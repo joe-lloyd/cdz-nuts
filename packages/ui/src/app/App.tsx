@@ -4,13 +4,14 @@
 // both consumers before any UI is ported. The real shell -- sidebar, page head,
 // player bar, queue and lyrics panels -- arrives with the port.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { HashRouter, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Route, Routes } from 'react-router-dom';
 
-// Hash routing, not browser routing. The existing app is entirely #hash-based
-// (`#album/<id>`, `#radio/artist/<name>`), those URLs are bookmarked and are
-// what the phone app's WebView opens, and the desktop shell serves from a
-// custom scheme where path routing would need server-side rewrites it does not
-// have. Keeping hashes is a compatibility requirement, not a preference.
+import { pathFromLegacyHash } from './routes.ts';
+
+// Real paths, not hashes. That needs a catch-all on both consumers --
+// music-dump serves the document for any unknown non-API path, and the Tauri
+// protocol handler does the same from embedded bytes -- because otherwise a
+// hard load of /album/123 is a 404 rather than a route.
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -34,14 +35,21 @@ function Placeholder() {
   );
 }
 
+// Old #hash URLs are bookmarked, sit in the phone app's WebView history, and
+// are linked from the dashboard. Migrate before the router mounts, so it only
+// ever sees a path -- and use replaceState so the dead hash does not become a
+// history entry the back button returns to.
+const legacy = pathFromLegacyHash(window.location.hash);
+if (legacy) window.history.replaceState(null, '', legacy);
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
-      <HashRouter>
+      <BrowserRouter>
         <Routes>
           <Route path="*" element={<Placeholder />} />
         </Routes>
-      </HashRouter>
+      </BrowserRouter>
     </QueryClientProvider>
   );
 }
