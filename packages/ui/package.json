@@ -3,7 +3,7 @@
   "version": "0.2.0",
   "private": true,
   "type": "module",
-  "description": "Shared front end for the home music player \u2014 served by the web app (music-dump) and the desktop shell (homelab-music) alike, so the two can never drift.",
+  "description": "Shared front end for the home music player — served by the web app (music-dump) and the desktop shell (homelab-music) alike, so the two can never drift.",
   "main": "index.js",
   "exports": {
     ".": "./index.js",
@@ -41,6 +41,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "babel-plugin-react-compiler": "^1.0.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "jsdom": "^27.0.0",
     "typescript": "^5.9.3",
     "vite": "^7.1.9",

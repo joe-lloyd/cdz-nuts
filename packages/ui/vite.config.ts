@@ -11,7 +11,21 @@ import react from '@vitejs/plugin-react';
 // homelab-music embeds it with include_dir! — and renaming it would mean a
 // coordinated change across two other repos in two languages for no gain.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react({
+      // React Compiler. It auto-memoises components and hooks, which is the
+      // point: the old UI's whole performance model was "rebuild the subtree
+      // with innerHTML", and replacing that with hand-placed useMemo/useCallback
+      // would just be a different kind of bookkeeping. This way components stay
+      // written plainly and the compiler decides what may be skipped.
+      //
+      // Note this stays on @vitejs/plugin-react v5, which still runs Babel
+      // internally. v6 swapped Babel for oxc, so moving to it means adding
+      // @rolldown/plugin-babel to get the compiler back -- a separate upgrade,
+      // deliberately not bundled into the rewrite.
+      babel: { plugins: [['babel-plugin-react-compiler', {}]] },
+    }),
+  ],
   publicDir: 'static',
   build: {
     outDir: 'public',
