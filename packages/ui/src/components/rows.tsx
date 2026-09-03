@@ -2,8 +2,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, day, dur } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { usePlayer } from '../player/usePlayer.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useNowPlaying } from './primitives.tsx';
 
 const DownloadBadge = () => (
   <span className="dl" title="already in the local library">
@@ -12,19 +11,6 @@ const DownloadBadge = () => (
     </svg>
   </span>
 );
-
-/**
- * Which row is playing, marked from player state rather than by re-rendering.
- *
- * One track can be visible on several surfaces at once, and the player outlives
- * navigation -- so the marker is derived from the engine's snapshot, and only
- * the rows for that id re-render.
- */
-function useNowPlaying(id: string): '' | ' playing' | ' paused' {
-  const p = usePlayer();
-  if (p.currentId !== id) return '';
-  return p.state === 'playing' ? ' playing' : ' paused';
-}
 
 export function TrackRow({ track, endText, rank }: { track: Track; endText?: string | undefined; rank?: number | null | undefined }) {
   const state = useNowPlaying(track.id);

@@ -3,7 +3,34 @@ import { Link } from 'react-router-dom';
 
 import { artUrl, day, genres as parseGenres, initial } from '../lib/format.ts';
 import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
+import { post } from '../api/client.ts';
+import { player, usePlayer } from '../player/usePlayer.ts';
 import { usePlayFromScope } from './PlayScope.tsx';
+
+/**
+ * Whether this track is the one playing, and how.
+ *
+ * Derived from the engine rather than by re-rendering a view: one track can be
+ * on screen several times at once, and the player outlives navigation. The
+ * class goes on BOTH the row (which tints) and the play button (which swaps
+ * its glyph for animated equaliser bars) -- putting it only on the row is what
+ * made the button stop reacting.
+ */
+export function useNowPlaying(id: string): '' | ' playing' | ' paused' {
+  const p = usePlayer();
+  if (p.currentId !== id) return '';
+  return p.state === 'playing' ? ' playing' : ' paused';
+}
+
+/**
+ * Do we actually hold this file?
+ *
+ * `quality` is attached by decorateBadges to any track-shaped row the
+ * provenance scanner has seen, so its absence means there is no local file.
+ * That is the same signal the fidelity badge uses, which is why a track
+ * without one shows neither a badge nor a play button.
+ */
+export const isHeld = (track: Badged): boolean => Boolean(track.quality);
 
 export const PLAY_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
@@ -118,13 +145,56 @@ export function MediaBadges({ row }: { row: Badged }) {
   );
 }
 
-/** The play button. Queues the whole scope it sits in, starting here. */
+const DOWNLOAD_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M11 3h2v8h3l-4 4-4-4h3z" /><path d="M5 19h14v2H5z" />
+  </svg>
+);
+
+/**
+ * Play this, or go and get it.
+ *
+ * A track with no local file cannot be queued, so it gets the download control
+ * instead of a play button -- shaped the same, so the row reads identically
+ * before and after the file lands. Deliberately not class `.track-play`: the
+ * player builds queues from those.
+ *
+ * Pressing it IS the request. Nobody asks for a song they do not want, so this
+ * sends the same "get me this" the player used to send when you pressed play
+ * on something missing; it just says so up front now instead of after.
+ */
 export function PlayControl({ track }: { track: Track }) {
   const play = usePlayFromScope();
+  const state = useNowPlaying(track.id);
+  const [requested, setRequested] = useState(false);
   if (!track.id) return null;
+
+  if (!isHeld(track)) {
+    return (
+      <button
+        className={`radio-get${requested ? ' queued' : ''}`} type="button" disabled={requested}
+        aria-label={`Get a copy of ${track.name}`}
+        title={requested ? 'Queued — it will appear once it lands' : 'Not in the library yet — get it'}
+        onClick={() => {
+          setRequested(true);
+          post('/api/tracks/want', {
+            artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
+            title: track.name,
+            album: track.album ?? null,
+            durationMs: track.duration_ms ?? null,
+          })
+            .then((d) => player.notify((d as { detail?: string }).detail ?? 'Queued'))
+            .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
+        }}
+      >
+        {DOWNLOAD_ICON}
+      </button>
+    );
+  }
+
   return (
     <button
-      className="track-play" type="button" data-track-id={track.id}
+      className={`track-play${state}`} type="button" data-track-id={track.id}
       aria-label={`Play ${track.name}`} onClick={() => play(track)}
     >
       {PLAY_ICON}
