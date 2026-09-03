@@ -8,13 +8,12 @@
 <link rel="manifest" href="/manifest.webmanifest">
 <meta name="description" content="Your private listening history, local music archive, and player.">
 <title>Music Taste</title>
-  <script type="module" crossorigin src="/app.js"></script>
-  <link rel="stylesheet" crossorigin href="/app.css">
 </head>
 <body>
 <!-- The skip link is the first focusable thing on the page and must stay that
      way; it is markup rather than a React node so it exists before hydration. -->
 <a class="skip-link" href="#main">Skip to collection</a>
 <div id="root"></div>
+<script type="module" src="/src/main.tsx"></script>
 </body>
 </html>

@@ -30,13 +30,17 @@ test('the document serves from both / and /index.html', () => {
 });
 
 test('nothing is declared that the app never asks for', () => {
-  // The document links app.css/player.js/sw.js/manifest; the manifest is what
-  // names icon.svg. Checking both is the real contract — a route no one
-  // references is dead weight, and this is how we notice.
-  const sources = [
-    readFileSync(indexHtml, 'utf8'),
-    readFileSync(staticFiles['/manifest.webmanifest'].file, 'utf8'),
-  ].join('\n');
+  // A route nothing references is dead weight, and this is how we notice.
+  //
+  // Which file does the referencing moved with the build: the document links
+  // app.css and app.js, the web manifest names icon.svg, and sw.js is now
+  // registered from inside the bundle rather than from an inline script. So
+  // scan everything textual we ship rather than guessing which file it is in —
+  // that guess is exactly what broke when the inline script went away.
+  const sources = [indexHtml, ...Object.values(staticFiles).map((f) => f.file)]
+    .filter((f) => /\.(html|js|webmanifest|json)$/.test(f))
+    .map((f) => readFileSync(f, 'utf8'))
+    .join('\n');
   for (const url of Object.keys(staticFiles)) {
     assert.ok(sources.includes(url), `nothing references ${url}`);
   }

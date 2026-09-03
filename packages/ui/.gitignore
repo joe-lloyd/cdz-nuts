@@ -1,1 +1,5 @@
 node_modules/
+
+# public/ is BUILD OUTPUT but is deliberately committed: music-dump serves it
+# and homelab-music embeds it with include_dir!, and neither has a JS
+# toolchain. CI rebuilds and fails if it drifts from src/.
