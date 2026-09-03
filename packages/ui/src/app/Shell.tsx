@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
-import { usePlayerStatus } from '../api/hooks.ts';
+import { usePlayerStatus, useStats } from '../api/hooks.ts';
+import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
 import { TABS, TAB_ICONS, PAGE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
@@ -58,7 +59,7 @@ export function Shell() {
               <span><b>Music Taste</b><small>Private archive</small></span>
             </Link>
           </header>
-          <nav aria-label="Library">
+          <nav id="nav" aria-label="Library">
             {(Object.keys(TABS) as TabId[]).map((tab) => (
               <NavLink key={tab} to={`/${tab}`} className={({ isActive }) => (isActive ? 'on' : undefined)}>
                 {TAB_ICONS[tab]}
@@ -66,7 +67,7 @@ export function Shell() {
               </NavLink>
             ))}
           </nav>
-          <div className="sidebar-foot"><ArchiveState /></div>
+          <div className="sidebar-foot"><ArchiveState /><SyncLine /></div>
         </aside>
 
         <section className="content-shell">
@@ -127,6 +128,13 @@ function BackButton({ parent, className }: { parent: string | null; className: s
       <span>Back</span>
     </button>
   );
+}
+
+/** The quiet monospace line under the archive state: when Spotify last synced. */
+function SyncLine() {
+  const { data } = useStats();
+  const syncedAt = typeof data?.syncedAt === 'string' ? data.syncedAt : null;
+  return <div id="sync">{syncedAt ? `last sync ${ago(syncedAt)}` : ''}</div>;
 }
 
 function ArchiveState() {

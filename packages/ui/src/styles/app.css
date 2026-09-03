@@ -185,8 +185,10 @@ input:focus-visible {
   margin: 0;
 }
 
-#nav button {
+#nav button,
+#nav a {
   display: flex;
+  text-decoration: none;
   align-items: center;
   gap: 11px;
   width: 100%;
@@ -202,18 +204,21 @@ input:focus-visible {
   transition: color .15s ease, background .15s ease, border-color .15s ease;
 }
 
-#nav button:hover {
+#nav button:hover,
+#nav a:hover {
   color: var(--ink);
   background: rgba(255, 255, 255, .035);
 }
 
-#nav button.on {
+#nav button.on,
+#nav a.on {
   color: var(--ink);
   background: var(--accent-soft);
   border-color: rgba(255, 87, 217, .1);
 }
 
-#nav button svg {
+#nav button svg,
+#nav a svg {
   width: 17px;
   height: 17px;
   fill: none;
@@ -221,7 +226,8 @@ input:focus-visible {
   stroke-width: 1.8;
 }
 
-#nav button.on svg { color: var(--accent); }
+#nav button.on svg,
+#nav a.on svg { color: var(--accent); }
 
 .sidebar-foot {
   display: grid;
@@ -922,19 +928,9 @@ svg text { fill: var(--ink-3); font-size: 9px; }
   font-size: 10px;
 }
 
-#tip {
-  position: fixed;
-  z-index: 90;
-  padding: 5px 8px;
-  color: var(--surface);
-  background: var(--ink);
-  border-radius: 6px;
-  opacity: 0;
-  pointer-events: none;
-  font-size: 9px;
-  white-space: nowrap;
-  transition: opacity .08s;
-}
+/* The cursor-following tooltip is gone: hover text is native `title` now,
+   which is keyboard- and screen-reader-accessible for free and needs no JS.
+   Its #tip element and styling were removed with the rewrite. */
 
 .player-bar {
   position: fixed;
@@ -2430,7 +2426,8 @@ input[type="range"] {
   body.nav-open .sidebar { transform: translateX(0); }
   .brand-head { margin: 0 0 22px; }
   #nav { flex-direction: column; gap: 3px; overflow-y: auto; }
-  #nav button { width: 100%; padding: 11px 12px; }
+  #nav button,
+  #nav a { width: 100%; padding: 11px 12px; }
   .sidebar-foot { display: grid; }
   .content-shell { padding: 18px 16px 54px; }
   .page-kicker { display: none; }
