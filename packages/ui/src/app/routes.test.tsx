@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { pathFromLegacyHash, TABS } from './routes.ts';
+import { pathFromLegacyHash, TABS } from './routes.tsx';
 
 describe('pathFromLegacyHash', () => {
   test('migrates every tab the old router served', () => {
