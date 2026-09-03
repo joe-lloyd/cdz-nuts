@@ -1,0 +1,29 @@
+{
+  "name": "@joe-lloyd/music-ui",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared front end for the home music player — served by the web app (music-dump) and the desktop shell (homelab-music) alike, so the two can never drift.",
+  "main": "index.js",
+  "exports": {
+    ".": "./index.js",
+    "./routes.json": "./routes.json",
+    "./public/*": "./public/*"
+  },
+  "files": [
+    "index.js",
+    "routes.json",
+    "public"
+  ],
+  "engines": {
+    "node": ">=21"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/joe-lloyd/music-ui.git"
+  },
+  "license": "UNLICENSED"
+}

@@ -1,0 +1,36 @@
+{
+  "$comment": "The canonical map of what the music UI serves and under which content type. Read by the Node web server (music-dump) and the Rust desktop shell (homelab-music) alike, so neither can drift from the other. Paths are relative to this file's directory. The document route is listed separately because it answers to two URLs.",
+  "document": {
+    "urls": ["/", "/index.html"],
+    "file": "public/index.html",
+    "type": "text/html; charset=utf-8",
+    "cacheControl": "no-cache"
+  },
+  "static": {
+    "/app.css": {
+      "file": "public/app.css",
+      "type": "text/css; charset=utf-8",
+      "cacheControl": "no-cache"
+    },
+    "/player.js": {
+      "file": "public/player.js",
+      "type": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache"
+    },
+    "/sw.js": {
+      "file": "public/sw.js",
+      "type": "text/javascript; charset=utf-8",
+      "cacheControl": "no-cache"
+    },
+    "/manifest.webmanifest": {
+      "file": "public/manifest.webmanifest",
+      "type": "application/manifest+json",
+      "cacheControl": "no-cache"
+    },
+    "/icon.svg": {
+      "file": "public/icon.svg",
+      "type": "image/svg+xml",
+      "cacheControl": "no-cache"
+    }
+  }
+}
