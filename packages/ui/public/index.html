@@ -59,7 +59,7 @@
   .pic .ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
              background: var(--accent-soft); color: var(--accent); font-size: 2rem; font-weight: 700;
              border-radius: 8px; }
-  /* "downloaded in the Lidarr library" marker, overlaid on album art */
+  /* "already in the local library" marker, overlaid on album art */
   .pic .dl { position: absolute; top: .3rem; right: .3rem; width: 1.5rem; height: 1.5rem;
              display: flex; align-items: center; justify-content: center;
              background: var(--accent); color: #fff; border-radius: 6px;
@@ -286,7 +286,7 @@ const upgradeControl = (track) => track.id ? `<button class="track-upgrade" type
  * "I want this one properly."
  *
  * Radio discoveries land at YouTube quality and stay there - a station plays
- * dozens of tracks nobody chose, and hunting Soulseek for every one turns
+ * dozens of tracks nobody chose, and chasing a lossless copy of every one turns
  * listening into a download campaign. This is how a track earns the lossless
  * hunt. Keyed on artist+title rather than an id, because the thing being asked
  * for may not exist in the library yet.
@@ -527,14 +527,17 @@ const QUALITY_META = {
   standard: { bars: 2, cls: 'q-standard', tip: 'Standard lossy — YouTube grade' },
   low: { bars: 1, cls: 'q-low', tip: 'Low bitrate' },
 };
+// Anything that is not one of the named local paths renders as a single neutral
+// identity. Provenance still records exactly which source produced each file --
+// that join is exact and worth keeping -- but this repository is public and the
+// UI has no reason to publish the breakdown.
 const SOURCE_META = {
-  youtube: { tip: 'From YouTube', svg: '<rect x="2.5" y="5" width="19" height="14" rx="4.5"/><path d="m10.2 8.9 5.2 3.1-5.2 3.1z"/>' },
+  youtube: { tip: 'From a web stream', svg: '<rect x="2.5" y="5" width="19" height="14" rx="4.5"/><path d="m10.2 8.9 5.2 3.1-5.2 3.1z"/>' },
   cd: { tip: 'Ripped from CD', svg: '<circle cx="12" cy="12" r="8.6"/><circle cx="12" cy="12" r="2.3"/>' },
-  usenet: { tip: 'From usenet', svg: '<path d="M7.4 15.6a3.7 3.7 0 0 1 .7-7.3 4.8 4.8 0 0 1 9.1 1.2 3.3 3.3 0 0 1-.2 6.1"/><path d="M12 11.5v7.2m-2.7-2.7L12 18.7l2.7-2.7"/>' },
-  torrent: { tip: 'From a torrent', svg: '<path d="M8 4.2v10.4m0 0-2.8-2.8M8 14.6l2.8-2.8"/><path d="M16 19.8V9.4m0 0-2.8 2.8M16 9.4l2.8 2.8"/>' },
-  soulseek: { tip: 'From Soulseek', svg: '<circle cx="12" cy="5.2" r="2.1"/><circle cx="5.2" cy="18" r="2.1"/><circle cx="18.8" cy="18" r="2.1"/><path d="m10.9 7.1-4.6 8.8M13.1 7.1l4.6 8.8M7.3 18h9.4"/>' },
+  external: { tip: 'From an external source', svg: '<path d="M7.4 15.6a3.7 3.7 0 0 1 .7-7.3 4.8 4.8 0 0 1 9.1 1.2 3.3 3.3 0 0 1-.2 6.1"/><path d="M12 11.5v7.2m-2.7-2.7L12 18.7l2.7-2.7"/>' },
   unknown: { tip: 'Source not recorded', svg: '<circle cx="12" cy="12" r="8.6"/><path d="M9.7 9.7a2.4 2.4 0 1 1 2.6 3.4v1"/><path d="M12.3 16.6v.01"/>' },
 };
+const sourceKey = (k) => (k === 'youtube' || k === 'cd' || k === 'unknown' ? k : 'external');
 
 const qualityBadge = (t) => {
   const meta = QUALITY_META[t.quality];
@@ -546,12 +549,16 @@ const qualityBadge = (t) => {
 };
 
 const sourceBadge = (t) => {
-  const meta = SOURCE_META[t.source];
+  const meta = SOURCE_META[sourceKey(t.source)];
   // `source` is also set on play rows to mark where a play happened, which is
   // a different vocabulary — only render it when it names a real pipeline.
   if (!meta || !t.quality) return '';
-  const tip = t.source_detail ? `${meta.tip} · ${t.source_detail}` : meta.tip;
-  return `<span class="s-badge s-${t.source}" data-tip="${esc(tip)}"><svg viewBox="0 0 24 24" aria-hidden="true">${meta.svg}</svg></span>`;
+  // The three network sources render as one identity. The distinction is still
+  // recorded per file, and source_detail still holds where it came from — the
+  // UI simply does not put either on screen. Everything else keeps its detail.
+  const key = sourceKey(t.source);
+  const tip = t.source_detail && key !== 'external' ? `${meta.tip} · ${t.source_detail}` : meta.tip;
+  return `<span class="s-badge s-${key}" data-tip="${esc(tip)}"><svg viewBox="0 0 24 24" aria-hidden="true">${meta.svg}</svg></span>`;
 };
 
 const mediaBadges = (t) => {
@@ -709,7 +716,7 @@ const stationLink = (kind, value, label, sub = '') => `
     <b>${esc(label)}</b>${sub ? `<span class="sub">${esc(sub)}</span>` : ''}
   </a>`;
 
-// New and upcoming records, from Lidarr's calendar rather than Spotify's.
+// New and upcoming records, from the library manager's calendar rather than Spotify's.
 //
 // Two things this can say that the Spotify version never could: a record can
 // be in the FUTURE (announced, not out), and a record we already hold links
@@ -741,7 +748,7 @@ const releaseSection = (rel) => {
 // One FLAC-queue job as a card. Top level rather than inline in the view so
 // the refresh poll can re-render the list without rebuilding the whole page.
 const UPGRADE_LABEL = {
-  pending_source: 'downloading source', queued: 'ready for Soulseek', working: 'working now',
+  pending_source: 'downloading source', queued: 'ready for upgrade', working: 'working now',
   retry_wait: 'retry scheduled', upgraded: 'upgraded', already_lossless: 'already lossless',
   exhausted: 'retries exhausted', cancelled: 'cancelled',
 };
@@ -827,15 +834,22 @@ const views = {
       ['high', 'High · 320k', '#c9b2c4'], ['standard', 'Standard', '#8a7f88'],
       ['low', 'Low', '#5c545b'],
     ];
-    const SRC_LABEL = { usenet: 'Usenet', torrent: 'Torrents', soulseek: 'Soulseek', youtube: 'YouTube', cd: 'CD rips', unknown: 'Before records began' };
+    const SRC_LABEL = { external: 'External', youtube: 'Web streams', cd: 'CD rips', unknown: 'Before records began' };
     const provBars = (entries, total) => entries.map(([key, label, color, n]) => `
       <div class="lbl">${label}</div>
       <div class="bar" style="width:${Math.max(2, Math.round((n / total) * 100))}%;background:${color}" data-tip="${label} · ${n.toLocaleString()} files"></div>
       <div class="n">${n.toLocaleString()}</div>`).join('');
     const tierRows = TIER_META.filter(([k]) => prov.tiers[k])
       .map(([k, label, color]) => [k, label, color, prov.tiers[k]]);
-    const srcRows = Object.entries(prov.sources).sort((a, b) => b[1] - a[1])
-      .map(([k, n]) => [k, SRC_LABEL[k] ?? k, k === 'soulseek' ? 'var(--violet)' : k === 'youtube' ? 'var(--coral)' : 'var(--accent)', n]);
+    // Folded before sorting, so the merged bar is ranked on its real total
+    // rather than on whichever of its parts happened to be largest.
+    const folded = {};
+    for (const [k, n] of Object.entries(prov.sources)) {
+      const key = sourceKey(k);
+      folded[key] = (folded[key] ?? 0) + n;
+    }
+    const srcRows = Object.entries(folded).sort((a, b) => b[1] - a[1])
+      .map(([k, n]) => [k, SRC_LABEL[k] ?? k, k === 'external' ? 'var(--violet)' : k === 'youtube' ? 'var(--coral)' : 'var(--accent)', n]);
     const fidelityCard = `<div class="card"><h2>The library, honestly</h2>
       ${prov.total ? `<p class="note">${prov.total.toLocaleString()} files, scanned ${ago(prov.scannedAt)}</p><div class="bars">${provBars(tierRows, prov.total)}</div>` : '<div class="empty">the library scanner has not run yet</div>'}</div>`;
     const originCard = `<div class="card"><h2>Where it all came from</h2>
@@ -853,7 +867,7 @@ const views = {
           <h2>${Number(o.plays30).toLocaleString()} plays, <em>${o.hours30} hours.</em></h2>
           <p>${trend}</p>
         </div>
-        <aside class="hero-signal"><span>Downloaded now</span><b>${Number(c.downloaded ?? 0).toLocaleString()} albums</b><small>${o.downloadsSyncedAt ? `Library checked ${ago(o.downloadsSyncedAt)}` : 'Waiting for the first Lidarr library snapshot'}</small></aside>
+        <aside class="hero-signal"><span>Downloaded now</span><b>${Number(c.downloaded ?? 0).toLocaleString()} albums</b><small>${o.downloadsSyncedAt ? `Library checked ${ago(o.downloadsSyncedAt)}` : 'Waiting for the first library snapshot'}</small></aside>
       </section>
       <div class="tiles">${dlTile}${tiles}</div>
       <div class="cards">
@@ -979,7 +993,7 @@ const views = {
   },
 
   // Newest finished downloads: whatever most recently landed on disk,
-  // from Lidarr or from an import here.
+  // from the library manager or from an import here.
   async latest() {
     const rows = await api('/api/latest');
     if (!rows.length) return '<div class="empty">nothing downloaded yet — or the archive is asleep</div>';
@@ -1021,7 +1035,7 @@ const views = {
     const rows = (d.jobs ?? []).map(upgradeCard).join('');
     return `<div class="upgrade-intro">
         <div><span class="eyebrow">Lossy now, lossless later</span><h2>Feed the archive today. Let FLAC catch up.</h2>
-          <p>On the next worker sweep, a source link becomes an MP3; later Soulseek sweeps replace it only after codec, duration, artist and title checks pass.</p></div>
+          <p>On the next worker sweep, a source link becomes an MP3; later sweeps replace it only after codec, duration, artist and title checks pass.</p></div>
         <div class="upgrade-stats"><b>${active}</b><span>active</span><b>${finished}</b><span>finished</span></div>
       </div>
       <form class="upgrade-form" id="upgrade-form">
@@ -1137,7 +1151,7 @@ const views = {
     ].filter(Boolean).join(' · ');
     const discs = [...new Set(d.tracks.map((t) => t.disc_number ?? 1))].sort();
     const list = discs.map((disc) => {
-      // Badges per TRACK, not per album: a Soulseek folder can mix a 24-bit
+      // Badges per TRACK, not per album: one folder can mix a 24-bit
       // rip with a transcode, and this is the page where that shows.
       const rows = d.tracks.filter((t) => (t.disc_number ?? 1) === disc).map((t) => `
         <div class="row">
