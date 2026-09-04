@@ -12,6 +12,9 @@
 // tests exist to catch it changing.
 
 import { clamp, formatTime } from '../lib/format.ts';
+import {
+  absoluteUrl, hasNativeHost, installNativeCommands, sendGone, sendNowPlaying,
+} from './nativeBridge.ts';
 import { get, post } from '../api/client.ts';
 import type { Continuation, Lyrics, ResolveResult, Track } from '../api/types.ts';
 
@@ -438,6 +441,7 @@ class PlayerEngine {
       wakeAvailable: false,
     });
     this.updateMediaSession(track);
+    this.pushNowPlaying();
     void this.loadLyrics(track);
   }
 
@@ -562,11 +566,13 @@ class PlayerEngine {
   private onPlayState(state: 'playing' | 'paused') {
     if (state === 'paused' && this.snapshot.state === 'error') return;
     this.patch({ state });
+    this.pushNowPlaying();
     if ('mediaSession' in navigator) navigator.mediaSession.playbackState = state;
   }
 
   private onTimeUpdate() {
     this.tickPlayLog();
+    this.pushNowPlaying();
     const duration = this.durationSeconds();
     if ('mediaSession' in navigator && navigator.mediaSession.setPositionState && duration > 0) {
       try {
@@ -749,7 +755,12 @@ class PlayerEngine {
   }
 
   private installMediaSession() {
-    if (!('mediaSession' in navigator)) return;
+    // One table, two callers. The browser gets these as MediaSession action
+    // handlers; the phone app's host calls the same entries by name when a
+    // lock-screen button is pressed. Sharing them is what stops the lock
+    // screen and the media keys ever disagreeing about what "next" means --
+    // `previous`, in particular, restarts the track within its first four
+    // seconds, and that rule should not exist twice.
     const handlers: Record<string, MediaSessionActionHandler> = {
       play: () => { void this.audio.play(); },
       pause: () => this.audio.pause(),
@@ -759,9 +770,38 @@ class PlayerEngine {
       seekforward: (d) => { this.audio.currentTime = Math.min(this.audio.duration || Infinity, this.audio.currentTime + (d.seekOffset ?? 10)); },
       seekto: (d) => { if (d.seekTime != null) this.audio.currentTime = d.seekTime; },
     };
+    installNativeCommands(handlers);
+    if (!('mediaSession' in navigator)) return;
     for (const [action, handler] of Object.entries(handlers)) {
       try { navigator.mediaSession.setActionHandler(action as MediaSessionAction, handler); } catch { /* unsupported */ }
     }
+  }
+
+  /**
+   * Mirror what the OS is being told to the native host as well.
+   *
+   * Fed from the same three moments that drive `mediaSession` -- new track,
+   * play/pause, position tick -- so the notification cannot describe something
+   * the browser session does not.
+   */
+  private pushNowPlaying() {
+    if (!hasNativeHost()) return;
+    const track = this.current;
+    if (!track) { sendGone(); return; }
+    const duration = this.durationSeconds();
+    sendNowPlaying({
+      title: track.name,
+      artist: track.artists ?? '',
+      album: this.snapshot.albumName || (track.album ?? ''),
+      artworkUrl: absoluteUrl(this.snapshot.artUrl || artUrlFor(track.album_id ?? '')),
+      playing: !this.audio.paused,
+      positionSec: this.audio.currentTime,
+      durationSec: duration,
+      canNext: true,
+      // Matches `previous()`: past four seconds it restarts rather than
+      // stepping back, so the button is never a no-op.
+      canPrevious: this.queueIndex > 0 || this.audio.currentTime > 4,
+    });
   }
 
   // --- toast --------------------------------------------------------------
