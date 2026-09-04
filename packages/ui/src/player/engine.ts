@@ -50,8 +50,10 @@ export interface PlayerSnapshot {
   state: BarState;
   overline: string;
   title: string;
-  /** Rendered as text; the album link is separate so React can build it. */
+  /** Rendered as text; the artist and album links are separate so React can
+      build them. Both ids are empty when there is no page to link to. */
   byline: string;
+  artistId: string;
   albumId: string;
   albumName: string;
   artUrl: string;
@@ -82,7 +84,7 @@ const EMPTY: PlayerSnapshot = {
   overline: 'Local archive',
   title: 'Choose a track',
   byline: 'Play from your downloaded collection',
-  albumId: '', albumName: '', artUrl: '', artFallbackUrl: '', initial: 'MT',
+  artistId: '', albumId: '', albumName: '', artUrl: '', artFallbackUrl: '', initial: 'MT',
   radioSeedId: null,
   queue: [], queueIndex: -1, currentId: null,
   positionText: '0:00', remainingText: '−0:00', progress: 0,
@@ -421,8 +423,12 @@ class PlayerEngine {
       overline: 'Local archive · Jellyfin',
       title: track.name,
       byline: track.artists ?? '',
+      artistId: track.artist_id ?? '',
       albumId,
-      albumName: track.album ?? '',
+      // The album page's own name, not the file's album tag. "The 78" is
+      // tagged `Harmony Korine` but sits on the Singles shelf, so labelling
+      // the link with the tag pointed it somewhere it did not say.
+      albumName: track.album_name || track.album || '',
       artUrl: artUrlFor(albumId),
       artFallbackUrl: track.image_url ?? '',
       initial: (track.name || 'MT').slice(0, 1).toUpperCase(),

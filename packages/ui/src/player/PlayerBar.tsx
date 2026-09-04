@@ -18,6 +18,9 @@ export function PlayerBar() {
   const [panel, setPanel] = useState<'queue' | 'lyrics' | null>(null);
 
   const artHref = p.albumId ? `/album/${encodeURIComponent(p.albumId)}` : null;
+  // Null whenever the credit resolves to nobody we hold a page for -- a
+  // library-only artist is still named, just not linked.
+  const artistHref = p.artistId ? `/artist/${encodeURIComponent(p.artistId)}` : null;
 
   return (
     <>
@@ -36,7 +39,9 @@ export function PlayerBar() {
             <span className="player-overline">{p.overline}</span>
             <b>{p.title}</b>
             <span>
-              {p.byline}
+              {p.byline && artistHref
+                ? <Link className="player-artist" to={artistHref}>{p.byline}</Link>
+                : p.byline}
               {p.albumName && artHref ? (
                 <>
                   {p.byline ? ' · ' : ''}

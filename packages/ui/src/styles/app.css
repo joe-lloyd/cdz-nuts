@@ -1164,8 +1164,8 @@ input[type="range"] {
 .player-art.linked { cursor: pointer; }
 .player-art.linked:hover img { filter: brightness(1.12); }
 
-.player-album { color: inherit; }
-.player-album:hover { color: var(--accent); text-decoration: underline; }
+.player-album, .player-artist { color: inherit; }
+.player-album:hover, .player-artist:hover { color: var(--accent); text-decoration: underline; }
 
 .queue-art {
   position: relative;

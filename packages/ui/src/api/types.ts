@@ -47,6 +47,10 @@ export interface Track extends Badged, Tombstoned {
   recording_mbid?: string | null;
   release_mbid?: string | null;
   continuation_album_id?: string | null;
+  /** Resolved from the credit string by the server; null when we hold no page. */
+  artist_id?: string | null;
+  /** What the album page for `album_id` calls itself. See PlayerBar. */
+  album_name?: string | null;
 }
 
 export interface Album extends Badged, Tombstoned {
