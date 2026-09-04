@@ -1,0 +1,143 @@
+# Keep the two consumers pinned to this package.
+#
+# music-ui is vendored as the `ui/` submodule by BOTH music-dump (the web
+# server) and homelab-music (the desktop tray app). A push here changes
+# neither of them: each holds a commit pointer that somebody has to move by
+# hand. music-dump usually gets remembered because deploying it is a `git
+# pull`; homelab-music does not, because its UI is compiled into the binary
+# and there is no symptom other than a fix that "did not arrive".
+#
+# So the bump becomes the default rather than a chore: every push to main
+# opens (or updates) a PR on each consumer moving the pointer here. A PR and
+# not a direct push, because bumping homelab-music is only half of shipping it
+# -- that one also needs a version bump and a release build.
+
+name: bump consumers
+
+on:
+  push:
+    branches: [main]
+    # Only what a consumer actually vendors. A change to tests, CI or the
+    # README moves no bytes that either host serves, and a PR for it would be
+    # noise that teaches you to ignore these.
+    paths:
+      - 'public/**'
+      - 'routes.json'
+      - 'index.js'
+      - 'package.json'
+  workflow_dispatch:
+
+# One bump at a time. Two runs racing would fight over the same branch on the
+# consumer and leave whichever lost pointing at an older commit.
+concurrency:
+  group: bump-consumers
+  cancel-in-progress: false
+
+jobs:
+  # Never bump a consumer onto a broken or stale bundle. This is the gate.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run test:unit
+      - run: npm run test:contract
+
+      # public/ is BUILD OUTPUT that is committed, which only works if it is
+      # actually rebuilt. A source change committed without running the build
+      # would otherwise sail through every test above and then pin both
+      # consumers to a bundle that does not contain it -- and the desktop's
+      # drift check would call itself current while being wrong.
+      - name: The committed bundle is the one this source builds
+        run: |
+          npm run build
+          if ! git diff --quiet -- public; then
+            echo "::error::public/ is not up to date with src/. Run 'npm run build' and commit the result."
+            git diff --stat -- public
+            exit 1
+          fi
+
+  bump:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      # Independent repos: a failure to open one PR should not hide the other.
+      fail-fast: false
+      matrix:
+        include:
+          - repo: music-dump
+            note: 'Deploying is a `git pull` + `docker restart spotify-taste-db-web` on pi-server.'
+          - repo: homelab-music
+            note: 'This one also needs a version bump in `src-tauri/tauri.conf.json` and a release build — the UI is compiled into the binary, so merging alone ships nothing.'
+    steps:
+      - name: Open or update the bump PR
+        env:
+          # A PAT, because the default GITHUB_TOKEN is scoped to THIS repo and
+          # cannot push a branch to another one. Needs `repo` scope on both
+          # consumers. Without it this job fails loudly rather than skipping,
+          # which is the point -- a silently disabled bump is the problem this
+          # workflow exists to solve.
+          GH_TOKEN: ${{ secrets.CONSUMER_BUMP_TOKEN }}
+          REPO: ${{ matrix.repo }}
+          NOTE: ${{ matrix.note }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          owner=${GITHUB_REPOSITORY%%/*}
+          short=${SHA:0:7}
+          branch=ci/ui-bump
+
+          git clone --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${owner}/${REPO}.git" consumer
+          cd consumer
+
+          current=$(git ls-files -s ui | awk '{print $2}')
+          if [ "$current" = "$SHA" ]; then
+            echo "$REPO already points at $short — nothing to do."
+            exit 0
+          fi
+
+          git config user.name  "music-ui bot"
+          git config user.email "noreply@github.com"
+          git checkout -b "$branch"
+
+          # Move the gitlink directly. Cloning the submodule's contents just to
+          # check out one commit would fetch the whole bundle for a change that
+          # is one line of the index.
+          git update-index --add --cacheinfo "160000,${SHA},ui"
+
+          subject="chore(ui): bump the shared UI to ${short}"
+          git commit -q -m "$subject"
+
+          # Force, because this branch is a rolling "latest bump" rather than a
+          # history -- a second push while the first PR is open should update
+          # it, not stack a second PR on top.
+          git push -q --force -u origin "$branch"
+
+          body=$(cat <<EOF
+          Moves the \`ui/\` submodule to [\`${short}\`](https://github.com/${owner}/${GITHUB_REPOSITORY##*/}/commit/${SHA}).
+
+          Opened automatically by \`bump-consumers\` in music-ui, which runs
+          typecheck, unit tests, the contract tests and a check that the
+          committed \`public/\` bundle really is what the source builds.
+
+          ${NOTE}
+          EOF
+          )
+
+          # --repo explicitly: the clone's remote carries the token in its URL,
+          # and gh should not be left to infer the repository from that.
+          target="${owner}/${REPO}"
+          existing=$(gh pr list --repo "$target" --head "$branch" --state open             --json number --jq '.[0].number' || true)
+          if [ -n "$existing" ]; then
+            gh pr edit "$existing" --repo "$target" --title "$subject" --body "$body"
+            echo "updated ${target}#${existing}"
+          else
+            gh pr create --repo "$target" --title "$subject" --body "$body"               --base main --head "$branch"
+          fi
