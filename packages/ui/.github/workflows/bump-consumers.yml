@@ -134,10 +134,10 @@ jobs:
           # --repo explicitly: the clone's remote carries the token in its URL,
           # and gh should not be left to infer the repository from that.
           target="${owner}/${REPO}"
-          existing=$(gh pr list --repo "$target" --head "$branch" --state open             --json number --jq '.[0].number' || true)
+          existing=$(gh pr list --repo "$target" --head "$branch" --state open --json number --jq '.[0].number' || true)
           if [ -n "$existing" ]; then
             gh pr edit "$existing" --repo "$target" --title "$subject" --body "$body"
             echo "updated ${target}#${existing}"
           else
-            gh pr create --repo "$target" --title "$subject" --body "$body"               --base main --head "$branch"
+            gh pr create --repo "$target" --title "$subject" --body "$body" --base main --head "$branch"
           fi
