@@ -1,12 +1,12 @@
 import { useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
+import { Link, useParams, useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   useArtists, useLatest, useLibraryAlbums, useLikedTracks, useLocalTracks,
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
-import { get, qs } from '../api/client.ts';
+import { get, post, qs } from '../api/client.ts';
 import { ago, day, dur, initial } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, SongCard, TrackRow } from '../components/rows.tsx';
@@ -173,20 +173,36 @@ export function Albums() {
 }
 
 export function Playlists() {
+  const navigate = useNavigate();
+  const cache = useQueryClient();
+  const [name, setName] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+  async function create() {
+    setSaving(true);
+    try {
+      const result = await post<{ id: string }>('/api/local-playlists', { name, trackIds: [] });
+      await cache.invalidateQueries({ queryKey: ['playlists'] });
+      navigate(`/playlist/${result.id}`);
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setSaving(false); }
+  }
   const { data, isPending, error } = usePlaylists();
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
   // Spotify refuses to enumerate some playlists, so they sync with zero tracks.
   // A card that opens to an empty page is worse than no card.
-  const pls = all.filter((p) => Number(p.synced_tracks ?? 0) > 0);
+  const pls = all.filter((p) => p.source === 'local' || Number(p.synced_tracks ?? 0) > 0);
   const hidden = all.length - pls.length;
 
-  if (!pls.length) {
-    return <Empty>no playlists with readable tracks yet{all.length ? ` — ${all.length} synced but returned no songs` : ''}</Empty>;
-  }
   return (
     <>
+      <form className="tools" onSubmit={e => { e.preventDefault(); void create(); }}>
+        <input aria-label="New playlist name" placeholder="New playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
+        <button disabled={saving || !name.trim()}>Create playlist</button>
+      </form>
+      {message && <p role="alert">{message}</p>}
       {hidden ? <p className="note">{hidden} playlist{hidden === 1 ? '' : 's'} hidden — Spotify returned no tracks for {hidden === 1 ? 'it' : 'them'}.</p> : null}
       <div className="al-grid pl-grid">
         {pls.map((p) => {
@@ -235,6 +251,7 @@ export function PlaylistDetail() {
           {meta.description ? <p className="note">{meta.description}</p> : null}
         </div>
       ) : null}
+      {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
       <PlayScope tracks={rows}>
         <div className="rows">
           {rows.length ? rows.map((t) => (
@@ -302,4 +319,52 @@ export function Plays() {
       </PlayScope>
     </>
   );
+}
+
+function PlaylistEditor({ id, name, description, tracks }: { id: string; name: string; description: string; tracks: Track[] }) {
+  const cache = useQueryClient();
+  const navigate = useNavigate();
+  const [title, setTitle] = useState(name);
+  const [notes, setNotes] = useState(description);
+  const [q, setQ] = useState('');
+  const [message, setMessage] = useState('');
+  const [saving, setSaving] = useState(false);
+  const search = useDebounced(q, 300);
+  const results = useQuery({ queryKey: ['playlist-search', search], queryFn: () => get<Track[]>(`/api/search-songs${qs({ q: search })}`), enabled: search.trim().length >= 2 });
+  async function save(next: Track[], remove = false) {
+    setSaving(true); setMessage('');
+    try {
+      await post('/api/local-playlists', { id, name: title, description: notes, trackIds: next.map(t => t.id), action: remove ? 'delete' : 'save' });
+      await Promise.all([cache.invalidateQueries({ queryKey: ['playlists'] }), cache.invalidateQueries({ queryKey: ['playlist-tracks', id] })]);
+      if (remove) navigate('/playlists');
+      else setMessage('Saved');
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setSaving(false); }
+  }
+  function move(index: number, delta: number) {
+    const next = [...tracks];
+    const selected = next[index];
+    const neighbor = next[index + delta];
+    if (!selected || !neighbor) return;
+    [next[index], next[index + delta]] = [neighbor, selected];
+    void save(next);
+  }
+  return <details className="playlist-editor"><summary>Edit playlist</summary>
+    <fieldset disabled={saving}>
+      <label>Name <input value={title} onChange={e => setTitle(e.target.value)} maxLength={200} /></label>
+      <label>Description <input value={notes} onChange={e => setNotes(e.target.value)} maxLength={2000} /></label>
+      <button onClick={() => void save(tracks)}>Save details</button>
+      <button onClick={() => void save([], true)}>Delete playlist</button>
+      <ol>{tracks.map((track, i) => <li key={`${track.id}-${i}`}>{track.name}
+        <button aria-label={`Move ${track.name} up`} disabled={i === 0} onClick={() => move(i, -1)}>Up</button>
+        <button aria-label={`Move ${track.name} down`} disabled={i === tracks.length - 1} onClick={() => move(i, 1)}>Down</button>
+        <button aria-label={`Remove ${track.name}`} onClick={() => void save(tracks.filter((_, index) => index !== i))}>Remove</button>
+      </li>)}</ol>
+      <label>Add songs <input type="search" placeholder="Search your library" value={q} onChange={e => setQ(e.target.value)} /></label>
+      {results.error && <p role="alert">{results.error.message}</p>}
+      {search.trim().length >= 2 && results.data?.map(track => <div key={track.id}>{track.name} ? {track.artists}
+        <button onClick={() => void save([...tracks, track])}>Add</button></div>)}
+    </fieldset>
+    <p role="status">{message}</p>
+  </details>;
 }

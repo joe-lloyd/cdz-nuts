@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAlbum, useArtist, useEvents } from '../api/hooks.ts';
@@ -59,6 +61,7 @@ export function AlbumDetail() {
         </div>
       </div>
 
+      {album.id && !album.local ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
       <h2>Tracks{tracks.length ? ` (${tracks.length} in library)` : ''}</h2>
       {tracks.length ? (
         <PlayScope tracks={tracks}>
@@ -189,4 +192,34 @@ export function Shows() {
       ) : null}
     </>
   );
+}
+
+function AlbumImport({ id, artist, album }: { id: string; artist: string; album: string }) {
+  const [mode, setMode] = useState('tracks');
+  const [url, setUrl] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState('');
+  async function submit() {
+    setBusy(true); setMessage('');
+    try {
+      await post(mode === 'tracks' ? '/api/albums/import-tracks' : '/api/upgrades', mode === 'tracks'
+        ? { albumId: id }
+        : { sourceUrl: url, sourceMode: mode, artist, album, title: album, downloader: 'yt-dlp' });
+      setMessage('Album queued. Follow progress in the FLAC queue.');
+    } catch (error) { setMessage((error as Error).message); }
+    finally { setBusy(false); }
+  }
+  return <details><summary>Add whole album to archive</summary>
+    <form className="tools" onSubmit={e => { e.preventDefault(); void submit(); }}>
+      <select aria-label="Album import method" value={mode} onChange={e => setMode(e.target.value)}>
+        <option value="tracks">Find each song on YouTube</option>
+        <option value="chapters">Split full album video by chapters</option>
+        <option value="playlist">YouTube album playlist</option>
+      </select>
+      {mode !== 'tracks' && <input type="url" aria-label="YouTube album URL" placeholder="YouTube URL" required value={url} onChange={e => setUrl(e.target.value)} />}
+      <button disabled={busy}>Add album</button>
+    </form>
+    <p>Existing library recordings are kept. Full album videos need chapters to split tracks.</p>
+    <p role="status">{message}</p>
+  </details>;
 }

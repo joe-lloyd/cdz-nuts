@@ -91,6 +91,7 @@ export interface Artist extends Tombstoned {
 }
 
 export interface Playlist extends Tombstoned {
+  source?: 'local' | 'spotify';
   id: string;
   name: string;
   description?: string | null;
