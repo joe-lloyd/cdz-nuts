@@ -36,6 +36,16 @@ const OFFSETS_KEY = 'music-taste-lyric-offsets-v1';
 const KEEP_AHEAD = 30;
 const HISTORY = 10;
 
+/**
+ * How long `next()` will refuse a second, overlapping advance.
+ *
+ * Long enough to cover a resolve and a track swap on a slow link, short
+ * enough that a wedged advance cannot outlast the song it was trying to
+ * leave. Only one `ended` fires per track, so the only thing this really has
+ * to coalesce is that event racing an impatient click.
+ */
+const ADVANCE_GUARD_MS = 15_000;
+
 export interface QueueItem {
   id: string;
   name: string;
@@ -115,7 +125,7 @@ class PlayerEngine {
   private queueIndex = -1;
   private current: Track | null = null;
   private pendingTrackId: string | null = null;
-  private advancing = false;
+  private advancingUntil = 0;
 
   private continuationAlbums: string[] = [];
   private continuationEnabled = true;
@@ -140,8 +150,14 @@ class PlayerEngine {
 
   constructor() {
     this.audioA = new Audio();
-    this.audioA.preload = 'metadata';
     this.audioB = new Audio();
+    // Both elements buffer eagerly, and they must agree. `next()` alternates
+    // which one is active, so whichever is on standby is the one prefetchNext
+    // is loading the following track into -- if only one of them preloads,
+    // then every other track is marked ready having fetched nothing but its
+    // metadata, and the "gapless" swap lands on an element with no audio in
+    // it. Same role each time round, so: same setting.
+    this.audioA.preload = 'auto';
     this.audioB.preload = 'auto';
     this.audio = this.audioA;
 
@@ -470,8 +486,19 @@ class PlayerEngine {
   }
 
   async next(): Promise<void> {
-    if (this.advancing) return;
-    this.advancing = true;
+    // A re-entrancy guard, deliberately not a lock: it must never be able to
+    // outlive the advance it is guarding.
+    //
+    // All it has to absorb is `ended` and the Next button landing within a
+    // few hundred milliseconds of each other. A boolean set here and cleared
+    // in `finally` does that, but it also stays set forever if anything in
+    // between never settles -- and a `play()` promise on a starved media
+    // element does exactly that: it neither resolves nor rejects. One stalled
+    // track would then silently kill auto-advance, the Next button AND the
+    // media keys for the rest of the document's life. A browser tab gets
+    // reloaded often enough to hide that; the tray app runs for days.
+    if (Date.now() < this.advancingUntil) return;
+    this.advancingUntil = Date.now() + ADVANCE_GUARD_MS;
     try {
       this.flushPlay(true);
       let index = this.queueIndex + 1;
@@ -518,7 +545,7 @@ class PlayerEngine {
       }
       await this.playAt(index);
     } finally {
-      this.advancing = false;
+      this.advancingUntil = 0;
     }
   }
 
