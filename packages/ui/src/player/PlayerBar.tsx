@@ -5,6 +5,7 @@ import { formatTime } from '../lib/format.ts';
 import { LyricsPanel } from './LyricsPanel.tsx';
 import { QueuePanel } from './QueuePanel.tsx';
 import { player, usePlayer } from './usePlayer.ts';
+import { Slider } from './Slider.tsx';
 
 /**
  * The bar, and the two panels that share its corner.
@@ -85,10 +86,11 @@ export function PlayerBar() {
           </div>
           <div className="scrubber-row">
             <span>{p.positionText}</span>
-            <input
-              type="range" min={0} max={1000} disabled={!p.canScrub}
-              value={Math.round(p.progress * 1000)} aria-label="Track position"
-              onChange={(e) => player.seekFraction(Number(e.target.value) / 1000)}
+            <Slider
+              value={p.progress}
+              onValue={(fraction) => player.seekFraction(fraction)}
+              label="Track position"
+              disabled={!p.canScrub}
             />
             <span>{p.remainingText}</span>
           </div>
@@ -115,9 +117,11 @@ export function PlayerBar() {
             <svg viewBox="0 0 24 24" aria-hidden="true">
               <path d="M11 5 6 9H2v6h4l5 4zM15 9a4 4 0 0 1 0 6m2-9a8 8 0 0 1 0 12" />
             </svg>
-            <input
-              type="range" min={0} max={1} step={0.01} value={p.volumePosition}
-              aria-label="Volume" onChange={(e) => player.setVolumePosition(Number(e.target.value))}
+            <Slider
+              value={p.volumePosition}
+              onValue={(position) => player.setVolumePosition(position)}
+              label="Volume"
+              steps={100}
             />
           </label>
         </div>

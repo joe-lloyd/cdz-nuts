@@ -238,10 +238,24 @@ class PlayerEngine {
     this.emit();
   }
 
+  /**
+   * How long the track really is.
+   *
+   * The element's own `duration` is a guess for Ogg and Opus: the container
+   * carries no duration in its header, so a browser estimates one from the
+   * bitrate and only corrects it if the tail is ever fetched -- which the
+   * desktop proxy's range cap can stop happening at all. Drawn against that
+   * guess, the bar ended before the song did: dragging to the end landed
+   * short, and the remaining time hit zero while playback carried on.
+   *
+   * The scan knows the real length and sends it with the track, so that is
+   * what the bar is drawn against. The element's figure is the fallback, for
+   * anything the library has no duration for.
+   */
   private durationSeconds(): number {
-    return Number.isFinite(this.audio.duration)
-      ? this.audio.duration
-      : (this.current?.duration_ms ?? 0) / 1000;
+    const known = (this.current?.duration_ms ?? 0) / 1000;
+    if (known > 0) return known;
+    return Number.isFinite(this.audio.duration) ? this.audio.duration : 0;
   }
 
   // --- persistence --------------------------------------------------------
@@ -620,8 +634,11 @@ class PlayerEngine {
   }
 
   seekFraction(fraction: number) {
-    if (!Number.isFinite(this.audio.duration)) return;
-    this.audio.currentTime = clamp(fraction, 0, 1) * this.audio.duration;
+    // The same duration the bar is drawn against, or the two disagree and the
+    // handle lands somewhere other than where it was dropped.
+    const duration = this.durationSeconds();
+    if (!duration) return;
+    this.audio.currentTime = clamp(fraction, 0, 1) * duration;
     this.emit();
   }
 

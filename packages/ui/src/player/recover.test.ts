@@ -46,7 +46,9 @@ vi.stubGlobal('fetch', vi.fn((url: string) => {
     return Promise.resolve(new Response(JSON.stringify({
       available: true,
       streamUrl: `/api/player/stream?id=${id}`,
-      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: 210_000 },
+      // The scanned length the server sends back. 'd1' is deliberately longer
+      // than the element's guess, which is the case the scrubber test pins.
+      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: id === 'd1' ? 300_000 : 210_000 },
     }), { headers: { 'content-type': 'application/json' } }));
   }
   return Promise.resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }));
@@ -128,4 +130,29 @@ test('the standby element is made playable inside the first gesture', async () =
 
   const both = created.slice(0, Math.max(before, 2));
   expect(both.every((el) => el.plays > 0), 'both elements must have played something').toBe(true);
+});
+
+test('the scrubber spans the real track, not the container is guess', async () => {
+  // Ogg and Opus carry no duration in the header, so a browser estimates it
+  // from the bitrate and only corrects itself if the tail is ever fetched --
+  // which the desktop proxy's range cap can prevent. Dragging to the end then
+  // landed short, and the remaining time hit zero while the song played on.
+  // The scan knows the real length, so that is what the bar is drawn against.
+  player.setQueue([{ id: 'd1', name: 'Long one', artists: 'Someone', durationMs: 300_000 }], 'd1');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  const el = active();
+  el.duration = 210;            // the element's guess, well short of the truth
+  el.currentTime = 0;
+
+  player.seekFraction(1);
+  expect(el.currentTime, 'the end of the bar must be the end of the track').toBe(300);
+
+  el.currentTime = 150;
+  await vi.advanceTimersByTimeAsync(0);
+  el.fire('timeupdate');
+  const snap = player.getSnapshot();
+  expect(snap.progress).toBeCloseTo(0.5, 2);
+  expect(snap.remainingText).toBe('−2:30');
 });
