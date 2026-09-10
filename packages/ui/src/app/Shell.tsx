@@ -5,7 +5,7 @@ import { usePlayerStatus, useStats } from '../api/hooks.ts';
 import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
-import { TABS, TAB_ICONS, PAGE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
+import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
 
 /**
  * The frame everything renders inside.
@@ -67,7 +67,13 @@ export function Shell() {
               </NavLink>
             ))}
           </nav>
-          <div className="sidebar-foot"><ArchiveState /><SyncLine /></div>
+          <div className="sidebar-foot">
+            <ArchiveState />
+            <SyncLine />
+            <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
+              Settings
+            </NavLink>
+          </div>
         </aside>
 
         <section className="content-shell">
@@ -99,6 +105,8 @@ function describe(pathname: string): { kicker: string; title: string; parent: st
     const copy = DETAIL_COPY[head as keyof typeof DETAIL_COPY];
     return { kicker: copy[0], title: copy[1], parent: PARENT_OF[head] ?? null };
   }
+  const aside = head ? ASIDE_COPY[head] : undefined;
+  if (aside) return { kicker: aside[0], title: aside[1], parent: null };
   const tab = (head && head in TABS ? head : 'overview') as TabId;
   const copy = PAGE_COPY[tab];
   return { kicker: copy[0], title: copy[1], parent: null };

@@ -10,6 +10,7 @@ import { Radio, Station } from '../views/Radio.tsx';
 import { Top } from '../views/Top.tsx';
 import { Cds } from '../views/Cds.tsx';
 import { Upgrades } from '../views/Upgrades.tsx';
+import { Settings } from '../views/Settings.tsx';
 import { Empty } from '../components/primitives.tsx';
 
 // Real paths, not hashes. That needs a catch-all on both consumers --
@@ -59,6 +60,7 @@ export function App() {
             <Route path="/artist/:id" element={<ArtistDetail />} />
             <Route path="/album/:id" element={<AlbumDetail />} />
             <Route path="/playlist/:id" element={<PlaylistDetail />} />
+            <Route path="/settings" element={<Settings />} />
             <Route path="*" element={<Empty>That page does not exist.</Empty>} />
           </Route>
         </Routes>

@@ -72,6 +72,17 @@ export const PAGE_COPY: Record<TabId, [string, string]> = {
   plays: ['The latest signals', 'Recently played'],
 };
 
+/**
+ * Pages that are not tabs.
+ *
+ * Settings is reached from the sidebar foot rather than the tab list: it is
+ * not a view of the library, and putting it in the nav would push a
+ * once-a-month page in front of the twelve you use daily.
+ */
+export const ASIDE_COPY: Record<string, [string, string]> = {
+  settings: ['This app and this machine', 'Settings'],
+};
+
 export const DETAIL_COPY = {
   artist: ['Artist in your archive', 'Artist'],
   album: ['Release in your archive', 'Album'],
