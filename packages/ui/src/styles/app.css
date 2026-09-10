@@ -229,6 +229,13 @@ input:focus-visible {
   flex-direction: column;
   gap: 4px;
   margin: 0;
+  /* min-height: 0 before overflow, or a flex item refuses to shrink below its
+     content and simply spills. Twelve destinations are taller than a laptop
+     window that is not maximised, and what spilled off the bottom was the
+     sidebar foot -- which is where Settings lives. The narrow breakpoint has
+     had this since the drawer was added; the desktop one never did. */
+  min-height: 0;
+  overflow-y: auto;
 }
 
 #nav button,
