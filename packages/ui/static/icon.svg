@@ -1,6 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
-  <rect width="24" height="24" fill="#0a080a"/>
-  <circle cx="12" cy="12" r="9.5" fill="#141014"/>
-  <circle cx="12" cy="12" r="4.2" fill="#ff57d9"/>
-  <circle cx="12" cy="12" r="1.5" fill="#141014"/>
+  <!-- No background rect on purpose: the mark is the record, and everything
+       that shows it puts it on its own surface. A dark square baked in here
+       was a black tile on a light taskbar and a black tile inside macOS's own
+       rounded icon. The geometry matches the inline favicon in index.html, so
+       the tab, the phone and the desktop icon are one mark. -->
+  <circle cx="12" cy="12" r="11" fill="#141014"/>
+  <circle cx="12" cy="12" r="4.6" fill="#ff57d9"/>
+  <circle cx="12" cy="12" r="1.7" fill="#141014"/>
 </svg>
