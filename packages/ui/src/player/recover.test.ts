@@ -96,3 +96,36 @@ test('a stream that keeps failing eventually gives up and says so', async () => 
 
   expect(player.getSnapshot().state, 'retrying for ever is its own bug').toBe('error');
 });
+
+test('the queue advances on its own when a track ends', async () => {
+  player.setQueue([
+    { id: 'a1', name: 'Track A', artists: 'Someone', durationMs: 210_000 },
+    { id: 'a2', name: 'Track B', artists: 'Someone', durationMs: 210_000 },
+  ], 'a1');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  const first = active();
+  expect(first.src).toContain('a1');
+
+  first.currentTime = 210;
+  first.fire('ended');
+  await vi.advanceTimersByTimeAsync(2000);
+
+  const playing = created.find((el) => el.src.includes('a2'));
+  expect(playing, 'the next track should be loaded and playing').toBeTruthy();
+  expect(playing!.paused).toBe(false);
+});
+
+test('the standby element is made playable inside the first gesture', async () => {
+  // WebKit refuses play() on an element that has never played inside a user
+  // gesture, and the gapless swap plays the *other* element. Without this the
+  // second track of every session is refused on macOS.
+  const before = created.length;
+  player.setQueue([{ id: 'b1', name: 'Track', artists: 'Someone', durationMs: 210_000 }], 'b1');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  const both = created.slice(0, Math.max(before, 2));
+  expect(both.every((el) => el.plays > 0), 'both elements must have played something').toBe(true);
+});

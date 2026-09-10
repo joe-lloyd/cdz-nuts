@@ -47,6 +47,18 @@ const HISTORY = 10;
 const ADVANCE_GUARD_MS = 15_000;
 
 /** How many times a failed stream is retried before the player gives up. */
+/**
+ * A single silent sample, played once to buy an element the right to play.
+ *
+ * WebKit grants autoplay per media *element*, not per document: one that has
+ * never played inside a user gesture is refused for the life of the page. The
+ * gapless swap plays the other element, which has never seen a gesture, so on
+ * macOS the track ended and the next one was refused while the same code
+ * worked on WebView2. Playing silence on the standby inside the gesture that
+ * starts the first track is what buys the second track the right to play.
+ */
+const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+
 const RESUME_ATTEMPTS = 3;
 /** Backoff between retries, multiplied by the attempt number. */
 const RESUME_BACKOFF_MS = 1000;
@@ -154,6 +166,7 @@ class PlayerEngine {
   private snapshot: PlayerSnapshot = EMPTY;
   private listeners = new Set<() => void>();
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private blessed = false;
   private resumeAttempts = 0;
   private resumeFrom = 0;
   private resumeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -390,6 +403,7 @@ class PlayerEngine {
 
   async playAt(index: number): Promise<void> {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
+    this.bless();
     this.flushPlay(false);
     this.prefetch = null;
     this.audio.pause();
@@ -496,6 +510,23 @@ class PlayerEngine {
     return this.audio === this.audioA ? this.audioB : this.audioA;
   }
 
+  /** Give the standby element its one chance to become playable. See SILENCE. */
+  private bless() {
+    if (this.blessed) return;
+    this.blessed = true;
+    const el = this.standby();
+    if (el.src) return;
+    el.muted = true;
+    const done = () => {
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+      el.muted = false;
+    };
+    el.src = SILENCE;
+    void Promise.resolve(el.play()).then(done, done);
+  }
+
   async next(): Promise<void> {
     // A re-entrancy guard, deliberately not a lock: it must never be able to
     // outlive the advance it is guarding.
@@ -551,7 +582,13 @@ class PlayerEngine {
         this.adoptTrack(track);
         this.save();
         this.startPlayLog(track.id);
-        this.audio.play().catch(() => { void this.playAt(index); });
+        this.audio.play().catch(() => {
+          // Whatever refused the swapped element, the one that was just
+          // playing is known to be allowed. Go back to it rather than
+          // retrying into the same refusal.
+          this.audio = old;
+          void this.playAt(index);
+        });
         return;
       }
       await this.playAt(index);
@@ -576,6 +613,7 @@ class PlayerEngine {
   }
 
   toggle() {
+    this.bless();
     if (!this.audio.src && this.queueIndex >= 0) { void this.playAt(this.queueIndex); return; }
     if (this.audio.paused) this.audio.play().catch((e: Error) => this.notify(e.message, true));
     else this.audio.pause();
