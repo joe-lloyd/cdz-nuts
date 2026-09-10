@@ -59,6 +59,18 @@ const ADVANCE_GUARD_MS = 15_000;
  */
 const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
 
+/**
+ * How long a swapped-in element gets to make a sound.
+ *
+ * The gapless swap plays an element that has been buffering in the
+ * background for twenty seconds, so it should start at once. One that has not
+ * moved after this long is not going to: its `play()` promise is the kind
+ * that never settles, and nothing else will ever fire. Loading the track
+ * afresh through the ordinary path is the same thing every first track does,
+ * and that path is known to work.
+ */
+const SWAP_START_MS = 5000;
+
 const RESUME_ATTEMPTS = 3;
 /** Backoff between retries, multiplied by the attempt number. */
 const RESUME_BACKOFF_MS = 1000;
@@ -167,6 +179,7 @@ class PlayerEngine {
   private listeners = new Set<() => void>();
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private blessed = false;
+  private swapWatchdog: ReturnType<typeof setTimeout> | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
   private resumeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -420,6 +433,7 @@ class PlayerEngine {
     this.bless();
     this.flushPlay(false);
     this.prefetch = null;
+    clearTimeout(this.swapWatchdog);
     this.audio.pause();
     this.audio.removeAttribute('src');
     this.audio.load();
@@ -530,15 +544,32 @@ class PlayerEngine {
     this.blessed = true;
     const el = this.standby();
     if (el.src) return;
-    el.muted = true;
+    // Not muted: the sample has no samples, so there is nothing to hear. It
+    // used to be muted here and unmuted once `play()` settled, and on media
+    // it will not decode WebKit's `play()` never settles -- which left the
+    // element muted for the life of the page, and every track that swapped
+    // onto it afterwards played in silence.
     const done = () => {
+      // Only if it is still ours. Prefetch may have moved a real track in by
+      // the time a slow promise gets round to settling.
+      if (el.src !== SILENCE) return;
       el.pause();
       el.removeAttribute('src');
       el.load();
-      el.muted = false;
     };
     el.src = SILENCE;
     void Promise.resolve(el.play()).then(done, done);
+  }
+
+  /** Give a swapped-in element SWAP_START_MS to move, or load the track afresh. */
+  private watchSwap(el: HTMLAudioElement, index: number) {
+    clearTimeout(this.swapWatchdog);
+    this.swapWatchdog = setTimeout(() => {
+      if (this.audio !== el || this.queueIndex !== index) return;
+      // Paused at zero is the listener's doing; playing at zero is a wedge.
+      if (el.paused || el.currentTime > 0) return;
+      void this.playAt(index);
+    }, SWAP_START_MS);
   }
 
   async next(): Promise<void> {
@@ -596,6 +627,7 @@ class PlayerEngine {
         this.adoptTrack(track);
         this.save();
         this.startPlayLog(track.id);
+        this.watchSwap(this.audio, index);
         this.audio.play().catch(() => {
           // Whatever refused the swapped element, the one that was just
           // playing is known to be allowed. Go back to it rather than
