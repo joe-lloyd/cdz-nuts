@@ -83,21 +83,36 @@ input:focus-visible {
   border: 50px solid rgba(255, 87, 217, .018);
 }
 
+/* Hidden by clipping, not by being parked above the viewport.
+   translateY(-160%) left it one flick away from being seen: WebKit drags
+   fixed elements down during rubber-band overscroll, so on a Mac it rode into
+   view every time you scrolled up past the top, looking like a button nobody
+   could press. Clipped to a single pixel it cannot be revealed by any amount
+   of bouncing, and focus restores it to a real button. */
 .skip-link {
   position: fixed;
   z-index: 200;
   top: 12px;
   left: 12px;
-  padding: 10px 14px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
   color: var(--accent-ink);
   background: var(--accent);
   border-radius: 999px;
   font-weight: 800;
-  transform: translateY(-160%);
-  transition: transform .18s ease;
 }
 
-.skip-link:focus { transform: translateY(0); }
+.skip-link:focus {
+  width: auto;
+  height: auto;
+  padding: 10px 14px;
+  overflow: visible;
+  clip-path: none;
+}
 
 .mobile-bar,
 .nav-backdrop,
