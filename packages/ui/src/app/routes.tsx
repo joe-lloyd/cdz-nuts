@@ -10,10 +10,17 @@
 import type { ReactNode } from 'react';
 
 /** Top-level tabs. The path is the tab id, which is also the nav button's key. */
+/**
+ * The sidebar list, and only that.
+ *
+ * Twelve entries did not fit a window that was not maximised, and what fell
+ * off the bottom was the sidebar foot. Three came out rather than adding a
+ * scrollbar and calling it fixed: Overview is where the logo goes, and Latest
+ * and Radio are sections of Overview now, so they are one scroll from the
+ * front page instead of a click from a list nobody could finish reading.
+ * Their paths still work; see PAGE_COPY.
+ */
 export const TABS = {
-  overview: 'Overview',
-  radio: 'Radio',
-  latest: 'Latest',
   artists: 'Artists',
   liked: 'Songs',
   albums: 'Albums',
@@ -56,8 +63,13 @@ export function pathFromLegacyHash(hash: string): string | null {
   return known ? `/${route}` : null;
 }
 
-/** The eyebrow and heading each tab shows in the page head. */
-export const PAGE_COPY: Record<TabId, [string, string]> = {
+/**
+ * The eyebrow and heading each page shows in the page head.
+ *
+ * Keyed by path rather than by TabId: overview, latest and radio are still
+ * real destinations with real URLs, they are simply not in the sidebar.
+ */
+export const PAGE_COPY: Record<string, [string, string]> = {
   overview: ['Your listening memory', 'The collection'],
   radio: ['Everything you have not heard yet', 'Radio'],
   latest: ['Freshly on disk', 'Latest downloads'],
@@ -97,13 +109,10 @@ export const PARENT_OF: Record<string, string> = {
 const icon = (path: ReactNode): ReactNode => path;
 
 export const TAB_ICONS: Record<TabId, ReactNode> = {
-  overview: icon(<svg viewBox="0 0 24 24"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z" /></svg>),
   artists: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>),
   liked: icon(<svg viewBox="0 0 24 24"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>),
   albums: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="2" /><path d="M12 3v3" /></svg>),
   playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7M18 14v6m-3-3h6" /></svg>),
-  latest: icon(<svg viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" /><circle cx="12" cy="12" r="9" /></svg>),
-  radio: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="14" r="3" /><path d="M5.6 8.4a9 9 0 0 1 12.8 0M8.5 11.3a5 5 0 0 1 7 0" /></svg>),
   top: icon(<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" /></svg>),
   shows: icon(<svg viewBox="0 0 24 24"><path d="M6 3v18M18 3v18M6 7h12M6 17h12" /><path d="M10 11h4v2h-4z" /></svg>),
   upgrades: icon(<svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 3 13 3-9 2 6h3" /><path d="m16 6 2-2 2 2M18 4v6" /></svg>),

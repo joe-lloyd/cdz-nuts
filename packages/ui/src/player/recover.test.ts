@@ -1,0 +1,98 @@
+// The bug this pins: a single failed range request ended the song for good.
+//
+// On 2026-09-10 four /api/player/stream requests from a Mac got a 502 while
+// the server container was being redeployed. Each one stopped playback dead
+// with "Playback interrupted" and no way back except pressing play again. A
+// deploy, a WiFi blip or eliot waking up should cost a listener a second, not
+// the rest of the track.
+
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+
+type Listener = (event: { target: unknown }) => void;
+
+/** An audio element that records listeners, so a test can fail it mid-track. */
+class FakeAudio {
+  preload = '';
+  src = '';
+  currentTime = 0;
+  duration = 210;
+  paused = true;
+  volume = 1;
+  playbackRate = 1;
+  loads = 0;
+  plays = 0;
+  private listeners = new Map<string, Listener[]>();
+
+  load() { this.loads += 1; }
+  pause() { this.paused = true; }
+  play(): Promise<void> { this.paused = false; this.plays += 1; return Promise.resolve(); }
+  removeAttribute(name: string) { if (name === 'src') this.src = ''; }
+  addEventListener(type: string, fn: Listener) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  removeEventListener() {}
+  fire(type: string) {
+    for (const fn of this.listeners.get(type) ?? []) fn({ target: this });
+  }
+}
+
+const created: FakeAudio[] = [];
+vi.stubGlobal('Audio', class extends FakeAudio {
+  constructor() { super(); created.push(this); }
+});
+vi.stubGlobal('fetch', vi.fn((url: string) => {
+  if (url.startsWith('/api/player/resolve')) {
+    const id = new URL(url, 'http://localhost').searchParams.get('id') ?? '';
+    return Promise.resolve(new Response(JSON.stringify({
+      available: true,
+      streamUrl: `/api/player/stream?id=${id}`,
+      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: 210_000 },
+    }), { headers: { 'content-type': 'application/json' } }));
+  }
+  return Promise.resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }));
+}));
+
+const { player } = await import('./engine.ts');
+
+const active = () => created.find((el) => el.src) ?? created[0]!;
+
+beforeEach(() => { vi.useFakeTimers(); });
+afterEach(() => { vi.useRealTimers(); });
+
+test('a stream that fails mid-track resumes where it stopped', async () => {
+  player.setQueue([{ id: 't1', name: 'Track 1', artists: 'Someone', durationMs: 210_000 }], 't1');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  const el = active();
+  const url = el.src;
+  expect(url, 'the track should be loaded before we break it').toBeTruthy();
+  el.currentTime = 137;
+  el.fire('error');
+
+  // Not an error state: the listener should be trying again, not giving up.
+  expect(player.getSnapshot().state).not.toBe('error');
+
+  await vi.advanceTimersByTimeAsync(5000);
+  el.fire('loadedmetadata');
+
+  expect(el.src).toBe(url);
+  expect(el.currentTime, 'it must pick the track up where it stopped').toBe(137);
+  expect(el.paused).toBe(false);
+});
+
+test('a stream that keeps failing eventually gives up and says so', async () => {
+  player.setQueue([{ id: 't2', name: 'Track 2', artists: 'Someone', durationMs: 210_000 }], 't2');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  const el = active();
+  el.currentTime = 12;
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    el.fire('error');
+    await vi.advanceTimersByTimeAsync(5000);
+    el.fire('loadedmetadata');
+  }
+
+  expect(player.getSnapshot().state, 'retrying for ever is its own bug').toBe('error');
+});

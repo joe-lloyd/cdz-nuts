@@ -155,7 +155,6 @@ input:focus-visible {
 /* Small enough to ignore, always there when you want to check. The dot is the
    only state it carries: an update is downloaded and waiting. */
 .version-chip {
-  align-self: center;
   padding: 2px 8px;
   border: 1px solid rgba(255, 255, 255, .16);
   border-radius: 999px;
@@ -358,6 +357,15 @@ input:focus-visible {
   margin: 0 auto 30px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--line);
+}
+
+/* The version and the wake button, kept together on the right of the header
+   so the heading keeps the whole left side to grow into. */
+.page-head-tools {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 /* Step back one page. The app is normally opened inside the phone's WebView,

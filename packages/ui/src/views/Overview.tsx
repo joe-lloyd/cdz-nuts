@@ -5,6 +5,8 @@ import { ago, releaseDay } from '../lib/format.ts';
 import { MonthChart, ProvBars, RhythmChart, StackChart, VIZ, VizLegend } from '../charts/charts.tsx';
 import { AlbumCell } from '../components/rows.tsx';
 import { Empty, Skeleton } from '../components/primitives.tsx';
+import { Latest } from './Library.tsx';
+import { Radio } from './Radio.tsx';
 import type { QualityTier, StackPoint } from '../api/types.ts';
 
 const TIER_META: Array<[QualityTier, string, string]> = [
@@ -145,6 +147,15 @@ export function Overview() {
       </div>
 
       <ReleaseSection />
+
+      {/* Both were sidebar entries of their own until the list stopped fitting
+          a window. They are sections here because this is the page you land on
+          from the logo, so they cost a scroll rather than a click. */}
+      <h2 id="latest">Latest downloads</h2>
+      <Latest />
+
+      <h2 id="radio">Radio</h2>
+      <Radio />
     </>
   );
 

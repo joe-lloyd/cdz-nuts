@@ -46,6 +46,13 @@ const HISTORY = 10;
  */
 const ADVANCE_GUARD_MS = 15_000;
 
+/** How many times a failed stream is retried before the player gives up. */
+const RESUME_ATTEMPTS = 3;
+/** Backoff between retries, multiplied by the attempt number. */
+const RESUME_BACKOFF_MS = 1000;
+/** Seconds of clean playback that count as recovered. */
+const RESUME_SETTLED_S = 3;
+
 export interface QueueItem {
   id: string;
   name: string;
@@ -147,6 +154,9 @@ class PlayerEngine {
   private snapshot: PlayerSnapshot = EMPTY;
   private listeners = new Set<() => void>();
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
+  private resumeAttempts = 0;
+  private resumeFrom = 0;
+  private resumeTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor() {
     this.audioA = new Audio();
@@ -171,6 +181,7 @@ class PlayerEngine {
         // A failed pre-buffer just falls back to the normal resolve path.
         if (e.target !== this.audio) { this.prefetch = null; return; }
         if (!this.audio.src) return;
+        if (this.resume()) return;
         this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed' });
         this.notify('Playback stopped. The archive may have gone offline.', true);
       });
@@ -590,6 +601,55 @@ class PlayerEngine {
     this.emit();
   }
 
+  /**
+   * Pick the track back up where it stopped, after a failed stream request.
+   *
+   * The media element treats any failed range request as the end of the road:
+   * it fires `error` once and stays dead. That made every transient blip
+   * terminal. On 2026-09-10 four requests got a 502 during a redeploy and each
+   * one ended the song, which is how this was found.
+   *
+   * The same URL and a seek back to where it stopped is all it takes, because
+   * the server answers ranges properly -- the retry asks for the bytes from
+   * that offset, not the whole file again. Bounded attempts, because a stream
+   * that is genuinely gone must still end up saying so rather than retrying
+   * silently for ever.
+   *
+   * Returns whether a retry was scheduled.
+   */
+  private resume(): boolean {
+    const src = this.audio.src;
+    if (!src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
+
+    const at = this.audio.currentTime;
+    const element = this.audio;
+    this.resumeAttempts += 1;
+    this.resumeFrom = at;
+
+    this.patch({
+      state: 'loading',
+      overline: 'Reconnecting',
+      byline: `Picking up where it stopped, attempt ${this.resumeAttempts} of ${RESUME_ATTEMPTS}`,
+    });
+
+    clearTimeout(this.resumeTimer);
+    this.resumeTimer = setTimeout(() => {
+      // Seek only once the element knows the track again: setting currentTime
+      // on an element with no metadata is either ignored or throws.
+      const seek = () => {
+        element.removeEventListener('loadedmetadata', seek);
+        if (element !== this.audio) return;
+        element.currentTime = at;
+        void element.play();
+      };
+      element.addEventListener('loadedmetadata', seek);
+      element.src = src;
+      element.load();
+    }, RESUME_BACKOFF_MS * this.resumeAttempts);
+
+    return true;
+  }
+
   private onPlayState(state: 'playing' | 'paused') {
     if (state === 'paused' && this.snapshot.state === 'error') return;
     this.patch({ state });
@@ -598,6 +658,11 @@ class PlayerEngine {
   }
 
   private onTimeUpdate() {
+    // Past the point it broke at, so the next blip gets its own full budget
+    // rather than inheriting the last one's.
+    if (this.resumeAttempts && this.audio.currentTime > this.resumeFrom + RESUME_SETTLED_S) {
+      this.resumeAttempts = 0;
+    }
     this.tickPlayLog();
     this.pushNowPlaying();
     const duration = this.durationSeconds();

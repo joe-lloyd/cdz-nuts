@@ -46,7 +46,6 @@ export function Shell() {
         <Link className="brand-mini" to="/overview">
           <span className="brand-mark" aria-hidden="true"><span /></span>
           <b>Music Taste</b>
-          <VersionChip />
         </Link>
         <BackButton parent={parent} className="page-back top-back" />
       </header>
@@ -59,7 +58,6 @@ export function Shell() {
             <Link className="brand" to="/overview" aria-label="Music Taste home">
               <span className="brand-mark" aria-hidden="true"><span /></span>
               <span><b>Music Taste</b><small>Private archive</small></span>
-              <VersionChip />
             </Link>
           </header>
           <nav id="nav" aria-label="Library">
@@ -83,10 +81,13 @@ export function Shell() {
           <header className="page-head">
             <div>
               <BackButton parent={parent} className="page-back" />
-              <span className="page-kicker">{kicker}</span>
+                <span className="page-kicker">{kicker}</span>
               <h1>{title}</h1>
             </div>
-            <WakeButton />
+            <div className="page-head-tools">
+              <VersionChip />
+              <WakeButton />
+            </div>
           </header>
           <main id="main" tabIndex={-1}><Outlet /></main>
         </section>
@@ -142,8 +143,9 @@ function describe(pathname: string): { kicker: string; title: string; parent: st
   }
   const aside = head ? ASIDE_COPY[head] : undefined;
   if (aside) return { kicker: aside[0], title: aside[1], parent: null };
-  const tab = (head && head in TABS ? head : 'overview') as TabId;
-  const copy = PAGE_COPY[tab];
+  // Overview is the fallback as well as a real path, because it is what the
+  // logo goes to and what an unknown head should land on.
+  const copy = (head ? PAGE_COPY[head] : undefined) ?? PAGE_COPY.overview!;
   return { kicker: copy[0], title: copy[1], parent: null };
 }
 
