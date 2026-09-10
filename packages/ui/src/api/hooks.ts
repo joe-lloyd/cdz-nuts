@@ -7,7 +7,7 @@
 
 import { useQuery, type UseQueryResult } from '@tanstack/react-query';
 
-import { get, getFresh, qs } from './client.ts';
+import { ApiError, get, getFresh, qs } from './client.ts';
 import type {
   Album, AlbumDetail, Artist, ArtistDetail, Cds, Continuation, Events,
   ListenBrainz, Overview, PlayerStatus, Playlist, Provenance, RadioStation,
@@ -16,6 +16,35 @@ import type {
 
 /** The archive changes on a nightly sync, so this is generous on purpose. */
 const ARCHIVE = 5 * 60_000;
+
+/**
+ * What the desktop shell says about itself, or null in a browser.
+ *
+ * One bundle serves two hosts. The shell answers /api/desktop/status itself
+ * and music.home.arpa 404s it, so the 404 is how the UI knows where it is
+ * running. Nothing here sniffs a user agent or waits for an injected global.
+ */
+export interface DesktopStatus {
+  version: string;
+  update_pending: boolean;
+}
+
+export const useDesktop = () => useQuery<DesktopStatus | null>({
+  queryKey: ['desktop-status'],
+  queryFn: async () => {
+    try {
+      return await getFresh<DesktopStatus>('/api/desktop/status');
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) return null;
+      throw error;
+    }
+  },
+  retry: false,
+  staleTime: ARCHIVE,
+});
+
+/** Which front end this server is serving. The web build's only version. */
+export const useUiBuild = () => query<{ digest: string }>(['ui-build'], '/api/ui-build');
 
 const query = <T>(key: unknown[], path: string, staleTime = ARCHIVE) =>
   useQuery({ queryKey: key, queryFn: () => get<T>(path), staleTime });

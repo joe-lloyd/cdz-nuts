@@ -1,40 +1,14 @@
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
-import { get, getFresh, post, ApiError } from '../api/client.ts';
+import { post } from '../api/client.ts';
+import { useDesktop, useUiBuild } from '../api/hooks.ts';
 import { Empty, Skeleton } from '../components/primitives.tsx';
 import { player } from '../player/usePlayer.ts';
-
-/**
- * What the desktop shell answers about itself.
- *
- * The web server has no /api/desktop/*, so a 404 here is the honest way for
- * one bundle to know which of its two hosts it is running in. Anything else
- * would mean sniffing a user agent or asking the shell to inject a global.
- */
-interface DesktopStatus {
-  version: string;
-  update_pending: boolean;
-}
 
 type Found =
   | { state: 'current'; version: string }
   | { state: 'available'; version: string }
   | { state: 'failed'; error: string };
-
-function useDesktop() {
-  return useQuery<DesktopStatus | null>({
-    queryKey: ['desktop-status'],
-    queryFn: async () => {
-      try {
-        return await getFresh<DesktopStatus>('/api/desktop/status');
-      } catch (error) {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }
-    },
-    retry: false,
-  });
-}
 
 export function Settings() {
   const { data: desktop, isPending, refetch } = useDesktop();
@@ -94,11 +68,7 @@ export function Settings() {
 
 /** In a browser there is no app to update, so say which front end is serving. */
 function ServerVersion() {
-  const { data, isPending } = useQuery({
-    queryKey: ['ui-build'],
-    queryFn: () => get<{ digest: string }>('/api/ui-build'),
-    retry: false,
-  });
+  const { data, isPending } = useUiBuild();
 
   if (isPending) return <Skeleton />;
   if (!data) return <Empty>Nothing to configure here yet.</Empty>;

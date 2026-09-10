@@ -6,6 +6,7 @@ import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
 import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
+import { useDesktop, useUiBuild } from '../api/hooks.ts';
 
 /**
  * The frame everything renders inside.
@@ -45,6 +46,7 @@ export function Shell() {
         <Link className="brand-mini" to="/overview">
           <span className="brand-mark" aria-hidden="true"><span /></span>
           <b>Music Taste</b>
+          <VersionChip />
         </Link>
         <BackButton parent={parent} className="page-back top-back" />
       </header>
@@ -57,6 +59,7 @@ export function Shell() {
             <Link className="brand" to="/overview" aria-label="Music Taste home">
               <span className="brand-mark" aria-hidden="true"><span /></span>
               <span><b>Music Taste</b><small>Private archive</small></span>
+              <VersionChip />
             </Link>
           </header>
           <nav id="nav" aria-label="Library">
@@ -92,6 +95,38 @@ export function Shell() {
       <PlayerBar />
       <Toast />
     </>
+  );
+}
+
+/**
+ * Which build you are looking at, in the one place you always see.
+ *
+ * The desktop app has a version number that can fall behind, so it gets one.
+ * A browser is always on whatever the server just served, so a version number
+ * there would be theatre; it shows the front-end build id instead, which is
+ * the thing worth comparing against a desktop app that embeds its own copy.
+ */
+export function VersionChip() {
+  const { data: desktop } = useDesktop();
+  const { data: build } = useUiBuild();
+
+  if (desktop) {
+    return (
+      <span
+        className={`version-chip${desktop.update_pending ? ' has-update' : ''}`}
+        title={desktop.update_pending
+          ? 'An update is downloaded and waiting. Install it from Settings.'
+          : 'The version of the desktop app you are running'}
+      >
+        v{desktop.version}
+      </span>
+    );
+  }
+  if (!build) return null;
+  return (
+    <span className="version-chip" title="The front end this server is serving">
+      {build.digest.slice(0, 7)}
+    </span>
   );
 }
 

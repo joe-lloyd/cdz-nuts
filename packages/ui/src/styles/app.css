@@ -152,6 +152,37 @@ input:focus-visible {
 
 .brand:hover { text-decoration: none; }
 
+/* Small enough to ignore, always there when you want to check. The dot is the
+   only state it carries: an update is downloaded and waiting. */
+.version-chip {
+  align-self: center;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  color: var(--ink-3);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  white-space: nowrap;
+}
+
+.version-chip.has-update {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.version-chip.has-update::after {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-left: 6px;
+  vertical-align: middle;
+  background: var(--accent);
+  border-radius: 50%;
+}
+
 .brand-mark {
   position: relative;
   display: grid;
