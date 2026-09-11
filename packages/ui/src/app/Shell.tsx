@@ -1,3 +1,4 @@
+import { GlobalSearch } from './GlobalSearch.tsx';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
@@ -78,6 +79,7 @@ export function Shell() {
         </aside>
 
         <section className="content-shell">
+          <GlobalSearch>
           <header className="page-head">
             <div>
               <BackButton parent={parent} className="page-back" />
@@ -90,6 +92,7 @@ export function Shell() {
             </div>
           </header>
           <main id="main" tabIndex={-1}><Outlet /></main>
+          </GlobalSearch>
         </section>
       </div>
 

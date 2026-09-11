@@ -1,3 +1,4 @@
+import { LikeButton } from '../components/LikeButton.tsx';
 import { useState } from 'react';
 import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
@@ -125,7 +126,7 @@ export function ArtistDetail() {
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
           <div className="meta">{meta}</div>
-          <SpotifyButton type="artist" id={artist.id} />{' '}
+          {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}{' '}
           <BandcampButton query={artist.name} type="b" />
         </div>
       </div>

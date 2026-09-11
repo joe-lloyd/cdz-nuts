@@ -1,3 +1,4 @@
+import { LikeButton } from './LikeButton.tsx';
 import { Link } from 'react-router-dom';
 
 import { bareAlbumName, day, dur } from '../lib/format.ts';
@@ -29,6 +30,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
           {track.album ? <> · {albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album}</> : null}
         </div>
       </div>
+      <LikeButton track={track} />
       <MediaBadges row={track} />
       <div className="end">{endText ?? dur(track.duration_ms)}</div>
       <RadioControl track={track} />
@@ -56,6 +58,7 @@ export function SongCard({ track, meta }: { track: Track; meta?: string | undefi
       </div>
       <MediaBadges row={track} />
       <div className="song-end">
+        <LikeButton track={track} />
         <span className="song-dur">{dur(track.duration_ms)}</span>
         {meta ? <small>{meta}</small> : null}
       </div>
