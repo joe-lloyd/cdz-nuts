@@ -3,7 +3,7 @@ import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
-  useArtists, useLatest, useLibraryAlbums, useLikedTracks, useLocalTracks,
+  useArtists, useLatest, useLibraryAlbums, useLikedTracks,
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
@@ -16,20 +16,16 @@ import type { Track } from '../api/types.ts';
 
 export function Artists() {
   const { data, isPending, error } = useArtists();
-  const [q, setQ] = useState('');
   const [followedOnly, setFollowedOnly] = useState(false);
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
-  const needle = q.toLowerCase();
   const rows = all.filter((a) =>
-    (!followedOnly || a.is_followed)
-    && (!needle || a.name.toLowerCase().includes(needle) || (a.genres ?? '').toLowerCase().includes(needle)));
+    !followedOnly || a.is_followed);
 
   return (
     <>
       <div className="tools">
-        <input type="search" placeholder={`search ${all.length} artists…`} value={q} onChange={(e) => setQ(e.target.value)} />
         <label className="chk">
           <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} /> followed only
         </label>
@@ -55,107 +51,27 @@ export function Artists() {
 }
 
 export function Songs() {
-  const liked = useLikedTracks();
-  const local = useLocalTracks();
-  const [q, setQ] = useState('');
-  const [showGone, setShowGone] = useState(false);
-  const debounced = useDebounced(q, 300);
-
-  // Liked songs are the page; the search box reaches the whole library.
-  // Server-side, because "everything" is tens of thousands of tracks. Query's
-  // keyed cache is what drops out-of-order responses — the old code needed a
-  // hand-rolled generation counter for exactly this.
-  const search = useQuery({
-    queryKey: ['search-songs', debounced],
-    queryFn: () => get<Track[]>(`/api/search-songs${qs({ q: debounced })}`),
-    enabled: debounced.trim().length >= 2,
-    staleTime: 60_000,
-  });
-
-  if (liked.isPending) return <Skeleton />;
-  const all = liked.data ?? [];
-  const needle = q.trim().toLowerCase();
-  const matches = (t: Track) =>
-    !needle || `${t.name} ${t.artists ?? ''} ${t.album ?? ''}`.toLowerCase().includes(needle);
-
-  const rows = all.filter((t) => (showGone || !t.removed_at) && matches(t));
-  const mine = (local.data ?? []).filter(matches);
-  const likedIds = new Set(all.map((t) => t.id));
-  const extra = (search.data ?? []).filter((t) => !likedIds.has(t.id));
-
-  return (
-    <>
-      <div className="tools">
-        <input type="search" placeholder="search liked songs, or the whole library…" value={q} onChange={(e) => setQ(e.target.value)} />
-        <label className="chk">
-          <input type="checkbox" checked={showGone} onChange={(e) => setShowGone(e.target.checked)} /> show un-liked
-        </label>
-      </div>
-
-      <h2>Liked songs ({rows.length.toLocaleString()})</h2>
-      {rows.length ? (
-        <PlayScope tracks={rows}>
-          <div className="song-grid">
-            {rows.map((t) => <SongCard key={t.id} track={t} meta={t.added_at ? day(t.added_at) : undefined} />)}
-          </div>
-        </PlayScope>
-      ) : <Empty>no matches</Empty>}
-
-      {debounced.trim().length >= 2 ? (
-        <>
-          <h2>Everywhere in the library {extra.length ? `(${extra.length}${(search.data?.length ?? 0) >= 150 ? '+' : ''})` : ''}</h2>
-          {search.isPending ? <Empty>searching…</Empty>
-            : extra.length ? (
-              <PlayScope tracks={extra}>
-                <div className="song-grid">
-                  {extra.map((t) => <SongCard key={t.id} track={t} meta={t.liked ? 'liked' : undefined} />)}
-                </div>
-              </PlayScope>
-            ) : <Empty>nothing else matches — every hit is already in your liked songs</Empty>}
-        </>
-      ) : null}
-
-      {mine.length ? (
-        <>
-          <h2>Downloaded here ({mine.length.toLocaleString()})</h2>
-          <PlayScope tracks={mine}>
-            {mine.some((t) => t.standalone) ? (
-              <div className="song-grid">
-                {mine.filter((t) => t.standalone).map((t) => <SongCard key={t.id} track={t} meta="single" />)}
-              </div>
-            ) : null}
-            {mine.some((t) => !t.standalone) ? (
-              <>
-                <h3 className="sub-head">From imported albums</h3>
-                <div className="song-grid">
-                  {mine.filter((t) => !t.standalone).map((t) => <SongCard key={t.id} track={t} meta={t.codec ?? undefined} />)}
-                </div>
-              </>
-            ) : null}
-          </PlayScope>
-        </>
-      ) : null}
-    </>
-  );
+  const { data, isPending, error } = useLikedTracks();
+  if (isPending) return <Skeleton />;
+  if (error) return <Empty>{error.message}</Empty>;
+  const rows = (data ?? []).filter(t => !t.removed_at);
+  return <>
+    <h2>{rows.length.toLocaleString()} liked songs</h2>
+    {rows.length ? <PlayScope tracks={rows}><div className="song-grid">
+      {rows.map(t => <SongCard key={t.id} track={t} meta={t.added_at ? day(t.added_at) : undefined} />)}
+    </div></PlayScope> : <Empty>Like a song to save it here alongside your Spotify likes.</Empty>}
+  </>;
 }
 
 export function Albums() {
   const saved = useSavedAlbums();
   const library = useLibraryAlbums();
-  const [q, setQ] = useState('');
-  const needle = q.toLowerCase();
-  const match = (name: string, artists?: string | null) =>
-    !needle || `${name} ${artists ?? ''}`.toLowerCase().includes(needle);
-
   if (saved.isPending && library.isPending) return <Skeleton />;
-  const savedRows = (saved.data ?? []).filter((a) => match(a.name, a.artists));
-  const libRows = (library.data ?? []).filter((a) => match(a.name, a.artists));
+  const savedRows = saved.data ?? [];
+  const libRows = library.data ?? [];
 
   return (
     <>
-      <div className="tools">
-        <input type="search" placeholder="search albums…" value={q} onChange={(e) => setQ(e.target.value)} />
-      </div>
       {savedRows.length ? (
         <>
           <h2>Saved ({savedRows.length})</h2>
