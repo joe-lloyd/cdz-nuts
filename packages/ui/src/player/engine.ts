@@ -46,18 +46,12 @@ const HISTORY = 10;
  */
 const ADVANCE_GUARD_MS = 15_000;
 
-/** How many times a failed stream is retried before the player gives up. */
 /**
- * A single silent sample, played once to buy an element the right to play.
- *
- * WebKit grants autoplay per media *element*, not per document: one that has
- * never played inside a user gesture is refused for the life of the page. The
- * gapless swap plays the other element, which has never seen a gesture, so on
- * macOS the track ended and the next one was refused while the same code
- * worked on WebView2. Playing silence on the standby inside the gesture that
- * starts the first track is what buys the second track the right to play.
+ * Ten milliseconds of silence to start the standby inside a user gesture.
+ * The previous WAV had zero frames. WKWebView rejected it with a decode
+ * error and left play() pending, so it could not grant playback permission.
  */
-const SILENCE = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA=';
+const SILENCE = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YVAAAACAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgA==';
 
 /**
  * How long a swapped-in element gets to make a sound.
@@ -157,6 +151,7 @@ class PlayerEngine {
   private current: Track | null = null;
   private pendingTrackId: string | null = null;
   private advancingUntil = 0;
+  private playbackId = 0;
 
   private continuationAlbums: string[] = [];
   private continuationEnabled = true;
@@ -430,6 +425,7 @@ class PlayerEngine {
 
   async playAt(index: number): Promise<void> {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
+    const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
     this.prefetch = null;
@@ -453,7 +449,7 @@ class PlayerEngine {
 
     try {
       const result = await get<ResolveResult>(`/api/player/resolve?id=${encodeURIComponent(item.id)}`);
-      if (this.pendingTrackId !== item.id) return;
+      if (this.playbackId !== playbackId) return;
       if (!result.available) { this.showUnavailable(result); return; }
 
       const track = result.track!;
@@ -473,6 +469,7 @@ class PlayerEngine {
       this.audio.src = result.streamUrl!;
       this.startPlayLog(track.id);
       await this.audio.play();
+      if (this.playbackId !== playbackId) return;
       if (this.pendingResume?.id === track.id && this.pendingResume.pos > 0) {
         this.audio.currentTime = this.pendingResume.pos;
       }
@@ -480,6 +477,7 @@ class PlayerEngine {
       this.save();
       this.emit();
     } catch (err) {
+      if (this.playbackId !== playbackId) return;
       this.showUnavailable({
         available: false, reason: 'player-error',
         detail: err instanceof Error ? err.message : 'Playback could not start',
@@ -544,11 +542,7 @@ class PlayerEngine {
     this.blessed = true;
     const el = this.standby();
     if (el.src) return;
-    // Not muted: the sample has no samples, so there is nothing to hear. It
-    // used to be muted here and unmuted once `play()` settled, and on media
-    // it will not decode WebKit's `play()` never settles -- which left the
-    // element muted for the life of the page, and every track that swapped
-    // onto it afterwards played in silence.
+    // Keep it unmuted so this grants permission for audible playback too.
     const done = () => {
       // Only if it is still ours. Prefetch may have moved a real track in by
       // the time a slow promise gets round to settling.
@@ -559,17 +553,6 @@ class PlayerEngine {
     };
     el.src = SILENCE;
     void Promise.resolve(el.play()).then(done, done);
-  }
-
-  /** Give a swapped-in element SWAP_START_MS to move, or load the track afresh. */
-  private watchSwap(el: HTMLAudioElement, index: number) {
-    clearTimeout(this.swapWatchdog);
-    this.swapWatchdog = setTimeout(() => {
-      if (this.audio !== el || this.queueIndex !== index) return;
-      // Paused at zero is the listener's doing; playing at zero is a wedge.
-      if (el.paused || el.currentTime > 0) return;
-      void this.playAt(index);
-    }, SWAP_START_MS);
   }
 
   async next(): Promise<void> {
@@ -603,6 +586,7 @@ class PlayerEngine {
       const item = this.queue[index]!;
       // The gapless path: swap which element is active instead of re-fetching.
       if (this.prefetch?.ready && this.prefetch.trackId === item.id && this.prefetch.track) {
+        const playbackId = ++this.playbackId;
         const old = this.audio;
         this.audio = this.standby();
         old.pause();
@@ -627,14 +611,22 @@ class PlayerEngine {
         this.adoptTrack(track);
         this.save();
         this.startPlayLog(track.id);
-        this.watchSwap(this.audio, index);
-        this.audio.play().catch(() => {
-          // Whatever refused the swapped element, the one that was just
-          // playing is known to be allowed. Go back to it rather than
-          // retrying into the same refusal.
+        const incoming = this.audio;
+        const retry = () => {
+          if (this.playbackId !== playbackId) return;
+          clearTimeout(this.swapWatchdog);
+          incoming.pause();
+          incoming.removeAttribute('src');
+          incoming.load();
           this.audio = old;
-          void this.playAt(index);
-        });
+          // trim() may have moved the cursor since we computed index.
+          void this.playAt(this.queueIndex);
+        };
+        clearTimeout(this.swapWatchdog);
+        this.swapWatchdog = setTimeout(() => {
+          if (incoming.currentTime === 0) retry();
+        }, SWAP_START_MS);
+        this.audio.play().catch(retry);
         return;
       }
       await this.playAt(index);
@@ -662,7 +654,13 @@ class PlayerEngine {
     this.bless();
     if (!this.audio.src && this.queueIndex >= 0) { void this.playAt(this.queueIndex); return; }
     if (this.audio.paused) this.audio.play().catch((e: Error) => this.notify(e.message, true));
-    else this.audio.pause();
+    else this.pause();
+  }
+
+  private pause() {
+    ++this.playbackId;
+    clearTimeout(this.swapWatchdog);
+    this.audio.pause();
   }
 
   seekFraction(fraction: number) {
@@ -670,11 +668,13 @@ class PlayerEngine {
     // handle lands somewhere other than where it was dropped.
     const duration = this.durationSeconds();
     if (!duration) return;
+    this.pendingResume = null;
     this.audio.currentTime = clamp(fraction, 0, 1) * duration;
     this.emit();
   }
 
   seekTo(seconds: number) {
+    this.pendingResume = null;
     this.audio.currentTime = Math.max(0, seconds);
     this.lyricsScrolledAt = 0;
     this.syncLyrics(true);
@@ -942,12 +942,12 @@ class PlayerEngine {
     // seconds, and that rule should not exist twice.
     const handlers: Record<string, MediaSessionActionHandler> = {
       play: () => { void this.audio.play(); },
-      pause: () => this.audio.pause(),
+      pause: () => this.pause(),
       previoustrack: () => this.previous(),
       nexttrack: () => { void this.next(); },
-      seekbackward: (d) => { this.audio.currentTime = Math.max(0, this.audio.currentTime - (d.seekOffset ?? 10)); },
-      seekforward: (d) => { this.audio.currentTime = Math.min(this.audio.duration || Infinity, this.audio.currentTime + (d.seekOffset ?? 10)); },
-      seekto: (d) => { if (d.seekTime != null) this.audio.currentTime = d.seekTime; },
+      seekbackward: (d) => this.seekTo(this.audio.currentTime - (d.seekOffset ?? 10)),
+      seekforward: (d) => this.seekTo(Math.min(this.audio.duration || Infinity, this.audio.currentTime + (d.seekOffset ?? 10))),
+      seekto: (d) => { if (d.seekTime != null) this.seekTo(d.seekTime); },
     };
     installNativeCommands(handlers);
     if (!('mediaSession' in navigator)) return;

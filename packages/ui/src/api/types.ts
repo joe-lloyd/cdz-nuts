@@ -67,6 +67,8 @@ export interface Album extends Badged, Tombstoned {
   popularity?: number | null;
   total_tracks?: number | null;
   saved_at?: string | null;
+  /** In the favourites list, by a Spotify save or a heart pressed here. */
+  liked?: number | boolean | null;
   downloaded?: boolean | number | null;
   local?: boolean | null;
   /** Latest only: files on disk but not yet indexed. null means unknown. */
@@ -84,6 +86,8 @@ export interface Artist extends Tombstoned {
   popularity?: number | null;
   image_url?: string | null;
   liked_count?: number | null;
+  /** In the favourites list, by a Spotify follow or a heart pressed here. */
+  liked?: number | boolean | null;
   top_rank?: number | null;
   discog_synced_at?: string | null;
   rank?: number | null;

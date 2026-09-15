@@ -2770,6 +2770,9 @@ input[type="range"] {
 .like-button[aria-pressed="true"] { color: var(--accent); }
 .like-control { flex-shrink: 0; }
 .like-control [role="alert"] { display: block; max-width: 140px; font-size: 12px; }
+.like-control [role="status"] { display: block; font-size: 12px; color: var(--ink-2); }
+.hero-actions .like-control { display: flex; align-items: center; gap: 8px; }
+.hero-actions .like-control [role="status"], .hero-actions .like-control [role="alert"] { display: inline; max-width: none; }
 @media (max-width: 760px) { .global-search-bar { top: 59px; } .global-search-bar button { font-size: 12px; max-width: 80px; } }
 
 .like-button, .global-search-bar button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
