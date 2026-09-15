@@ -20,8 +20,8 @@ export function Artists() {
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
-  const rows = all.filter((a) =>
-    !followedOnly || a.is_followed);
+  // A heart pressed here counts the same as a Spotify follow.
+  const rows = all.filter((a) => !followedOnly || (a.liked ?? a.is_followed));
 
   return (
     <>
@@ -35,7 +35,7 @@ export function Artists() {
           <div className="cell" key={a.id}>
             <Link to={`/artist/${a.id}`}>
               <Pic kind="artists" id={a.id} cdn={a.image_url} name={a.name} />
-              <div className="nm">{a.is_followed ? '★ ' : ''}{a.name}</div>
+              <div className="nm">{(a.liked ?? a.is_followed) ? '★ ' : ''}{a.name}</div>
             </Link>
             <div className="sub">
               {a.liked_count ? `${a.liked_count} liked` : ''}
