@@ -1,4 +1,4 @@
-import { LikeButton } from '../components/LikeButton.tsx';
+import { AlbumLikeButton, ArtistLikeButton } from '../components/LikeButton.tsx';
 import { useState } from 'react';
 import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
@@ -48,6 +48,7 @@ export function AlbumDetail() {
           <div className="meta">{meta}</div>
           <Badges row={album} />
           <div className="hero-actions">
+            <AlbumLikeButton album={album} />
             {album.downloaded && tracks.length ? (
               <button className="primary-action play-album" type="button" onClick={() => playAll(tracks)}>
                 {PLAY_ICON} Play album
@@ -122,12 +123,15 @@ export function ArtistDetail() {
       <div className="hero">
         <Pic kind="artists" id={artist.id} cdn={artist.image_url} name={artist.name} />
         <div>
-          <h1>{artist.is_followed ? '★ ' : ''}{artist.name}</h1>
+          <h1>{artist.name}</h1>
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
           <div className="meta">{meta}</div>
-          {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}{' '}
-          <BandcampButton query={artist.name} type="b" />
+          <div className="hero-actions">
+            <ArtistLikeButton artist={artist} />
+            {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}
+            <BandcampButton query={artist.name} type="b" />
+          </div>
         </div>
       </div>
 
