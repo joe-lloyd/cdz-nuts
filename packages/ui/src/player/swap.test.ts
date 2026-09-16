@@ -173,3 +173,42 @@ test('media-key pause cancels a pending swap retry', async () => {
   expect(resolves.length).toBe(before);
   expect(second.paused).toBe(true);
 });
+
+test.each([2, 32])('a finished song advances in a %i-track queue when the desktop rejects beacons', async (length) => {
+  Object.defineProperty(navigator, 'sendBeacon', { configurable: true, value: () => {
+    throw new TypeError('Beacons can only be sent over HTTP(S)');
+  } });
+  try {
+    const tracks = Array.from({ length }, (_, i) => ({
+      id: `beacon${length}-${i}`, name: `Track ${i}`, artists: 'Someone', durationMs: 210_000,
+    }));
+    player.setQueue(tracks, `beacon${length}-0`, false);
+    await player.playAt(0);
+    const first = withSrc(`beacon${length}-0`)!;
+    // Listening time counts only small increments. Seeking to the end never
+    // reached the history-reporting path in the earlier regression tests.
+    for (let second = 1; second <= 21; second += 1) {
+      first.currentTime = second;
+      first.fire('timeupdate');
+    }
+    first.currentTime = 200;
+    first.fire('timeupdate');
+    await vi.advanceTimersByTimeAsync(0);
+    first.currentTime = 210;
+    first.pause();
+    first.fire('pause');
+    first.fire('ended');
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(player.getSnapshot().currentId).toBe(`beacon${length}-1`);
+    expect(player.getSnapshot().queueIndex).toBe(1);
+    expect(withSrc(`beacon${length}-1`)?.paused).toBe(false);
+    expect(fetch).toHaveBeenCalledWith('/api/player/played', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: `beacon${length}-0`, msPlayed: 21000, completed: true }),
+      keepalive: true,
+    });
+  } finally {
+    Reflect.deleteProperty(navigator, 'sendBeacon');
+  }
+});

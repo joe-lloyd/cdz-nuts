@@ -839,12 +839,15 @@ class PlayerEngine {
     this.playLog = null;
     if (!log || log.ms < 20000) return;
     const body = JSON.stringify({ id: log.trackId, msPlayed: Math.round(log.ms), completed });
-    const sent = navigator.sendBeacon?.('/api/player/played', new Blob([body], { type: 'application/json' }));
-    if (!sent) {
-      fetch('/api/player/played', {
-        method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true,
-      }).catch(() => {});
+    try {
+      if (navigator.sendBeacon?.('/api/player/played', new Blob([body], { type: 'application/json' }))) return;
+    } catch {
+      // WKWebView rejects beacons to homelab:// with a synchronous TypeError.
+      // The desktop protocol supports fetch, so report through it instead.
     }
+    fetch('/api/player/played', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true,
+    }).catch(() => {});
   }
 
   // --- lyrics -------------------------------------------------------------
