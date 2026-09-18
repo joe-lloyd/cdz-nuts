@@ -1363,6 +1363,62 @@ function libraryAlbumKeys(): Set<string> {
   return keys;
 }
 
+// One card per record. album_group (built by src/group-albums.ts after the
+// export) says which album rows are the same record; the artist page shows
+// the canonical row and folds the rest under it. The table may not exist yet
+// on a database the job has never run over, so its absence means "no groups".
+interface AlbumGroupRow { album_id: string; group_id: string; relation: 'canonical' | 'same_release' | 'edition' }
+interface EditionSummary { id: string; name: string; release_date: string | null; total_tracks: number | null; is_saved: number; relation: string; image_url: string | null }
+
+function albumGroupRows(albumIds: string[]): AlbumGroupRow[] {
+  if (!albumIds.length) return [];
+  if (!query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'album_group'").length) return [];
+  const marks = albumIds.map(() => '?').join(',');
+  return query(`SELECT album_id, group_id, relation FROM album_group WHERE album_id IN (${marks})`, ...albumIds) as AlbumGroupRow[];
+}
+
+/** Members of an album's group other than itself, with the canonical named. */
+function albumEditions(albumId: string): { canonical: { id: string; name: string } | null; editions: EditionSummary[] } {
+  const [mine] = albumGroupRows([albumId]);
+  if (!mine) return { canonical: null, editions: [] };
+  const members = query(`
+    SELECT al.id, al.name, al.release_date, al.total_tracks, al.is_saved, al.image_url, g.relation
+    FROM album_group g JOIN albums al ON al.id = g.album_id
+    WHERE g.group_id = ? AND al.removed_at IS NULL
+    ORDER BY g.relation = 'canonical' DESC, al.release_date, al.name`, mine.group_id) as EditionSummary[];
+  const canonical = members.find((m) => m.relation === 'canonical') ?? null;
+  return {
+    canonical: canonical && canonical.id !== albumId ? { id: canonical.id, name: canonical.name } : null,
+    editions: members.filter((m) => m.id !== albumId),
+  };
+}
+
+/**
+ * Fold grouped rows under their canonical row. A member whose canonical is
+ * not in the list (a multi-artist album grouped under the other artist)
+ * stays as it is rather than vanishing.
+ */
+function collapseEditions<T extends { id: string; name: string; release_date: string | null; total_tracks: number | null; is_saved: number; downloaded: number | null; image_url: string | null }>(rows: T[]): (T & { editions: EditionSummary[] })[] {
+  const groups = new Map(albumGroupRows(rows.map((r) => r.id)).map((g) => [g.album_id, g]));
+  const present = new Set(rows.map((r) => r.id));
+  const out: (T & { editions: EditionSummary[] })[] = [];
+  for (const row of rows) {
+    const g = groups.get(row.id);
+    if (g && g.relation !== 'canonical' && present.has(g.group_id)) continue;
+    const members = g ? rows.filter((r) => r.id !== row.id && groups.get(r.id)?.group_id === g.group_id) : [];
+    out.push({
+      ...row,
+      is_saved: Number(row.is_saved) || (members.some((m) => Number(m.is_saved)) ? 1 : 0),
+      downloaded: row.downloaded || (members.some((m) => m.downloaded) ? 1 : null),
+      editions: members.map((m) => ({
+        id: m.id, name: m.name, release_date: m.release_date, total_tracks: m.total_tracks,
+        is_saved: Number(m.is_saved), relation: groups.get(m.id)!.relation, image_url: m.image_url,
+      })),
+    });
+  }
+  return out;
+}
+
 const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown>> = {
   '/api/player/status': (params) => jellyfin.status(params.get('refresh') === '1'),
 
@@ -1654,7 +1710,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
 
     return {
       artist: query(`SELECT * FROM artists WHERE id = ?`, id)[0] ?? null,
-      albums: query(`
+      albums: collapseEditions(query(`
         SELECT DISTINCT al.id, al.name, al.album_type, al.release_date, al.image_url,
                al.total_tracks, al.is_saved, al.unsaved_at, al.removed_at, al.label,
                (SELECT downloaded FROM album_download_status ds WHERE ds.album_id = al.id) AS downloaded,
@@ -1663,7 +1719,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
         LEFT JOIN artist_albums aa ON aa.album_id = al.id AND aa.artist_id = ?1
         WHERE aa.artist_id = ?1
            OR al.id IN (SELECT album_id FROM album_artists WHERE artist_id = ?1)
-        ORDER BY al.release_date DESC`, id),
+        ORDER BY al.release_date DESC`, id) as Parameters<typeof collapseEditions>[0]),
       liked: query(`
         SELECT t.id, t.name, t.duration_ms, lt.added_at, lt.removed_at,
                al.name AS album, al.id AS album_id, al.image_url
@@ -1773,6 +1829,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       album: query(`SELECT al.*,
                (SELECT downloaded FROM album_download_status ds WHERE ds.album_id = al.id) AS downloaded
         FROM albums al WHERE al.id = ?`, id)[0] ?? null,
+      ...albumEditions(id),
       artists: query(`
         SELECT a.id, a.name FROM album_artists aa JOIN artists a ON a.id = aa.artist_id
         WHERE aa.album_id = ? ORDER BY aa.position`, id),

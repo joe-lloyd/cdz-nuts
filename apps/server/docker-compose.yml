@@ -21,7 +21,7 @@ services:
     image: node:24-alpine
     container_name: spotify-taste-db
     working_dir: /app/apps/server
-    command: ["sh", "-c", "while true; do node --disable-warning=ExperimentalWarning src/main.ts; S=$$(node -e \"const n=new Date(),t=new Date(n);t.setHours(4,0,0,0);if(t<=n)t.setDate(t.getDate()+1);console.log(Math.ceil((t-n)/1000))\"); echo \"--- sleeping $${S}s until 04:00\"; sleep $$S; done"]
+    command: ["sh", "-c", "while true; do node --disable-warning=ExperimentalWarning src/main.ts; node --disable-warning=ExperimentalWarning src/group-albums.ts; S=$$(node -e \"const n=new Date(),t=new Date(n);t.setHours(4,0,0,0);if(t<=n)t.setDate(t.getDate()+1);console.log(Math.ceil((t-n)/1000))\"); echo \"--- sleeping $${S}s until 04:00\"; sleep $$S; done"]
     restart: unless-stopped
     init: true
     # homelab-net + token: new-release alerts publish to the ntfy container
@@ -32,10 +32,15 @@ services:
       NTFY_URL: "http://ntfy:8080"
       NTFY_TOPIC: "homelab"
       NTFY_TOKEN_FILE: "/run/secrets/ntfy-token"
+      # TypeSafe judges which album rows are the same record (src/group-albums.ts,
+      # run after each export). Read-only and cached per pair, so a nightly run
+      # costs a handful of requests. Without the file the code rules still run.
+      TYPESAFE_API_KEY_FILE: "/run/secrets/typesafe-api-key"
       EVENT_COUNTRIES: "NL,BE,DE"
     volumes:
       - ../..:/app
       - /etc/homelab/spotify-taste-db/ntfy-token:/run/secrets/ntfy-token:ro
+      - /etc/homelab/spotify-taste-db/typesafe-api-key:/run/secrets/typesafe-api-key:ro
     logging:
       driver: json-file
       options:

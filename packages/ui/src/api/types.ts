@@ -70,6 +70,8 @@ export interface Album extends Badged, Tombstoned {
   /** In the favourites list, by a Spotify save or a heart pressed here. */
   liked?: number | boolean | null;
   downloaded?: boolean | number | null;
+  /** Other rows of the same record, folded under this one on the artist page. */
+  editions?: Edition[];
   local?: boolean | null;
   /** Latest only: files on disk but not yet indexed. null means unknown. */
   playable?: boolean | null;
@@ -144,10 +146,24 @@ export interface Stats {
   [k: string]: unknown;
 }
 
+/** Another Spotify listing of the same record: a duplicate or an edition. */
+export interface Edition {
+  id: string;
+  name: string;
+  release_date: string | null;
+  total_tracks: number | null;
+  is_saved: number;
+  relation: 'canonical' | 'same_release' | 'edition';
+  image_url: string | null;
+}
+
 export interface AlbumDetail {
   album: Album | null;
   artists: Array<{ id: string | null; name: string }>;
   tracks: Track[];
+  /** Set when this album is itself an edition of another listing. */
+  canonical?: { id: string; name: string } | null;
+  editions?: Edition[];
 }
 
 export interface ArtistDetail {

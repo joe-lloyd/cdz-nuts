@@ -78,7 +78,8 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
     || (String(album.name).match(/\((\d{4})\)/) ?? [])[1] || '';
   const type = (album.album_group && album.album_group !== 'album') ? album.album_group
     : (album.album_type === 'single' || album.kind === 'single') ? 'single' : '';
-  const line = [year, type, album.is_saved ? 'saved ✓' : ''].filter(Boolean).join(' · ');
+  const editions = album.editions?.length ? `${album.editions.length + 1} editions` : '';
+  const line = [year, type, editions, album.is_saved ? 'saved ✓' : ''].filter(Boolean).join(' · ');
 
   const art = (
     <Pic

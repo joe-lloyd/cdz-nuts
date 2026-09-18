@@ -47,6 +47,19 @@ export function AlbumDetail() {
           </div>
           <div className="meta">{meta}</div>
           <Badges row={album} />
+          {data!.editions?.length ? (
+            <div className="meta editions">
+              {data!.canonical ? <>an edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link> · </> : null}
+              also listed as {data!.editions.filter((e) => e.id !== data!.canonical?.id).map((e, i) => {
+                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : ''].filter(Boolean).join(', ');
+                return (
+                  <span key={e.id}>
+                    {i ? ', ' : ''}<Link to={`/album/${e.id}`}>{e.name}</Link>{detail ? ` (${detail})` : ''}{e.is_saved ? ' ✓' : ''}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
           <div className="hero-actions">
             <AlbumLikeButton album={album} />
             {album.downloaded && tracks.length ? (
