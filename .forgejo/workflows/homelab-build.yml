@@ -45,6 +45,11 @@ jobs:
       - name: Ring the doorbell
         env:
           CONDUCTOR_HMAC: ${{ secrets.CONDUCTOR_HMAC }}
+          # builds.home.arpa is signed by the lab CA. The runner mounts its
+          # bundle over the system store, but Node ignores that store and
+          # ships its own roots, so without this every fetch died with a bare
+          # "fetch failed" (UNABLE_TO_GET_ISSUER_CERT_LOCALLY underneath).
+          NODE_EXTRA_CA_CERTS: /etc/ssl/certs/ca-certificates.crt
           EVENT_NAME: ${{ github.event_name }}
           INPUT_PIPELINE: ${{ inputs.pipeline }}
           REF: ${{ github.ref }}
@@ -108,5 +113,10 @@ jobs:
             for (const p of pipelines) await post(p);
             console.log('\nQueued on the homelab runner.');
             console.log('Logs and artifacts: https://builds.home.arpa (LAN or wg0 only)');
-          })().catch((e) => { console.error(String(e.message || e)); process.exit(1); });
+          })().catch((e) => {
+            // fetch() hides the useful part in .cause; "fetch failed" alone
+            // cost a debugging session.
+            console.error(String(e.message || e), e.cause ? `(${e.cause.code || e.cause.message})` : '');
+            process.exit(1);
+          });
           JS
