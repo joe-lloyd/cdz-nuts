@@ -241,9 +241,60 @@ test('a title that exists on two records resolves to the album that was asked fo
       }),
     ]);
     const key = provenanceKey('Porcupine Tree', 'Fadeaway');
-    assert.match(store.byMatchKey(key, 'Stars Die (Remaster)')!.path, /Stars Die/);
+    assert.match(store.byMatchKey(key, { album: 'Stars Die (Remaster)' })!.path, /Stars Die/);
     // No album named, or a record the library does not hold: still owned, best copy.
     assert.match(store.byMatchKey(key)!.path, /On the Sunday of Life/);
-    assert.match(store.byMatchKey(key, 'Coma Divine')!.path, /On the Sunday of Life/);
+    assert.match(store.byMatchKey(key, { album: 'Coma Divine' })!.path, /On the Sunday of Life/);
+  });
+});
+
+// SPOT-25. Even Less is track 1 on Stupid Dream (about 7 minutes) and track 8
+// on Recordings (the full 14-minute take). Only the Stupid Dream file is on
+// disk. Asking for the Recordings take must not hand back the other one.
+test('a file whose length disagrees with the track is not that track', () => {
+  withStore((store) => {
+    store.upsert([
+      row({
+        path: '/lib/Porcupine Tree/Stupid Dream (1999) [Album]/01 Even Less.flac',
+        artist: 'Porcupine Tree', title: 'Even Less', album: 'Stupid Dream',
+        duration_ms: 427_000,
+      }),
+    ]);
+    const key = provenanceKey('Porcupine Tree', 'Even Less');
+    // The 14-minute take is not in the library: say so.
+    assert.equal(store.byMatchKey(key, { album: 'Recordings', durationMs: 856_000 }), null);
+    // The album take, a mastering fade apart, still resolves.
+    assert.match(store.byMatchKey(key, { album: 'Stupid Dream', durationMs: 430_000 })!.path, /Stupid Dream/);
+    // Nothing known about the length: nothing to gate on, so name wins as before.
+    assert.match(store.byMatchKey(key, { album: 'Recordings' })!.path, /Stupid Dream/);
+    assert.match(store.byMatchKey(key, { durationMs: null })!.path, /Stupid Dream/);
+  });
+});
+
+test('the album tag breaks ties only among files that pass the length gate', () => {
+  withStore((store) => {
+    store.upsert([
+      // The same recording on the original album and on a compilation, and a
+      // live version whose tag happens to match the album being asked about.
+      row({
+        path: '/lib/PT/Stupid Dream/03 Piano Lessons.flac', artist: 'Porcupine Tree',
+        title: 'Piano Lessons', album: 'Stupid Dream', duration_ms: 259_000, size_bytes: 30_000_000,
+      }),
+      row({
+        path: '/lib/PT/Stars Die/07 Piano Lessons.flac', artist: 'Porcupine Tree',
+        title: 'Piano Lessons', album: 'Stars Die', duration_ms: 260_000, size_bytes: 45_000_000,
+      }),
+      row({
+        path: '/lib/PT/Stupid Dream/12 Piano Lessons (live).flac', artist: 'Porcupine Tree',
+        title: 'Piano Lessons', album: 'Stupid Dream', duration_ms: 331_000, size_bytes: 60_000_000,
+      }),
+    ]);
+    const key = provenanceKey('Porcupine Tree', 'Piano Lessons');
+    // Biggest file is the live take, and it is tagged Stupid Dream. Neither
+    // fact makes it the 4:19 studio recording.
+    assert.match(store.byMatchKey(key, { album: 'Stupid Dream', durationMs: 259_000 })!.path, /03 Piano Lessons/);
+    assert.match(store.byMatchKey(key, { album: 'Stars Die', durationMs: 259_000 })!.path, /Stars Die/);
+    // A record the library does not hold falls back to the best copy that fits.
+    assert.match(store.byMatchKey(key, { album: 'Coma Divine', durationMs: 259_000 })!.path, /Stars Die/);
   });
 });

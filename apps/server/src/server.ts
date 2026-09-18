@@ -395,7 +395,7 @@ function libAsTasteTrack(row: ProvenanceRow): TasteTrack {
 // exact path can never resolve to the wrong recording.
 async function resolveMatch(track: TasteTrack) {
   if (track.id.startsWith('setlist:')) {
-    const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name));
+    const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name), { durationMs: track.duration_ms });
     if (owned) return jellyfin.matchPath(owned.path);
     const imported = upgrades.localTracks().find(item => provenanceKey(item.artists, item.name) === provenanceKey(track.artists, track.name));
     if (imported) return jellyfin.matchPath(imported.path);
@@ -519,7 +519,7 @@ function continuationAlbumId(track: TasteTrack, albums?: ContinuationAlbum[]): s
   // The indexed artist+title lookup keeps the ordinary resolve path cheap.
   // Confirm the album too: the same song can exist on an original record and
   // a compilation, and the player should continue from the one it named.
-  const byTitle = provenance.byMatchKey(provenanceKey(track.artists, track.name), track.album);
+  const byTitle = provenance.byMatchKey(provenanceKey(track.artists, track.name), { album: track.album, durationMs: track.duration_ms });
   if (byTitle && (!track.album || albumMatchKey(byTitle.artist, byTitle.album) === albumMatchKey(track.artists, track.album))) {
     return libAlbumId(byTitle.path);
   }
@@ -909,7 +909,7 @@ function referenceAlbumView(releaseGroupMbid: string): Record<string, unknown> |
   const coverage = upgrades.albumCoverage(releaseGroupMbid);
   let owned = 0;
   const tracks = album.tracks.map((track) => {
-    const file = provenance.byMatchKey(provenanceKey(album.artist, track.title), album.title);
+    const file = provenance.byMatchKey(provenanceKey(album.artist, track.title), { album: album.title, durationMs: track.lengthMs });
     const job = coverage.get(`${track.disc}:${track.position}`);
     if (file) owned += 1;
     return {
@@ -1157,7 +1157,7 @@ function wantTrack({ artist, title, album = null, durationMs = null, recordingMb
 
   // On disk already but never queued - the lossless hunt can start from
   // the file itself, no download needed.
-  const row = provenance.byMatchKey(provenanceKey(artist, title), album);
+  const row = provenance.byMatchKey(provenanceKey(artist, title), { album, durationMs });
   if (row) {
     if (isLosslessCodec(row.codec)) return { outcome: 'already-lossless', detail: 'Already lossless in the library' };
     const job = upgrades.create({
@@ -1191,7 +1191,7 @@ function tasteTrack(id: string): TasteTrack | null {
   if (id.startsWith('setlist:')) {
     const entry = localPlaylists.track(id);
     if (!entry) return null;
-    const owned = provenance.byMatchKey(provenanceKey(entry.artists ?? '', entry.name));
+    const owned = provenance.byMatchKey(provenanceKey(entry.artists ?? '', entry.name), { durationMs: entry.duration_ms });
     if (owned) return { ...libAsTasteTrack(owned), id, name: entry.name };
     const imported = upgrades.localTracks().find(track => provenanceKey(track.artists, track.name) === provenanceKey(entry.artists, entry.name));
     if (imported) return { ...localAsTasteTrack(imported), id, name: entry.name };
@@ -2465,7 +2465,7 @@ const server = http.createServer(async (req, res) => {
           if (!track) throw new Error('album track no longer exists');
           const queued = upgrades.findQueued(track.artists ?? '', track.name);
           if (queued) { jobs.push(publicUpgrade(queued)); continue; }
-          const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name), track.album);
+          const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name), { album: track.album, durationMs: track.duration_ms });
           let match = null;
           if (!owned) { try { match = await resolveMatch(track); } catch { /* worker checks the filesystem before intake */ } }
           jobs.push(publicUpgrade(upgrades.create({

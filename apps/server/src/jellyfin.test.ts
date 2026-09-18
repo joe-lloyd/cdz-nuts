@@ -72,13 +72,34 @@ test('reads artist credit from AlbumArtists {Id, Name} pairs, as Jellyfin serial
   assert.equal(score, 10);
 });
 
+// SPOT-25. Name, artist and track number score 8, the threshold, so a
+// same-named recording of a different length on another album resolved.
+test('a same-named track of a different length is not a candidate at all', () => {
+  const otherTake = {
+    Id: '3',
+    Name: 'Signal in the Static',
+    Album: 'Live at the Static',
+    Artists: ['Local Signals'],
+    IndexNumber: 3,
+    RunTimeTicks: 3_610_000_000, // 361 s against the track's 252 s
+  } as never;
+  assert.equal(scoreJellyfinMatch(track, otherTake), -1);
+  // Inside the tolerance it is the same recording and scores as before.
+  const sameTake = { ...(otherTake as object), RunTimeTicks: 2_560_000_000 } as never;
+  assert.equal(scoreJellyfinMatch(track, sameTake), 4 + 3 + 1 + 1);
+  // Jellyfin not knowing the length is not evidence of anything.
+  const unknown = { ...(otherTake as object), RunTimeTicks: undefined } as never;
+  assert.equal(scoreJellyfinMatch(track, unknown), 4 + 3 + 1);
+});
+
 test('does not over-score a same-title track by another artist and album', () => {
   const score = scoreJellyfinMatch(track, {
     Id: '2',
     Name: 'Signal in the Static',
     Album: 'Elsewhere',
     Artists: ['Someone Else'],
-    RunTimeTicks: 1_800_000_000,
+    // No length: a 180 s runtime would now reject it outright, and this test
+    // is about the artist and album not adding up, not the length gate.
   } as never);
   assert.equal(score, 4);
 });

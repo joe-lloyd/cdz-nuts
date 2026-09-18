@@ -13,7 +13,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
-import { normalizeMusicText } from './jellyfin.ts';
+import { lengthsDisagree, normalizeMusicText } from './jellyfin.ts';
 
 export const PROVENANCE_FILE = process.env.PROVENANCE_DB
   ?? path.join(import.meta.dirname, '..', 'data', 'provenance.db');
@@ -619,18 +619,29 @@ export class ProvenanceStore {
    * at all. Name matching is the only handle on those, and `match_key` is
    * already indexed for exactly this shape of question.
    *
+   * Pass `durationMs` when the caller knows how long the track is. A file
+   * whose length disagrees with it is a different recording of the same
+   * title (the 14-minute Even Less on Recordings is not the 7-minute one on
+   * Stupid Dream) and is not a candidate at all. When nothing passes, this
+   * returns null rather than the biggest file: a non-null answer means "we
+   * own this" to every caller, and the wrong take playing is worse than a
+   * track showing as missing. With no known length there is nothing to gate
+   * on, so the answer is whatever the name matches, as before.
+   *
    * Pass `album` when the caller knows which record it is asking about. A
    * recording filed under both its original album and a compilation matches
    * twice, and without the hint the bigger file wins - which is how a track
-   * on one album ended up showing another album's cover art.
+   * on one album ended up showing another album's cover art. It breaks ties
+   * among the files that pass the length gate.
    */
-  byMatchKey(key: string, album?: string | null): ProvenanceRow | null {
+  byMatchKey(key: string, hint: { album?: string | null; durationMs?: number | null } = {}): ProvenanceRow | null {
     if (!key) return null;
-    const rows = this.handle().prepare(`
+    const rows = (this.handle().prepare(`
       SELECT * FROM track_provenance WHERE match_key = ?
       ORDER BY size_bytes DESC
-    `).all(key) as ProvenanceRow[];
-    const want = albumNameKey(album);
+    `).all(key) as ProvenanceRow[])
+      .filter((row) => !lengthsDisagree(row.duration_ms, hint.durationMs));
+    const want = albumNameKey(hint.album);
     return (want && rows.find((row) => albumNameKey(row.album) === want)) || rows[0] || null;
   }
 

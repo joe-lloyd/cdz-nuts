@@ -121,8 +121,28 @@ export function deriveFromFilename(item: JellyfinAudioItem): JellyfinAudioItem {
   };
 }
 
+/**
+ * How far two lengths may differ and still be the same recording.
+ *
+ * Different recordings of one song (an album take, a radio edit, a live cut,
+ * a demo) almost always differ by more than a few seconds; the same recording
+ * on two releases differs by at most a mastering fade. 5 s sits between the
+ * scorer's 3 s "tight" and 8 s "loose" bands. Shared by every matcher that
+ * compares a file to a track, so there is one number to argue about.
+ */
+export const DURATION_TOLERANCE_MS = 5_000;
+
+/** True when both lengths are known and disagree by more than the tolerance. */
+export function lengthsDisagree(a: number | null | undefined, b: number | null | undefined): boolean {
+  return a != null && b != null && a > 0 && b > 0 && Math.abs(a - b) > DURATION_TOLERANCE_MS;
+}
+
 export function scoreJellyfinMatch(track: TasteTrack, item: JellyfinAudioItem): number {
   if (normalizeMusicText(track.name) !== normalizeMusicText(item.Name)) return -1;
+  // A same-named track of a different length is a different recording, no
+  // matter how many other fields agree. Name, artist and track number alone
+  // reach the threshold, which is how another album's take got played.
+  if (item.RunTimeTicks && lengthsDisagree(track.duration_ms, item.RunTimeTicks / 10_000)) return -1;
 
   let score = 4;
   const tasteArtists = names(track.artists);
