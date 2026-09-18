@@ -30,6 +30,8 @@ export function AlbumDetail() {
   ].filter(Boolean).join(' · ');
 
   const discs = [...new Set(tracks.map((t) => t.disc_number ?? 1))].sort((a, b) => a - b);
+  // The canonical is named separately, so it is not also "listed as".
+  const editions = (data!.editions ?? []).filter((e) => e.id !== data!.canonical?.id);
 
   return (
     <>
@@ -47,10 +49,12 @@ export function AlbumDetail() {
           </div>
           <div className="meta">{meta}</div>
           <Badges row={album} />
-          {data!.editions?.length ? (
+          {editions.length || data!.canonical ? (
             <div className="meta editions">
-              {data!.canonical ? <>an edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link> · </> : null}
-              also listed as {data!.editions.filter((e) => e.id !== data!.canonical?.id).map((e, i) => {
+              {data!.canonical ? <>an edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link></> : null}
+              {data!.canonical && editions.length ? ' · ' : ''}
+              {editions.length ? 'also listed as ' : ''}
+              {editions.map((e, i) => {
                 const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : ''].filter(Boolean).join(', ');
                 return (
                   <span key={e.id}>
