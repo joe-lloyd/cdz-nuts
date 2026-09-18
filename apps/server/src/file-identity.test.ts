@@ -61,6 +61,21 @@ test('pruning drops bootleg-only and wrong-length recordings and puts the tagged
   assert.deepEqual(pruned.map((c) => c.recordingMbid), ['arriving', 'other-live']);
 });
 
+test('mixes a stereo rip cannot be are not candidates', () => {
+  const f = file({ title: 'Shallow - 2017 Remaster', album: 'Deadwing', duration_ms: 257_000 });
+  const pruned = pruneCandidates(f, [
+    candidate({ recordingMbid: 'album', title: 'Shallow (album version)', lengthMs: 257_000, releases: [release('Deadwing')] }),
+    candidate({ recordingMbid: '51', title: 'Shallow (5.1 mix)', lengthMs: 257_000, releases: [release('Deadwing')] }),
+    candidate({ recordingMbid: 'inst', title: 'Shallow', disambiguation: 'instrumental', lengthMs: 257_000, releases: [release('Deadwing')] }),
+  ]);
+  assert.deepEqual(pruned.map((c) => c.recordingMbid), ['album']);
+  // Unless the file says it is one.
+  const inst = pruneCandidates(file({ title: 'Shallow (Instrumental)', album: 'Deadwing', duration_ms: 257_000 }), [
+    candidate({ recordingMbid: 'inst', title: 'Shallow', disambiguation: 'instrumental', lengthMs: 257_000, releases: [release('Deadwing')] }),
+  ]);
+  assert.equal(inst.length, 1);
+});
+
 test('a release matches the tag through markers and subtitles', () => {
   assert.equal(releaseMatchesTag('Stars Die (Remaster)', 'Stars Die: The Delerium Years 1991 – 1997'), true);
   assert.equal(releaseMatchesTag('Deadwing', 'Deadwing (Remastered)'), true);
@@ -111,6 +126,12 @@ test('a verdict is identified only above the threshold, and carries the chosen r
   const weak = verdictOf(item, { choice: 'c0', probabilities: { c0: 0.6, none: 0.4 }, confidence: 0.3 }, 'jev');
   assert.equal(weak.recording_mbid, null);
   assert.equal(weak.choice, 'c0');
+  // A live file tagged with one concert is never a recording from another.
+  const elsewhere = verdictOf(
+    { file: file({ title: 'Anesthetize - Live', album: 'Anesthetize' }), candidates: [candidate({ recordingMbid: 'atl', disambiguation: 'live, 2007: Atlanta', releases: [release('Atlanta')] })] },
+    { choice: 'c0', probabilities: { c0: 0.94, none: 0.06 }, confidence: 0.9 }, 'jev',
+  );
+  assert.equal(elsewhere.recording_mbid, null);
   const none = verdictOf(item, { choice: 'none', probabilities: { c0: 0.2, none: 0.8 }, confidence: 0.7 }, 'jev');
   assert.equal(none.recording_mbid, null);
   assert.equal(none.p_none, 0.8);

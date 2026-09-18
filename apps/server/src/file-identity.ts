@@ -124,11 +124,19 @@ export function parseRecording(raw: unknown): Candidate | null {
  * so it is dropped too. What is left is ordered by how well its releases
  * match the album tag and how close its length is, and capped.
  */
+// Mixes a stereo rip cannot be. MusicBrainz lists a 5.1 mix, an Atmos mix
+// and an instrumental beside the album version at the same length, and a
+// model shown all of them splits its probability between look-alikes it has
+// no way to tell apart. Only a file whose own title says so can be one.
+const MIX_QUALIFIER = /\b(5\.1|atmos|surround|quadraphonic|instrumental|karaoke|a ?cap+ella)\b/i;
+
 export function pruneCandidates(file: FileToIdentify, candidates: Candidate[]): Candidate[] {
   const albumKey = nameKey(file.album ?? '');
+  const fileSaysMix = MIX_QUALIFIER.test(file.title);
   const scored = candidates
     .map((c) => ({ ...c, releases: c.releases.filter((r) => r.status !== 'Bootleg') }))
     .filter((c) => c.releases.length && !lengthsDisagree(c.lengthMs, file.duration_ms))
+    .filter((c) => fileSaysMix || !MIX_QUALIFIER.test(`${c.title} ${c.disambiguation}`))
     .map((c) => {
       const tagMatch = albumKey && c.releases.some((r) => nameKey(r.title) === albumKey) ? 1 : 0;
       const delta = c.lengthMs && file.duration_ms ? Math.abs(c.lengthMs - file.duration_ms) : 60_000;
@@ -252,7 +260,14 @@ export function verdictOf(item: Judged, answer: ChoiceAnswer, model: string): Fi
   const index = /^c(\d+)$/.exec(answer.choice);
   const candidate = index ? item.candidates[Number(index[1])] : undefined;
   const p = answer.probabilities[answer.choice] ?? 0;
-  const accepted = candidate && p >= ACCEPT_P;
+  // A live file belongs to the concert its tag names, and no other. When
+  // that recording is missing from MusicBrainz the model has only impostors
+  // to choose from, and it chose one at p=0.94 twice on the first library
+  // pass (Tilburg files matched to Atlanta and to London). Same length, same
+  // song, different night: the tag is the only evidence, so it decides.
+  const liveElsewhere = Boolean(candidate && item.file.album && /\blive\b/i.test(item.file.title)
+    && !candidate.releases.some((r) => releaseMatchesTag(item.file.album, r.title)));
+  const accepted = candidate && p >= ACCEPT_P && !liveElsewhere;
   const release = accepted ? chooseRelease(item.file, candidate) : null;
   return {
     path: item.file.path,
