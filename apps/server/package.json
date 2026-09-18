@@ -1,0 +1,21 @@
+{
+  "name": "spotify-taste-db",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Export your Spotify library metadata (liked songs, albums, artists, playlists, tops, recent plays) into a local SQLite database.",
+  "engines": {
+    "node": ">=23.6"
+  },
+  "scripts": {
+    "export": "node --disable-warning=ExperimentalWarning src/main.ts",
+    "test": "node --disable-warning=ExperimentalWarning --test src/*.test.ts",
+    "fixture": "node --disable-warning=ExperimentalWarning src/dev-fixture.ts",
+    "verify:search": "node scripts/verify-search.mjs",
+    "verify:likes": "node scripts/verify-likes.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "playwright": "^1.63.0"
+  }
+}

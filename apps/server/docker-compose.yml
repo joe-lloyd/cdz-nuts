@@ -1,0 +1,108 @@
+# Persistent container with an internal sync loop, instead of host cron
+# spawning throwaway containers: a long-lived container shows up in
+# Portainer/Beszel/docker stats alongside the other pi-server services,
+# ephemeral ones don't.
+#
+# Stock node:24-alpine with the project mounted at /app — the script has zero
+# runtime dependencies (built-in fetch + node:sqlite), so there is nothing to
+# install and no image to build. System Node on the Pi is v18; the script
+# needs >=23.6.
+#
+# Runs once a day at 04:00 (Joe's call, 2026-08-06 — was 6-hourly). The
+# sleep-until-4am is computed by node because busybox date can't do it and
+# node carries its own tz database (TZ below works without OS tzdata).
+# Caveat that comes with daily: the recently-played API only exposes the
+# last 50 plays, so a >50-track listening day loses the overflow — the
+# extended-history import is the real backstop for completeness.
+services:
+  exporter:
+    image: node:24-alpine
+    container_name: spotify-taste-db
+    working_dir: /app
+    command: ["sh", "-c", "while true; do node --disable-warning=ExperimentalWarning src/main.ts; S=$$(node -e \"const n=new Date(),t=new Date(n);t.setHours(4,0,0,0);if(t<=n)t.setDate(t.getDate()+1);console.log(Math.ceil((t-n)/1000))\"); echo \"--- sleeping $${S}s until 04:00\"; sleep $$S; done"]
+    restart: unless-stopped
+    init: true
+    # homelab-net + token: new-release alerts publish to the ntfy container
+    # (write-only service account "spotify", same pattern as n8n/beszel).
+    networks: [default, homelab-net]
+    environment:
+      TZ: "Europe/Amsterdam"
+      NTFY_URL: "http://ntfy:8080"
+      NTFY_TOPIC: "homelab"
+      NTFY_TOKEN_FILE: "/run/secrets/ntfy-token"
+      EVENT_COUNTRIES: "NL,BE,DE"
+    volumes:
+      - .:/app
+      - /etc/homelab/spotify-taste-db/ntfy-token:/run/secrets/ntfy-token:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+  # Read-only browse UI over the same DB (https://music.home.arpa via Caddy).
+  # Joins homelab-net so caddy_server can reach it by container name; no
+  # published ports. The volume stays rw because SQLite's WAL mode needs to
+  # manage -shm/-wal files even for read-only connections.
+  web:
+    image: node:24-alpine
+    container_name: spotify-taste-db-web
+    working_dir: /app
+    command: ["node", "--disable-warning=ExperimentalWarning", "src/server.ts"]
+    restart: unless-stopped
+    init: true
+    environment:
+      TZ: "Europe/Amsterdam"
+      EVENT_COUNTRIES: "NL,BE,DE"
+      # Playback stays disabled until JELLYFIN_API_KEY is added to the Pi's
+      # gitignored .env. The key is consumed only by this server-side bridge;
+      # browser stream URLs never contain it.
+      JELLYFIN_URL: "http://jellyfin:8096"
+      JELLYFIN_API_KEY: "${JELLYFIN_API_KEY:-}"
+      MUSIC_SOURCE_HOST: "192.168.2.34"
+      MUSIC_SOURCE_PORT: "2049"
+      ELIOT_WAKE_URL: "http://192.168.2.23:7777/wake"
+      # Shared only with eliot's one-shot music-upgrader worker. Browser
+      # queue/create endpoints never receive it; claim/complete require it.
+      # The library scanner posts audio-quality and provenance rows with the
+      # same token — same trusted worker, same trust boundary.
+      UPGRADE_WORKER_TOKEN: "${UPGRADE_WORKER_TOKEN:-}"
+      # Discogs, read-only, for the CDs tab. Two different credentials:
+      #   DISCOGS_TOKEN            personal access token - identifies YOU, and
+      #                            is the only thing that can read a collection
+      #   DISCOGS_CONSUMER_KEY/    OAuth app credentials - identify the APP and
+      #   DISCOGS_CONSUMER_SECRET  authenticate catalogue search only
+      # Absent just means the tab reports what it is missing.
+      DISCOGS_TOKEN: "${DISCOGS_TOKEN:-}"
+      DISCOGS_CONSUMER_KEY: "${DISCOGS_CONSUMER_KEY:-}"
+      DISCOGS_CONSUMER_SECRET: "${DISCOGS_CONSUMER_SECRET:-}"
+      # ListenBrainz: song radio, and scrobbling every play back so the
+      # listening history is rebuilt somewhere that is not Spotify. A free
+      # account's user token; without it the radio tab reports itself off and
+      # nothing else changes. The similarity endpoints it falls back to need
+      # no credentials at all.
+      LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
+      LISTENBRAINZ_USER: "${LISTENBRAINZ_USER:-}"
+    volumes:
+      - .:/app
+      # Read-only view of the music library so locally imported albums can
+      # serve their own cover art without depending on Jellyfin ingesting
+      # folder images. eliot asleep just means the read fails and the UI
+      # falls back to its placeholder.
+      - /mnt/eliot-media/music:/music:ro
+    # Bound to the Pi's LAN IP so Lidarr on eliot can pull /api/lidarr-list
+    # cross-host (plain http, no CA hassle). Caddy still fronts the browse UI
+    # at music.home.arpa via homelab-net; this port only serves the
+    # machine-readable list. LAN IP, not 0.0.0.0, to keep it off other ifaces.
+    ports:
+      - "192.168.2.23:8091:8080"
+    networks: [default, homelab-net]
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  homelab-net:
+    external: true
