@@ -1,9 +1,9 @@
 // The UI, embedded, and the map of what it serves.
 //
-// Both come from the ui/ submodule -- the same package the web server reads --
-// so the desktop app cannot serve a different front end than music.home.arpa
+// Both come from packages/ui -- the same package the web server reads -- so
+// the desktop app cannot serve a different front end than music.home.arpa
 // does. routes.json is deliberately JSON rather than JavaScript precisely so
-// this file can read it; see ui/README.md.
+// this file can read it; see packages/ui/README.md.
 
 use std::collections::HashMap;
 
@@ -13,9 +13,9 @@ use sha2::{Digest, Sha256};
 
 /// The UI assets, baked into the binary. Nothing is read from disk at runtime,
 /// so a user cannot end up with a half-updated app after moving files around.
-static UI: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../ui/public");
+static UI: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../../packages/ui/public");
 
-const MANIFEST: &str = include_str!("../../ui/routes.json");
+const MANIFEST: &str = include_str!("../../../../packages/ui/routes.json");
 
 #[derive(Deserialize)]
 struct RawEntry {
@@ -77,7 +77,7 @@ impl Ui {
             })
         };
 
-        // The base name is what both hosts can agree on: music-dump resolves
+        // The base name is what both hosts can agree on: apps/server resolves
         // these to absolute paths inside a checkout, we resolve them inside an
         // embedded directory, and only the file name survives both.
         let base = |rel: &str| -> String { rel.rsplit('/').next().unwrap_or(rel).to_owned() };
@@ -127,7 +127,7 @@ impl Ui {
 
     /// The identity of the UI embedded in this binary.
     ///
-    /// Must stay byte-for-byte agreeable with music-dump's `uiDigest()`:
+    /// Must stay byte-for-byte agreeable with the server's `uiDigest()`:
     /// sha256 over each file's NAME then its BYTES, in name order. A digest
     /// rather than a version string because the desktop embeds its UI at
     /// compile time -- there is no release step that could be trusted to bump
@@ -149,7 +149,7 @@ impl Ui {
 /// The hashing RULE, separated from the bundle it is applied to.
 ///
 /// sha256 over each file's NAME then its BYTES, in name order. This is a
-/// cross-language contract with music-dump's `uiDigest()`, so the rule is what
+/// cross-language contract with the server's `uiDigest()`, so the rule is what
 /// has to stay fixed -- ordering, whether the name is mixed in, which files
 /// are covered. Pulled out of `digest()` so a test can pin it against a
 /// fixture that never changes, rather than against whatever the ui/ submodule

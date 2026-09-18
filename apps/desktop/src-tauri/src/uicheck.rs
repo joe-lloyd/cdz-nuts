@@ -1,14 +1,14 @@
 // Is the UI baked into this binary still the UI home is serving?
 //
-// The desktop app EMBEDS the front end (`include_dir!` over ui/public) rather
-// than fetching it, which is deliberate -- see routes.rs -- but it means the
-// app ships a *snapshot* of a repo that moves independently. Push to music-ui,
-// deploy music-dump, and the web app has the new front end while the desktop
+// The desktop app EMBEDS the front end (`include_dir!` over packages/ui/public)
+// rather than fetching it, which is deliberate -- see routes.rs -- but it
+// means the app ships a *snapshot* taken at build time. Merge a UI change,
+// deploy the server, and the web app has the new front end while the desktop
 // keeps serving whatever it was last built with. Nothing about that is
 // visible: the app works, it is just older than the server it talks to, and
 // the only symptom is a fix that "did not arrive" on the desktop.
 //
-// So ask. music-dump exposes `/api/ui-build`, a sha256 over the files it
+// So ask. apps/server exposes `/api/ui-build`, a sha256 over the files it
 // serves; routes.rs computes the same hash over the files we embedded. Equal
 // means the two agree. A digest rather than a version string because there is
 // no release step here that could be trusted to bump a number, and bytes
@@ -87,7 +87,7 @@ pub fn report(drift: &Drift) {
         Drift::Current => log::info!("embedded UI matches home"),
         Drift::Stale { embedded, serving } => log::warn!(
             "embedded UI is not what home is serving (ours {}, home {}) -- \
-             this build predates a music-ui change; rebuild to pick it up",
+             this build predates a packages/ui change; rebuild to pick it up",
             short(embedded),
             short(serving),
         ),
@@ -149,17 +149,17 @@ mod tests {
 mod crosscheck {
     use crate::routes::Ui;
 
-    /// The digest is a CROSS-LANGUAGE contract with music-dump's `uiDigest()`,
+    /// The digest is a CROSS-LANGUAGE contract with the server's `uiDigest()`,
     /// so what has to stay fixed is the RULE: sha256 over each file's name
     /// then its bytes, in name order.
     ///
     /// Pinned against a fixture rather than against the real bundle. The old
-    /// version asserted the digest of whatever `ui/` currently held, which
-    /// meant every submodule bump broke it -- and those bumps are opened
-    /// automatically, so the failing check was guaranteed and therefore
-    /// worthless. A fixture pins the same rule and never goes stale.
+    /// version asserted the digest of whatever packages/ui currently held,
+    /// which meant every UI change broke it, so the failing check was
+    /// guaranteed and therefore worthless. A fixture pins the same rule and
+    /// never goes stale.
     ///
-    /// The expected value is what music-dump's implementation produces for
+    /// The expected value is what the server's implementation produces for
     /// this input:
     ///
     ///     const h = createHash('sha256');
@@ -207,7 +207,7 @@ mod crosscheck {
     ///     cargo test -- --ignored --nocapture
     ///
     /// A `Stale` here is a true finding, not a broken test: it means this
-    /// checkout's ui/ submodule is behind what pi-server is serving.
+    /// checkout's packages/ui is behind what pi-server is serving.
     #[tokio::test]
     #[ignore = "needs the home LAN"]
     async fn agrees_with_the_live_server_about_the_current_bundle() {

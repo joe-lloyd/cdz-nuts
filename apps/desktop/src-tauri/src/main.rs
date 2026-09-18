@@ -290,7 +290,7 @@ fn json<T: serde::Serialize>(status: u16, body: &T) -> http::Response<Vec<u8>> {
 
 /// Is this a path the app's own router should answer?
 ///
-/// Scoped by exclusion, matching what music-dump's server does, because the
+/// Scoped by exclusion, matching what apps/server does, because the
 /// route table lives in TypeScript in the UI package and neither consumer can
 /// import it. Anything under /api or /img belongs to the server -- a mistyped
 /// endpoint must keep its honest 404 rather than being answered with a page --

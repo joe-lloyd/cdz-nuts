@@ -5,8 +5,8 @@ description: Drive Music Dump library search and liked songs in a real browser a
 
 ## Launch
 
-Use Node 24 or newer. Run `pnpm install`, `npm run fixture`, and `npm run build --prefix ui` from the repository root.
-Run `npm run verify:search`. The script starts its own server on port 18081 with separate mutable SQLite stores in `data/search-verification/run-*`.
+Use Node 24 or newer. Run `pnpm install` and `pnpm build` from the repository root, then everything below from `apps/server`.
+Run `pnpm fixture`, then `pnpm verify:search`. The script starts its own server on port 18081 with separate mutable SQLite stores in `data/search-verification/run-*`.
 It copies the fictional `data/dev-fixture.db` into each run directory. Never replace that path with the live Spotify database.
 
 ## Doctor
@@ -34,4 +34,4 @@ Scratch databases and evidence remain in the ignored data directory for inspecti
 
 ## Helpers
 
-`npm run verify:search` runs the complete scripted flow. Read `features/README.md` for the feature map.
+`pnpm verify:search` runs the complete scripted flow. Read `features/README.md` for the feature map.

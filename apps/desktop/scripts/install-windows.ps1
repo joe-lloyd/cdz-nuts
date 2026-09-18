@@ -1,6 +1,6 @@
 # Install Homelab Music on Windows, from the latest GitHub release.
 #
-#   irm https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-windows.ps1 | iex
+#   irm https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-windows.ps1 | iex
 #
 # Downloads the installer from the latest release and runs it silently. No admin
 # rights are needed: the NSIS bundle installs per-user.
@@ -14,7 +14,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$repo = 'joe-lloyd/homelab-music'
+$repo = 'joe-lloyd/cdz-nuts'
 
 Write-Host '==> Looking up the latest release'
 $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{

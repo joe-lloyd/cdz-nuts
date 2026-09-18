@@ -7,9 +7,9 @@ import react from '@vitejs/plugin-react';
 //   public/  →  the BUILD OUTPUT (Vite's "outDir")
 //
 // Vite's convention is the opposite way round, but `public/` is the directory
-// both consumers already read — music-dump serves it via routes.json and
-// homelab-music embeds it with include_dir! — and renaming it would mean a
-// coordinated change across two other repos in two languages for no gain.
+// both consumers already read — apps/server serves it via routes.json and
+// apps/desktop embeds it with include_dir! — and renaming it would mean a
+// coordinated change across two consumers in two languages for no gain.
 export default defineConfig({
   plugins: [
     react({

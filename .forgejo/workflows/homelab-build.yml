@@ -22,7 +22,7 @@ name: homelab build
 on:
   push:
     branches: [main]
-    tags: ['v*']
+    tags: ['desktop-v*']
   pull_request:
   workflow_dispatch:
     inputs:
@@ -73,7 +73,7 @@ jobs:
 
           const post = async (pipeline) => {
             const body = Buffer.from(JSON.stringify({
-              repo: 'homelab-music',
+              repo: 'cdz-nuts',
               pipeline,
               pipeline_yaml: yaml,
               ref,
@@ -99,7 +99,7 @@ jobs:
             if (!res.ok) {
               throw new Error(
                 `${pipeline} was NOT queued (${res.status}). ` +
-                `Fallback from the Mac: conductorctl run homelab-music ${pipeline} --ref ${ref}`,
+                `Fallback from the Mac: conductorctl run cdz-nuts ${pipeline} --ref ${ref}`,
               );
             }
           };

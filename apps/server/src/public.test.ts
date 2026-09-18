@@ -10,10 +10,10 @@ import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import test from 'node:test';
 import vm from 'node:vm';
-import { uiDir } from '../ui/index.js';
+import { uiDir } from '../../../packages/ui/index.js';
 
-// The files now live in the shared ui/ package, and its own manifest says where
-// -- asking it beats hardcoding a path that only one of the two consumers uses.
+// The files live in packages/ui, and its own manifest says where -- asking it
+// beats hardcoding a path that only one of the two consumers uses.
 const PUBLIC = uiDir;
 
 function inlineScripts(html: string): string[] {
@@ -64,9 +64,9 @@ test('the back button has a rule that beats its own display', () => {
 // be checked here by grepping index.html. It cannot be, any more: React
 // creates the button from the bundle, so it is never in the served document.
 // This does not "come back once the port lands"; the assertion belongs in a
-// component test in music-ui, next to the component that renders it. Recorded
+// component test in packages/ui, next to the component that renders it. Recorded
 // as todo rather than deleted so the coverage is owed to someone.
-test('the back button ships hidden', { todo: 'moves to a music-ui component test with the shell port' }, () => {});
+test('the back button ships hidden', { todo: 'moves to a packages/ui component test with the shell port' }, () => {});
 
 test('the manifest and any JSON assets are valid JSON', () => {
   for (const name of readdirSync(PUBLIC).filter((file) => file.endsWith('.webmanifest') || file.endsWith('.json'))) {

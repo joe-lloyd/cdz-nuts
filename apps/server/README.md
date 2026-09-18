@@ -1,4 +1,9 @@
-# spotify-taste-db
+# apps/server
+
+The Node half of the home music player: the Spotify exporter and the web
+server behind `https://music.home.arpa`. Part of the `cdz-nuts` repository;
+the front end it serves is `packages/ui` and the desktop app that embeds the
+same front end is `apps/desktop`.
 
 Exports your Spotify library **metadata** (no audio) into a local SQLite database:
 liked songs, saved albums (with full track listings), followed artists, playlists,
@@ -31,7 +36,7 @@ Requires **Node >= 23.6** (runs TypeScript natively).
 3. Optional, for editor type support only:
 
    ```sh
-   pnpm install --ignore-scripts
+   pnpm install --ignore-scripts   # from the repository root
    ```
 
 ## Run
@@ -79,25 +84,22 @@ SELECT substr(added_at, 1, 7) AS month, COUNT(*) FROM liked_tracks GROUP BY mont
 
 ## Web UI
 
-The front end is **not in this repo**. It lives in
-[`music-ui`](https://github.com/joe-lloyd/music-ui) and is vendored here as the
-`ui/` submodule, because a second consumer — the
-[`homelab-music`](https://github.com/joe-lloyd/homelab-music) desktop tray app —
-serves the identical files. One copy, pinned by commit on each side, so a fix to
-the lyric scroll cannot land in one and be forgotten in the other.
-
-`ui/routes.json` is the single source of truth for what serves at which URL and
-under which content type; `src/server.ts` reads it rather than restating it.
-To change the UI, commit in `music-ui`, then bump the submodule pointer here.
+The front end is `packages/ui`, shared with the `apps/desktop` tray app so
+both serve the identical files. `packages/ui/routes.json` is the single source
+of truth for what serves at which URL and under which content type;
+`src/server.ts` reads it rather than restating it. It is imported by relative
+path rather than as a workspace package because pi-server runs this straight
+off a bind mount with no install step, so there is no `node_modules` symlink
+to resolve through.
 
 ### Telling the two consumers apart — `/api/ui-build`
 
-"Pinned by commit on each side" is exactly the thing that goes wrong. This
-server reads `ui/` off disk, so a `git pull` on pi-server updates it. The
-desktop app **compiles the UI into its binary**, so its copy is frozen at
-whenever it was last built — push to `music-ui`, deploy here, and the desktop
-keeps serving the old front end with no symptom other than a fix that "did not
-arrive". That is what happened to the player-bar link fixes.
+This server reads `packages/ui/public` off disk, so a `git pull` on pi-server
+updates it. The desktop app **compiles the UI into its binary**, so its copy is
+frozen at whenever it was last built — merge a UI change, deploy here, and the
+desktop keeps serving the old front end until a release is cut, with no symptom
+other than a fix that "did not arrive". That is what happened to the player-bar
+link fixes.
 
 So both sides can be asked which UI they hold. `GET /api/ui-build` returns
 
@@ -107,9 +109,9 @@ So both sides can be asked which UI they hold. `GET /api/ui-build` returns
 
 a sha256 over every file `routes.json` names: for each, in **file-name order**,
 the name then the bytes. `uiDigest()` in `src/server.ts` and `Ui::digest()` in
-homelab-music's `routes.rs` must agree byte for byte, so the rule is fixed:
+`apps/desktop`'s `routes.rs` must agree byte for byte, so the rule is fixed:
 sorted by basename with a plain `<` comparison (not `localeCompare`, which is
-free to disagree with Rust's byte ordering under another locale). `music-ui`
+free to disagree with Rust's byte ordering under another locale). The repository
 pins `* text=auto eol=lf` in `.gitattributes`, which is what makes the digest
 portable — without it a Windows checkout and a Linux one would hash
 differently for the same commit.
@@ -121,19 +123,19 @@ changing. Recompute it independently with:
 ```sh
 python - <<'EOF'
 import hashlib, json, os
-m = json.load(open('ui/routes.json', encoding='utf-8'))
+m = json.load(open('../../packages/ui/routes.json', encoding='utf-8'))
 files = [m['document']['file']] + [v['file'] for v in m['static'].values()]
 h = hashlib.sha256()
-for name, path in sorted((os.path.basename(f), os.path.join('ui', f)) for f in files):
+for name, path in sorted((os.path.basename(f), os.path.join('../../packages/ui', f)) for f in files):
     h.update(name.encode()); h.update(open(path, 'rb').read())
 print(h.hexdigest())
 EOF
 ```
 
-homelab-music pins that value in a test, so a change to the hashing rule fails
+`apps/desktop` pins that value in a test, so a change to the hashing rule fails
 there loudly instead of silently reporting every desktop build as out of date.
 
-`src/server.ts` + `ui/public/index.html`: a read-only browser over the DB —
+`src/server.ts` + `packages/ui/public/index.html`: a read-only browser over the DB —
 overview stats (genres, liked-per-month), artist grid with search, liked
 songs, saved albums, playlists, top artists/tracks per time range, recent
 plays. Navigation is internal: artist → discography → album detail with
@@ -647,34 +649,25 @@ docker compose exec web node --disable-warning=ExperimentalWarning   src/backfil
 
 Runs on `pi-server` (192.168.2.23) as two containers from one compose file —
 `spotify-taste-db` (exporter, internal 6h sync loop) and `spotify-taste-db-web`
-(UI) — both plain `node:24-alpine` with this repo bind-mounted (system Node on
-the Pi is v18). The deployed copy at `pi:~/spotify-taste-db` is a checkout of
-<https://github.com/joe-lloyd/music-dump>; update with:
+(UI) — both plain `node:24-alpine` with the whole repository bind-mounted at
+`/app` and `apps/server` as the working directory (system Node on the Pi is
+v18). The whole repository rather than this directory because the web server
+reads `packages/ui` by relative path. The deployed copy at `pi:~/cdz-nuts` is
+a checkout of <https://github.com/joe-lloyd/cdz-nuts>; update with:
 
 ```sh
-ssh pi 'cd spotify-taste-db && git pull --recurse-submodules && docker compose up -d --force-recreate'
+ssh pi 'cd cdz-nuts && git pull && docker compose -f apps/server/docker-compose.yml up -d --force-recreate'
 ```
 
-> **`--recurse-submodules` is not optional.** The front end is the `ui/`
-> submodule. A plain `git pull` leaves it at the old commit — or, on a checkout
-> that predates it, empty — and `src/server.ts` imports from it at startup, so
-> the web container crash-loops on `ERR_MODULE_NOT_FOUND` rather than serving a
-> stale page. On a checkout that has never seen the submodule, initialise it
-> once first:
->
-> ```sh
-> ssh pi 'cd spotify-taste-db && git submodule update --init'
-> ```
->
-> `music-ui` is public, so this needs no credentials on the Pi — which is
-> exactly why it is public.
+The repository is public, so this needs no credentials on the Pi — which is
+exactly why it is public.
 
 Logs via `docker logs spotify-taste-db` / `docker logs spotify-taste-db-web`;
 the DB lives at `data/spotify.db` on the Pi. Grab a copy for local querying
 with:
 
 ```sh
-scp pi:spotify-taste-db/data/spotify.db /tmp/spotify.db
+scp pi:cdz-nuts/apps/server/data/spotify.db /tmp/spotify.db
 ```
 
 **Do not run the export from two machines**: Spotify rotates refresh tokens,
@@ -795,7 +788,7 @@ node src/import-history.ts ~/Downloads/my_spotify_data/
 
 # on the Pi (host Node is too old — use the container)
 scp -r ~/Downloads/my_spotify_data pi:history-export
-ssh pi 'docker run --rm -v /home/pi-admin/spotify-taste-db:/app -v /home/pi-admin/history-export:/export -w /app node:24-alpine node src/import-history.ts /export'
+ssh pi 'docker run --rm -v /home/pi-admin/cdz-nuts:/app -v /home/pi-admin/history-export:/export -w /app/apps/server node:24-alpine node src/import-history.ts /export'
 ```
 
 Handles both the extended format (`Streaming_History_Audio_*.json`,

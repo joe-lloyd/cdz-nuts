@@ -10,7 +10,7 @@ Type into Search music from any panel.
 
 ## Driving it with Playwright
 
-Run npm run verify:search. Assert grouped results and navigate an artist or playlist link.
+Run pnpm verify:search from apps/server. Assert grouped results and navigate an artist or playlist link.
 
 ## Gotchas
 

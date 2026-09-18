@@ -1,4 +1,4 @@
-name: build
+name: ci
 
 on:
   push:
@@ -7,36 +7,71 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    # The Rust unit tests -- manifest parsing, header handling, CA validity --
-    # are platform-independent, so run them once on the cheapest runner rather
-    # than three times across the matrix.
+  # The front end. typecheck, unit and contract tests, then the check that
+  # matters most in this repository: public/ is BUILD OUTPUT that is committed,
+  # because apps/server serves it off a bind mount and apps/desktop embeds it
+  # with include_dir!, and neither runs a JS toolchain. A source change
+  # committed without rebuilding would sail through every test and then ship a
+  # bundle that does not contain it.
+  ui:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
         with:
-          submodules: recursive # the build embeds ui/public; without it, nothing compiles
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cdz-nuts/ui typecheck
+      - run: pnpm --filter @cdz-nuts/ui test:unit
+      - run: pnpm --filter @cdz-nuts/ui test:contract
+      - name: The committed bundle is the one this source builds
+        run: |
+          pnpm --filter @cdz-nuts/ui build
+          if ! git diff --quiet -- packages/ui/public; then
+            echo "::error::packages/ui/public is not up to date with src/. Run 'pnpm build' and commit the result."
+            git diff --stat -- packages/ui/public
+            exit 1
+          fi
+
+  # The Node server. Zero runtime dependencies; the install is for types only.
+  server:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @cdz-nuts/server test
+
+  # The Rust unit tests -- manifest parsing, header handling, CA validity --
+  # are platform-independent, so run them once on the cheapest runner rather
+  # than three times across the matrix.
+  desktop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: apps/desktop/src-tauri
 
       - name: Linux WebKit dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Test the shared UI package's own contract
-        run: node --test test/*.test.js
-        working-directory: ui
-
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
-      - run: cargo fmt --manifest-path src-tauri/Cargo.toml -- --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings
+      - run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml
+      - run: cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+      - run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml -- -D warnings
 
   bundle:
-    needs: test
+    needs: [ui, desktop]
     strategy:
       fail-fast: false
       matrix:
@@ -57,15 +92,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: apps/desktop/src-tauri
           key: ${{ matrix.target }}
 
       - name: Linux dependencies
@@ -81,7 +114,7 @@ jobs:
       - name: Regenerate icons from the shared UI package
         run: |
           python -m pip install --quiet pillow
-          python scripts/make-icons.py
+          python apps/desktop/scripts/make-icons.py
 
       - name: Install the Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
@@ -96,6 +129,8 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        # The Tauri CLI finds src-tauri by walking up from cwd, so run it there.
+        working-directory: apps/desktop
         run: cargo tauri build --target ${{ matrix.target }}
 
       # Unsigned on purpose: there is no Apple Developer ID and no Windows
@@ -106,8 +141,8 @@ jobs:
           name: homelab-music-${{ matrix.name }}
           if-no-files-found: error
           path: |
-            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
-            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
-            src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
-            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-            src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/nsis/*.exe
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
+            apps/desktop/src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb

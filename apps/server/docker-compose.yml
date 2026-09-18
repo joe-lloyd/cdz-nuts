@@ -3,9 +3,11 @@
 # Portainer/Beszel/docker stats alongside the other pi-server services,
 # ephemeral ones don't.
 #
-# Stock node:24-alpine with the project mounted at /app — the script has zero
-# runtime dependencies (built-in fetch + node:sqlite), so there is nothing to
-# install and no image to build. System Node on the Pi is v18; the script
+# Stock node:24-alpine with the whole repository mounted at /app — the script
+# has zero runtime dependencies (built-in fetch + node:sqlite), so there is
+# nothing to install and no image to build. The whole repository and not just
+# this directory because the web server reads the front end from
+# /app/packages/ui by relative path. System Node on the Pi is v18; the script
 # needs >=23.6.
 #
 # Runs once a day at 04:00 (Joe's call, 2026-08-06 — was 6-hourly). The
@@ -18,7 +20,7 @@ services:
   exporter:
     image: node:24-alpine
     container_name: spotify-taste-db
-    working_dir: /app
+    working_dir: /app/apps/server
     command: ["sh", "-c", "while true; do node --disable-warning=ExperimentalWarning src/main.ts; S=$$(node -e \"const n=new Date(),t=new Date(n);t.setHours(4,0,0,0);if(t<=n)t.setDate(t.getDate()+1);console.log(Math.ceil((t-n)/1000))\"); echo \"--- sleeping $${S}s until 04:00\"; sleep $$S; done"]
     restart: unless-stopped
     init: true
@@ -32,7 +34,7 @@ services:
       NTFY_TOKEN_FILE: "/run/secrets/ntfy-token"
       EVENT_COUNTRIES: "NL,BE,DE"
     volumes:
-      - .:/app
+      - ../..:/app
       - /etc/homelab/spotify-taste-db/ntfy-token:/run/secrets/ntfy-token:ro
     logging:
       driver: json-file
@@ -47,7 +49,7 @@ services:
   web:
     image: node:24-alpine
     container_name: spotify-taste-db-web
-    working_dir: /app
+    working_dir: /app/apps/server
     command: ["node", "--disable-warning=ExperimentalWarning", "src/server.ts"]
     restart: unless-stopped
     init: true
@@ -84,7 +86,7 @@ services:
       LISTENBRAINZ_TOKEN: "${LISTENBRAINZ_TOKEN:-}"
       LISTENBRAINZ_USER: "${LISTENBRAINZ_USER:-}"
     volumes:
-      - .:/app
+      - ../..:/app
       # Read-only view of the music library so locally imported albums can
       # serve their own cover art without depending on Jellyfin ingesting
       # folder images. eliot asleep just means the read fails and the UI

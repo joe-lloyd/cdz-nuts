@@ -10,7 +10,7 @@ Use a heart button in search, Liked songs, an album, or another song list.
 
 ## Driving it with Playwright
 
-Run npm run verify:search. Like a search hit, close search, reload, then remove it.
+Run pnpm verify:search from apps/server. Like a search hit, close search, reload, then remove it.
 
 ## Gotchas
 

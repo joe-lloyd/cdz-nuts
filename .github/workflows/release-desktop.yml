@@ -1,14 +1,17 @@
-name: release
+name: release desktop
 
-# Tag a version to ship it:
-#   git tag v0.1.0 && git push origin v0.1.0
+# Tag a version to ship the desktop app:
+#   git tag desktop-v0.5.0 && git push origin desktop-v0.5.0
+#
+# Prefixed tags because this repository also holds the server and the front
+# end; a bare v* would mean every tag is a desktop release.
 #
 # Builds every platform, signs the bundles with the updater key, and publishes
 # them to a GitHub Release together with latest.json -- which is the file the
 # running app polls to discover there is a newer version.
 on:
   push:
-    tags: ['v*']
+    tags: ['desktop-v*']
   workflow_dispatch:
     inputs:
       tag:
@@ -48,14 +51,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag || github.ref }}
-          submodules: recursive # the build embeds ui/public
 
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          workspaces: src-tauri
+          workspaces: apps/desktop/src-tauri
           key: ${{ matrix.target }}
 
       # Ubuntu 22.04 rather than latest: the AppImage produced on a newer glibc
@@ -75,7 +77,7 @@ jobs:
       - name: Generate icons from the shared UI package
         run: |
           python -m pip install --quiet pillow
-          python scripts/make-icons.py
+          python apps/desktop/scripts/make-icons.py
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -86,6 +88,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
+          projectPath: apps/desktop
           tagName: ${{ inputs.tag || github.ref_name }}
           releaseName: 'Homelab Music __VERSION__'
           releaseBody: |
@@ -93,17 +96,17 @@ jobs:
 
             **macOS** (Apple Silicon or Intel; handles Gatekeeper for you)
             ```sh
-            curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-macos.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-macos.sh | bash
             ```
 
             **Linux** (AppImage)
             ```sh
-            curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-linux.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-linux.sh | bash
             ```
 
             **Windows** (PowerShell)
             ```powershell
-            irm https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-windows.ps1 | iex
+            irm https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-windows.ps1 | iex
             ```
 
             Builds are unsigned — there is no Apple Developer ID and no Windows

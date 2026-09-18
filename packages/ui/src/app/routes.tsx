@@ -1,6 +1,6 @@
 // The URL space, in one place.
 //
-// This is the list the server-side fallbacks are really about: music-dump and
+// This is the list the server-side fallbacks are really about: apps/server and
 // the Tauri shell both have to answer "is this a client route or a 404?", and
 // neither can import TypeScript. They answer it by exclusion instead -- anything
 // that is not an API path and not a known asset is handed to the app -- so this

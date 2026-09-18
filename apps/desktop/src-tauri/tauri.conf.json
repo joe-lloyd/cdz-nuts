@@ -36,7 +36,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/joe-lloyd/homelab-music/releases/latest/download/latest.json"
+        "https://github.com/joe-lloyd/cdz-nuts/releases/latest/download/latest.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDhFRUEzQzRERTM4RjI1MzkKUldRNUpZL2pUVHpxamdMZ29UVU5qZ05FVGs3MzcyTUdtQURpbjBaWmt4Q2VuUUZmVGkwWFNuTHIK"
     }

@@ -46,7 +46,7 @@ export type RadioMode = 'easy' | 'medium' | 'hard';
 
 const API = 'https://api.listenbrainz.org/1';
 const LABS = 'https://labs.api.listenbrainz.org';
-const USER_AGENT = 'music-taste/1.0 (https://github.com/joe-lloyd/music-dump)';
+const USER_AGENT = 'music-taste/1.0 (https://github.com/joe-lloyd/cdz-nuts)';
 
 // A radio prompt is deterministic enough that re-asking within the hour just
 // burns someone else's quota, and short enough that a stale playlist is never

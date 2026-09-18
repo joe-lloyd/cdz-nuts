@@ -10,7 +10,7 @@ Use the sidebar or mobile menu; album search results open album details.
 
 ## Driving it with Playwright
 
-Run npm run verify:search. Check the Albums tab is absent and result navigation dismisses search.
+Run pnpm verify:search from apps/server. Check the Albums tab is absent and result navigation dismisses search.
 
 ## Gotchas
 

@@ -1,4 +1,4 @@
-// The shapes music-dump's API actually returns.
+// The shapes the server's API actually returns.
 //
 // Written from the server's handlers rather than guessed: fields are optional
 // where the server genuinely omits them, because the old UI relied on `??`

@@ -1,0 +1,14 @@
+{
+  "name": "cdz-nuts",
+  "private": true,
+  "description": "The home music player: the Node server behind music.home.arpa, the shared React front end, and the Tauri tray app that embeds it.",
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@10.21.0",
+  "scripts": {
+    "build": "pnpm --filter @cdz-nuts/ui build",
+    "typecheck": "pnpm --filter @cdz-nuts/ui typecheck",
+    "test": "pnpm -r test"
+  }
+}

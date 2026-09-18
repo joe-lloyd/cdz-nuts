@@ -2,7 +2,7 @@
 #
 # Install Homelab Music on macOS, from the latest GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-macos.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-macos.sh | bash
 #
 # Picks the right build for your CPU, then does the two things macOS requires of
 # an app with no Apple Developer ID behind it:
@@ -20,7 +20,7 @@
 
 set -euo pipefail
 
-REPO="joe-lloyd/homelab-music"
+REPO="joe-lloyd/cdz-nuts"
 APP="Homelab Music.app"
 DEST="${INSTALL_DIR:-/Applications}"
 

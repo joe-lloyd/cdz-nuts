@@ -14,7 +14,7 @@ import { Settings } from '../views/Settings.tsx';
 import { Empty } from '../components/primitives.tsx';
 
 // Real paths, not hashes. That needs a catch-all on both consumers --
-// music-dump serves the document for any unknown non-API path, and the Tauri
+// apps/server serves the document for any unknown non-API path, and the Tauri
 // protocol handler does the same from embedded bytes -- because otherwise a
 // hard load of /album/123 is a 404 rather than a route.
 const queryClient = new QueryClient({

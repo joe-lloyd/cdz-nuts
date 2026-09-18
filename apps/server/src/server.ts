@@ -11,13 +11,15 @@ import { Readable } from 'node:stream';
 import {
   DiscogsClient, DiscogsError, ShelfStore, albumKey, toShelfItem, type ShelfStatus,
 } from './discogs.ts';
-// The front end is a shared package, vendored as the ui/ submodule, so that the
-// desktop shell can serve byte-identical files. Its routes.json -- not this
-// file -- is the single source of truth for what lives at which URL.
+// The front end is the shared packages/ui, so that the desktop shell can serve
+// byte-identical files. Its routes.json -- not this file -- is the single
+// source of truth for what lives at which URL. A relative path rather than a
+// workspace package name: pi-server runs this straight off a bind mount with
+// no install step, so there is no node_modules symlink to resolve through.
 import {
   allFiles as UI_FILES, indexHtml as INDEX, staticFiles as STATIC_FILES,
   documentUrls, documentType,
-} from '../ui/index.js';
+} from '../../../packages/ui/index.js';
 import { JellyfinBridge, LOCAL_LIBRARY_PREFIX, normalizeMusicText, type TasteTrack } from './jellyfin.ts';
 import { LyricsService } from './lyrics.ts';
 import { resolveViaSearch } from './musicbrainz.ts';
@@ -244,11 +246,11 @@ function query(sql: string, ...args: (string | number)[]): unknown[] {
 // The identity of the front end this server is serving.
 //
 // The desktop shell does not fetch the UI, it EMBEDS it at compile time
-// (`include_dir!` over ui/public), so its copy is a snapshot taken whenever
-// its binary was last built. Nothing made that snapshot going stale visible:
-// push to music-ui, deploy here, and the desktop keeps serving the old front
-// end until somebody remembers to bump its submodule. That is exactly what
-// happened to the player-bar link fixes.
+// (`include_dir!` over packages/ui/public), so its copy is a snapshot taken
+// whenever its binary was last built. Nothing made that snapshot going stale
+// visible: merge a UI change, deploy here, and the desktop keeps serving the
+// old front end until somebody cuts a release. That is exactly what happened
+// to the player-bar link fixes.
 //
 // So both hosts can answer "which UI is this?" the same way: hash the bytes
 // they actually serve. A digest rather than a version string or a git sha

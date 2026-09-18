@@ -30,7 +30,7 @@ interface LyricsBridge {
 }
 
 const MISS_RETRY_MS = 7 * 24 * 60 * 60 * 1000;
-const USER_AGENT = 'music-taste/1.0 (https://github.com/joe-lloyd/music-dump)';
+const USER_AGENT = 'music-taste/1.0 (https://github.com/joe-lloyd/cdz-nuts)';
 
 const NONE: LyricsResult = { available: false, synced: null, plain: null, instrumental: false, source: null };
 

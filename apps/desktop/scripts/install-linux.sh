@@ -2,7 +2,7 @@
 #
 # Install Homelab Music on Linux, from the latest GitHub release.
 #
-#   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-linux.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-linux.sh | bash
 #
 # Installs the AppImage to ~/.local/bin and writes a desktop entry so it shows
 # up in your launcher. Nothing is installed system-wide and no root is needed.
@@ -15,7 +15,7 @@
 
 set -euo pipefail
 
-REPO="joe-lloyd/homelab-music"
+REPO="joe-lloyd/cdz-nuts"
 BIN_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
 BIN="$BIN_DIR/homelab-music"
 DESKTOP_DIR="$HOME/.local/share/applications"

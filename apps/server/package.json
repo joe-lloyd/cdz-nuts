@@ -1,6 +1,5 @@
 {
-  "name": "spotify-taste-db",
-  "version": "0.1.0",
+  "name": "@cdz-nuts/server",
   "private": true,
   "type": "module",
   "description": "Export your Spotify library metadata (liked songs, albums, artists, playlists, tops, recent plays) into a local SQLite database.",

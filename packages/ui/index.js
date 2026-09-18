@@ -1,4 +1,4 @@
-// music-ui — the shared front end of the music player.
+// packages/ui: the shared front end of the music player.
 //
 // Node-side helper. It does one job: turn routes.json into absolute paths, so
 // a server can mount the UI without knowing how it is laid out on disk. The

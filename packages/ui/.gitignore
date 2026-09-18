@@ -1,5 +1,3 @@
-node_modules/
-
-# public/ is BUILD OUTPUT but is deliberately committed: music-dump serves it
-# and homelab-music embeds it with include_dir!, and neither has a JS
-# toolchain. CI rebuilds and fails if it drifts from src/.
+# public/ is BUILD OUTPUT but is deliberately committed: apps/server serves it
+# off a bind mount and apps/desktop embeds it with include_dir!, and neither
+# runs a JS toolchain. CI rebuilds and fails if it drifts from src/.

@@ -3,7 +3,7 @@
 
 The web app, the phone app and this app all use the same record-shaped mark.
 Rather than keep a second, hand-drawn copy that drifts, this reads the circles
-straight out of ui/public/icon.svg and redraws them at the sizes Tauri bundles.
+straight out of packages/ui/public/icon.svg and redraws them at the sizes Tauri bundles.
 
 The SVG is a few concentric shapes on a 24x24 viewBox, so parsing it properly
 would be more machinery than the job needs -- but the values are read from the
@@ -11,7 +11,7 @@ file, not hardcoded here, so a colour change in the UI package still lands.
 
     python scripts/make-icons.py
 
-Regenerate whenever ui/ is bumped and the icon changed. This includes the macOS
+Regenerate whenever the icon in packages/ui changed. This includes the macOS
 .icns, which is written directly rather than shelled out to `iconutil` -- that
 only exists on a Mac, and needing a Mac to produce an icon would mean the Mac
 bundle could never be built anywhere else, including CI's own checkout.
@@ -26,7 +26,7 @@ import sys
 from PIL import Image, ImageDraw
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-SVG = ROOT / "ui" / "public" / "icon.svg"
+SVG = ROOT.parent.parent / "packages" / "ui" / "public" / "icon.svg"
 OUT = ROOT / "src-tauri" / "icons"
 
 VIEWBOX = 24.0
@@ -110,7 +110,7 @@ def write_icns(path, background, circles):
 
 def main():
     if not SVG.exists():
-        sys.exit(f"{SVG} is missing -- is the ui/ submodule initialised?")
+        sys.exit(f"{SVG} is missing")
     background, circles = parse(SVG.read_text(encoding="utf-8"))
     OUT.mkdir(parents=True, exist_ok=True)
 

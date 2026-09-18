@@ -1,4 +1,4 @@
-# homelab-music
+# apps/desktop
 
 A tray-resident desktop player for the home music library, on macOS and
 Windows, that carries **its own WireGuard tunnel** so it works from anywhere
@@ -47,24 +47,19 @@ Three things fall out of it for free:
   unauthenticated on the LAN and is a known bug; this goes through Caddy on 443
   like everything else.
 
-## The UI is not in this repo
+## The UI is `packages/ui`
 
-It lives in [`music-ui`](https://github.com/joe-lloyd/music-ui), vendored here
-as the `ui/` submodule, and is embedded into the binary at compile time. The web
-app at `music.home.arpa` serves the identical package. One copy, pinned by
-commit on each side, so a fix to the lyric scroll can't land in one and be
-forgotten in the other.
+The front end is the shared `packages/ui`, embedded into the binary at compile
+time. The web app at `music.home.arpa` serves the identical package, so a fix
+to the lyric scroll can't land in one and be forgotten in the other.
 
-`ui/routes.json` decides what serves at which URL. `src-tauri/src/routes.rs`
-reads that manifest rather than restating it — that manifest is JSON rather than
-JavaScript specifically so this Rust can read it.
+`packages/ui/routes.json` decides what serves at which URL.
+`src-tauri/src/routes.rs` reads that manifest rather than restating it; the
+manifest is JSON rather than JavaScript specifically so this Rust can read it.
 
-```sh
-git clone --recurse-submodules https://github.com/joe-lloyd/homelab-music.git
-```
-
-`--recurse-submodules` is not optional; the build embeds `ui/public` and fails
-without it.
+The build embeds `packages/ui/public`, which is committed build output. An
+empty one compiles clean and ships an app with no UI, which is why CI checks
+for it explicitly.
 
 ## Home vs away
 
@@ -86,10 +81,12 @@ not by a lot. Taking the tunnel when you didn't have to would be audible.
 
 Needs Rust and, on Windows, the MSVC C++ build tools.
 
+From `apps/desktop`:
+
 ```sh
 cargo build --manifest-path src-tauri/Cargo.toml            # dev
-cargo tauri build                                           # installers
-python scripts/make-icons.py                                # after a ui/ bump
+cargo tauri build                                           # installers; the CLI finds src-tauri from here
+python scripts/make-icons.py                                # after the icon in packages/ui changed
 ```
 
 macOS binaries cannot be cross-compiled from Windows or Linux — they're built
@@ -103,19 +100,19 @@ command whether this is a first install or a reinstall.
 **macOS** — Apple Silicon or Intel, detected for you:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-macos.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-macos.sh | bash
 ```
 
 **Linux** — AppImage into `~/.local/bin`, plus a desktop entry. No root:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-linux.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-linux.sh | bash
 ```
 
 **Windows** — per-user install, no admin:
 
 ```powershell
-irm https://raw.githubusercontent.com/joe-lloyd/homelab-music/main/scripts/install-windows.ps1 | iex
+irm https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-windows.ps1 | iex
 ```
 
 ### Why the macOS script does two things
@@ -155,11 +152,14 @@ the `.deb` is 5 MB and uses the system one.
 
 ## Releasing
 
+Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, then:
+
 ```sh
-git tag v0.1.0 && git push origin v0.1.0
+git tag desktop-v0.5.0 && git push origin desktop-v0.5.0
 ```
 
-That builds macOS (both architectures), Linux and Windows, signs every bundle
+The `desktop-` prefix is because this repository also holds the server and
+the front end; only tags with it build a release. That builds macOS (both architectures), Linux and Windows, signs every bundle
 with the updater key, and publishes them with `latest.json` — the file running
 copies poll. The signing key lives in the repository's Actions secrets; the
 public half is in `tauri.conf.json`. **Without those secrets the bundles still
@@ -181,12 +181,12 @@ notice until the second release.
 ### Knowing the embedded UI has gone stale
 
 The UI is compiled in, which is deliberate (see above) and has one cost: this
-app ships a *snapshot* of a repo that moves on its own. Push to music-ui,
-deploy music-dump, and the web app has the new front end while this one keeps
+app ships a *snapshot* taken at build time. Merge a change to `packages/ui`,
+deploy the server, and the web app has the new front end while this one keeps
 serving whatever it was last built with. There is no symptom — the app works,
 it is just older than the server it is talking to.
 
-So it asks. music-dump serves `GET /api/ui-build`, a sha256 over the files it
+So it asks. `apps/server` serves `GET /api/ui-build`, a sha256 over the files it
 serves; `Ui::digest()` computes the same hash over the files embedded here. At
 startup, once the network path is settled, `uicheck` compares them and logs the
 answer; a genuine mismatch also raises one notification, because the fix is a
@@ -202,9 +202,7 @@ order. `uicheck`'s tests pin the digest of the current bundle so a change to
 the rule fails here rather than silently reporting every build as out of date,
 and a `--ignored` test checks it against the live server on the home LAN.
 
-Bumping the `ui/` submodule is automated from the other side: music-ui's
-`bump-consumers` workflow opens a PR here on every push that changes what this
-app vendors. Merging it is not shipping it — the UI is in the binary, so a
+Merging a UI change is not shipping it here. The UI is in the binary, so a
 release build has to follow.
 
 The tunnel is the interesting remaining piece: `onetun`-style userspace

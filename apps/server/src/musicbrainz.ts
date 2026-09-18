@@ -6,7 +6,7 @@
 import { TasteDb } from './db.ts';
 
 const MB_API = 'https://musicbrainz.org/ws/2';
-const UA = 'spotify-taste-db/1.0 (https://github.com/joe-lloyd/music-dump)';
+const UA = 'spotify-taste-db/1.0 (https://github.com/joe-lloyd/cdz-nuts)';
 // Per-run cap: first run resolves the whole eligible backlog at ~1.1s each,
 // later runs only touch new artists and stale no-matches.
 const MB_LIMIT = Number(process.env.LIDARR_MB_LIMIT ?? 500);

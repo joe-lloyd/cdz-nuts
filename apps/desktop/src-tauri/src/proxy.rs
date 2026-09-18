@@ -317,7 +317,7 @@ mod tests {
         // range-aware, and that needs a resolved track id, which is too
         // stateful to assert here. What this does prove is that bytes survive
         // the round trip intact: the server's copy of app.css must be the same
-        // one we embedded, since both come from the music-ui package.
+        // one we embedded, since both come from packages/ui.
         let css = proxy
             .forward("GET", "/app.css", &HeaderMap::new(), Vec::new())
             .await
@@ -332,8 +332,8 @@ mod tests {
         assert_eq!(
             css.body().as_slice(),
             embedded,
-            "the server and this binary disagree about app.css -- the ui/ \
-             submodule here is at a different commit than the one deployed",
+            "the server and this binary disagree about app.css -- packages/ui \
+             here is at a different commit than the one deployed",
         );
     }
 }
