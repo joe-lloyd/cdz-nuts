@@ -1,0 +1,5 @@
+# This package is authored on Windows and served from a Linux container to a
+# browser. Pin LF everywhere so a checkout on either side is byte-identical --
+# the whole point of the package is that both consumers get the same bytes.
+* text=auto eol=lf
+*.svg text eol=lf
