@@ -52,7 +52,7 @@ export const genres = (json: string | null | undefined, n = 3): string[] => {
 
 /** Ids the server serves art for directly, rather than the Spotify CDN. */
 export const localArt = (id: string | null | undefined): boolean =>
-  /^(localalbum|libalbum)-/.test(String(id ?? ''));
+  /^(localalbum|libalbum)-|^rg:/.test(String(id ?? ''));
 
 /** Where the app serves a cover from, given an album id. */
 export const artUrl = (kind: 'albums' | 'artists', id: string | null | undefined): string => {

@@ -21,6 +21,7 @@ import {
   documentUrls, documentType,
 } from '../../../packages/ui/index.js';
 import { JellyfinBridge, LOCAL_LIBRARY_PREFIX, normalizeMusicText, type TasteTrack } from './jellyfin.ts';
+import { FileIdentityStore } from './file-identity.ts';
 import { LyricsService } from './lyrics.ts';
 import { resolveViaSearch } from './musicbrainz.ts';
 import {
@@ -28,7 +29,7 @@ import {
 } from './continuation.ts';
 import { APP_PLAYS_FILE, PlaysStore } from './plays.ts';
 import {
-  LIB_ALBUM_PREFIX, ProvenanceStore, albumMatchKey, badgeOf, libAlbumId, libAlbumIdForFolder,
+  LIB_ALBUM_PREFIX, PROVENANCE_FILE, ProvenanceStore, RG_ALBUM_PREFIX, albumMatchKey, badgeOf, libAlbumId, libAlbumIdForFolder, releaseGroupCover,
   libTrackId,
   provenanceKey, type ProvenanceRow, type ScanInput,
 } from './provenance.ts';
@@ -56,6 +57,7 @@ const upgrades = new UpgradeStore();
 const localPlaylists = new PlaylistStore();
 const appLikes = new LikesStore();
 const provenance = new ProvenanceStore();
+const identity = new FileIdentityStore(PROVENANCE_FILE);
 const shelf = new ShelfStore();
 const discogs = new DiscogsClient();
 const listenbrainz = new ListenBrainz();
@@ -71,17 +73,21 @@ function ownedPathsFor(mbids: string[]): Map<string, string> {
   const wanted = [...new Set(mbids.filter(Boolean))];
   if (!wanted.length) return new Map();
   const marks = wanted.map(() => '?').join(',');
+  // The files Lidarr never imported (singles folders, YouTube pulls) get
+  // their recording ids from file-identity.ts instead. Lidarr's map wins
+  // where both know a recording: its paths are exact by construction.
+  const owned = identity.pathsByRecording(wanted);
   try {
     const rows = query(
       `SELECT recording_mbid, path FROM lidarr_recording WHERE recording_mbid IN (${marks})`,
       ...wanted,
     ) as { recording_mbid: string; path: string }[];
-    return new Map(rows.map((row) => [row.recording_mbid.toLowerCase(), row.path]));
+    for (const row of rows) owned.set(row.recording_mbid.toLowerCase(), row.path);
   } catch {
     // The table arrives with the Lidarr sync. Without it radio still works,
     // it just believes we own nothing and falls back to name matching.
-    return new Map();
   }
+  return owned;
 }
 
 const radio = new RadioEngine(listenbrainz, provenance, ownedPathsFor);
@@ -104,12 +110,14 @@ function recordingForPath(file: string): {
     ) as { recording_mbid: string; artist_mbid: string | null; artist_name: string | null }[];
     const row = rows[0];
     return {
-      recordingMbid: row?.recording_mbid ?? null,
+      // A file Lidarr never imported may still have been identified by
+      // file-identity.ts; that gives the recording, not the artist.
+      recordingMbid: row?.recording_mbid ?? identity.byPath(file)?.recording_mbid ?? null,
       artistMbid: row?.artist_mbid ?? null,
       artistName: row?.artist_name ?? null,
     };
   } catch {
-    return { recordingMbid: null, artistMbid: null, artistName: null };
+    return { recordingMbid: identity.byPath(file)?.recording_mbid ?? null, artistMbid: null, artistName: null };
   }
 }
 
@@ -657,6 +665,7 @@ function isSinglesRel(rel: string): boolean {
  */
 function albumDisplayName(albumId: string | null | undefined, fallback: string | null | undefined): string {
   const id = String(albumId ?? '');
+  if (id.startsWith(RG_ALBUM_PREFIX)) return provenance.releaseTracks(id)[0]?.release_title ?? String(fallback ?? '');
   if (id.startsWith(LIB_ALBUM_PREFIX)) {
     const first = provenance.albumTracks(id)[0];
     if (first) return isSinglesRel(first.path) ? 'Singles' : String(first.album ?? fallback ?? '');
@@ -909,7 +918,7 @@ function referenceAlbumView(releaseGroupMbid: string): Record<string, unknown> |
   const coverage = upgrades.albumCoverage(releaseGroupMbid);
   let owned = 0;
   const tracks = album.tracks.map((track) => {
-    const file = provenance.byMatchKey(provenanceKey(album.artist, track.title), { album: album.title, durationMs: track.lengthMs });
+    const file = provenance.byMatchKey(provenanceKey(album.artist, track.title), { album: album.title, durationMs: track.lengthMs, recordingMbid: track.recordingMbid });
     const job = coverage.get(`${track.disc}:${track.position}`);
     if (file) owned += 1;
     return {
@@ -1739,6 +1748,39 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
 
   '/api/album': (params) => {
     const id = params.get('id') ?? '';
+    // A release the library holds by identity: files from a singles folder
+    // that file-identity.ts tied to one MusicBrainz release group. Same shape
+    // as a library album, so the page and the play button need nothing new.
+    if (id.startsWith(RG_ALBUM_PREFIX)) {
+      const tracks = provenance.releaseTracks(id);
+      if (!tracks.length) return { album: null, artists: [], tracks: [] };
+      const first = tracks[0];
+      return {
+        album: {
+          id,
+          name: first.release_title,
+          album_type: first.release_type?.toLowerCase() ?? 'release',
+          release_date: null,
+          image_url: releaseGroupCover(id.slice(RG_ALBUM_PREFIX.length)),
+          total_tracks: tracks.length,
+          is_saved: 0,
+          downloaded: 1,
+          local: 1,
+          source: first.source,
+          release_group_mbid: id.slice(RG_ALBUM_PREFIX.length),
+        },
+        artists: creditedArtists(first.artist),
+        tracks: tracks.map((track) => {
+          const badge = badgeOf(track);
+          return {
+            id: libTrackId(track.path), name: track.title, album_id: id, album: track.release_title,
+            disc_number: track.disc_number ?? 1, track_number: track.track_number, duration_ms: track.duration_ms,
+            explicit: 0, artists: track.artist, liked: 0, local: 1,
+            quality: badge.tier, quality_label: badge.quality, source: badge.source, source_detail: badge.detail,
+          };
+        }),
+      };
+    }
     // An album the library holds but Spotify never knew. Rendered from the
     // scanner's own record, so it carries real durations, track order,
     // per-track quality and a working play button.
@@ -1869,15 +1911,15 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     // an album you own ("Fated" by Nosaj Thing, when you own one single from
     // it). Say what it is - the same music reads the same here as it does on
     // Latest, just gathered.
-    const isSingles = isSinglesRel(album.rel);
+    const isSingles = isSinglesRel(album.rel) && !album.id.startsWith(RG_ALBUM_PREFIX);
     return {
       id: album.id,
       name: isSingles ? 'Singles' : album.name,
       artists: album.artists,
-      album_group: isSingles ? 'singles collection' : null,
+      album_group: isSingles ? 'singles collection' : album.album_group ?? null,
       total_tracks: album.total_tracks,
       added_at: album.added_at,
-      image_url: `/img/folder?rel=${encodeURIComponent(relOf(album.rel))}`,
+      image_url: album.image_url ?? `/img/folder?rel=${encodeURIComponent(relOf(album.rel))}`,
       downloaded: 1,
       local: 1,
       source: album.source,
@@ -3339,8 +3381,20 @@ const server = http.createServer(async (req, res) => {
     // sitting beside the audio (the intake writes one); fall back to asking
     // Jellyfin, which extracts embedded art. Jellyfin has proved unreliable
     // at ingesting folder art over the NFS mount, so the file comes first.
-    const localImage = url.pathname.match(/^\/img\/local\/([A-Za-z0-9-]+)\.jpg$/);
+    const localImage = url.pathname.match(/^\/img\/local\/([A-Za-z0-9-]+|rg(?::|%3[Aa])[A-Za-z0-9-]+)\.jpg$/);
     if (localImage) {
+      // An identified release: its files sit loose in a singles folder, each
+      // with its own sidecar art. The first track's sleeve is the record's;
+      // failing that, the Cover Art Archive has the release group.
+      if (/^rg(:|%3[Aa])/i.test(localImage[1])) {
+        const id = RG_ALBUM_PREFIX + localImage[1].replace(/^rg(:|%3[Aa])/i, '');
+        for (const track of provenance.releaseTracks(id)) {
+          const file = path.join(APP_LIBRARY_PREFIX, relOf(track.path));
+          if (sendArtwork(res, resolveArtwork(path.dirname(file), file))) return;
+        }
+        res.writeHead(302, { location: releaseGroupCover(id.slice(RG_ALBUM_PREFIX.length)), 'cache-control': 'public, max-age=86400' }).end();
+        return;
+      }
       // A library album's art is the cover in its folder. Answered here rather
       // than left to the <img> onerror fallback, so the first request already
       // resolves and every surface behaves the same.

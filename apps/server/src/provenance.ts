@@ -140,6 +140,13 @@ export function albumNameKey(album: string | null | undefined): string {
 
 export const LIB_ALBUM_PREFIX = 'libalbum-';
 export const LIB_TRACK_PREFIX = 'libtrack-';
+/**
+ * A release the library holds tracks of by identity rather than by folder:
+ * files in a singles folder that file-identity.ts tied to a MusicBrainz
+ * release group. The folder id stays; this id sits beside it.
+ */
+export const RG_ALBUM_PREFIX = 'rg:';
+export const releaseGroupCover = (mbid: string): string => `https://coverartarchive.org/release-group/${mbid}/front-250`;
 
 /**
  * Stable ids for music the taste DB has never heard of.
@@ -557,13 +564,27 @@ export class ProvenanceStore {
    * album that arrived by usenet, torrent, Soulseek, YouTube or a CD rip is
    * as reachable as one Spotify happens to know.
    */
-  albums(): { id: string; name: string; artists: string; total_tracks: number; added_at: string; source: Source; rel: string }[] {
+  albums(): { id: string; name: string; artists: string; total_tracks: number; added_at: string; source: Source; rel: string; image_url?: string; album_group?: string | null }[] {
     const folders = new Map<string, ProvenanceRow[]>();
+    const releases = new Map<string, (ProvenanceRow & { release_title: string; release_type: string | null })[]>();
+    const identified = this.hasTable('file_release');
     // One pass, grouped on the stored folder. Only the columns the listing
     // needs, so a thousand albums do not drag every column of 9,000 rows.
-    for (const row of this.handle().prepare(
-      'SELECT path, folder, album, artist, source, mtime FROM track_provenance WHERE folder IS NOT NULL',
-    ).all() as ProvenanceRow[]) {
+    // A file in a singles folder that has been identified to a release goes
+    // to that release instead: the folder is a filing location, not a record.
+    for (const row of this.handle().prepare(identified ? `
+      SELECT p.path, p.folder, p.album, p.artist, p.source, p.mtime,
+             CASE WHEN p.path LIKE '%/\\_Singles/%' ESCAPE '\\' THEN f.release_group_mbid END AS rg,
+             f.release_title, f.release_type
+      FROM track_provenance p LEFT JOIN file_release f ON f.path = p.path
+      WHERE p.folder IS NOT NULL` : `
+      SELECT path, folder, album, artist, source, mtime, NULL AS rg, NULL AS release_title, NULL AS release_type
+      FROM track_provenance WHERE folder IS NOT NULL`,
+    ).all() as (ProvenanceRow & { rg: string | null; release_title: string; release_type: string | null })[]) {
+      if (row.rg) {
+        (releases.get(row.rg) ?? releases.set(row.rg, []).get(row.rg)!).push(row);
+        continue;
+      }
       const folder = row.folder!;
       (folders.get(folder) ?? folders.set(folder, []).get(folder)!).push(row);
     }
@@ -574,7 +595,7 @@ export class ProvenanceStore {
       for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
       return [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
     };
-    return [...folders.entries()].map(([folder, rows]) => {
+    const byFolder = [...folders.entries()].map(([folder, rows]) => {
       const name = modal(rows.map((row) => row.album).filter(Boolean) as string[])
         // A folder of loose singles has no album tag; its own name is the
         // best label available.
@@ -590,7 +611,29 @@ export class ProvenanceStore {
         source: modal(rows.map((row) => row.source)) ?? 'unknown',
         rel: rows[0].path,
       };
-    }).sort((a, b) => b.added_at.localeCompare(a.added_at));
+    });
+    const byRelease = [...releases.entries()].map(([rg, rows]) => ({
+      id: RG_ALBUM_PREFIX + rg,
+      name: rows[0].release_title,
+      artists: modal(rows.map((row) => row.artist).filter(Boolean)) ?? '',
+      total_tracks: rows.length,
+      added_at: new Date(Math.max(...rows.map((row) => Number(row.mtime ?? 0))) * 1000).toISOString(),
+      source: modal(rows.map((row) => row.source)) ?? 'unknown',
+      rel: rows[0].path,
+      image_url: releaseGroupCover(rg),
+      album_group: /single/i.test(rows[0].release_type ?? '') ? 'single' : /\bep\b/i.test(rows[0].release_type ?? '') ? 'ep' : null,
+    }));
+    return [...byFolder, ...byRelease].sort((a, b) => b.added_at.localeCompare(a.added_at));
+  }
+
+  /** The library's tracks of one identified release group, in release order. */
+  releaseTracks(id: string): (ProvenanceRow & { release_title: string; release_type: string | null })[] {
+    if (!id.startsWith(RG_ALBUM_PREFIX) || !this.hasTable('file_release')) return [];
+    return (this.handle().prepare(`
+      SELECT p.*, f.release_title, f.release_type FROM file_release f JOIN track_provenance p ON p.path = f.path
+      WHERE f.release_group_mbid = ?
+    `).all(id.slice(RG_ALBUM_PREFIX.length)) as (ProvenanceRow & { release_title: string; release_type: string | null })[])
+      .sort((a, b) => (a.track_number ?? 0) - (b.track_number ?? 0) || a.path.localeCompare(b.path));
   }
 
   /** The tracks of one library album, in disc/track order. */
@@ -601,6 +644,10 @@ export class ProvenanceStore {
       .sort((a, b) => (a.disc_number ?? 1) - (b.disc_number ?? 1)
         || (a.track_number ?? 0) - (b.track_number ?? 0)
         || a.path.localeCompare(b.path));
+  }
+
+  private hasTable(name: string): boolean {
+    return Boolean(this.handle().prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name));
   }
 
   /** One scanned file by its derived id, for playback. */
@@ -634,7 +681,17 @@ export class ProvenanceStore {
    * on one album ended up showing another album's cover art. It breaks ties
    * among the files that pass the length gate.
    */
-  byMatchKey(key: string, hint: { album?: string | null; durationMs?: number | null } = {}): ProvenanceRow | null {
+  byMatchKey(key: string, hint: { album?: string | null; durationMs?: number | null; recordingMbid?: string | null } = {}): ProvenanceRow | null {
+    // Identity beats names. A file identified to this exact recording
+    // (file_release, see file-identity.ts) is the answer, whatever its tags
+    // say; the name key only decides among files nobody has identified.
+    if (hint.recordingMbid && this.hasTable('file_release')) {
+      const identified = this.handle().prepare(`
+        SELECT p.* FROM file_release f JOIN track_provenance p ON p.path = f.path
+        WHERE f.recording_mbid = ? ORDER BY p.size_bytes DESC LIMIT 1
+      `).get(hint.recordingMbid.toLowerCase()) as ProvenanceRow | undefined;
+      if (identified) return identified;
+    }
     if (!key) return null;
     const rows = (this.handle().prepare(`
       SELECT * FROM track_provenance WHERE match_key = ?
