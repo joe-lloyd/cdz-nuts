@@ -23,7 +23,7 @@ class FakeAudio {
   plays = 0;
   private listeners = new Map<string, Listener[]>();
 
-  load() { this.loads += 1; }
+  load() { this.loads += 1; this.currentTime = 0; }
   pause() { this.paused = true; }
   play(): Promise<void> { this.paused = false; this.plays += 1; return Promise.resolve(); }
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
@@ -75,6 +75,21 @@ test('reconnect rebuilds the desktop connection before checking the library', as
     '/api/desktop/reconnect',
     '/api/player/status?refresh=1',
   ]);
+});
+
+test('reconnect leaves a playing track at its current position', async () => {
+  player.setQueue([{ id: 'steady', name: 'Steady', artists: 'Someone', durationMs: 210_000 }], 'steady');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 64;
+  el.fire('play');
+  const plays = el.plays;
+
+  await player.reconnect();
+
+  expect(el.currentTime).toBe(64);
+  expect(el.plays).toBe(plays);
+  expect(player.getSnapshot().state).toBe('playing');
 });
 
 test('a stream that fails mid-track resumes where it stopped', async () => {
@@ -171,4 +186,21 @@ test('the scrubber spans the real track, not the container is guess', async () =
   const snap = player.getSnapshot();
   expect(snap.progress).toBeCloseTo(0.5, 2);
   expect(snap.remainingText).toBe('−2:30');
+});
+
+test('reconnect resumes a failed track at the position where playback stopped', async () => {
+  player.setQueue([{ id: 'retry', name: 'Retry', artists: 'Someone', durationMs: 210_000 }], 'retry');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 87;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  expect(player.getSnapshot().state).toBe('error');
+  expect(player.getSnapshot().canReconnect).toBe(true);
+
+  await player.reconnect();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(el.src).toContain('retry');
+  expect(el.currentTime).toBe(87);
+  expect(el.paused).toBe(false);
 });

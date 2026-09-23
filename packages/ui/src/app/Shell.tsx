@@ -207,7 +207,7 @@ export function ReconnectButton() {
   const p = usePlayer();
   const [reconnecting, setReconnecting] = useState(false);
   const offer = Boolean(desktop && (
-    isError || (!isPending && data?.state !== 'ready') || p.wakeAvailable
+    isError || (!isPending && data?.state !== 'ready') || p.canReconnect
   ));
   if (!offer) return null;
   return (
