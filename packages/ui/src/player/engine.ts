@@ -16,7 +16,7 @@ import {
   absoluteUrl, hasNativeHost, installNativeCommands, sendGone, sendNowPlaying,
 } from './nativeBridge.ts';
 import { get, post } from '../api/client.ts';
-import type { Continuation, Lyrics, ResolveResult, Track } from '../api/types.ts';
+import type { Continuation, Lyrics, PlayerStatus, ResolveResult, Track } from '../api/types.ts';
 
 const STORAGE_KEY = 'music-taste-player-v1';
 const OFFSETS_KEY = 'music-taste-lyric-offsets-v1';
@@ -106,6 +106,7 @@ export interface PlayerSnapshot {
   progress: number;
   canScrub: boolean;
   canPlay: boolean;
+  canReconnect: boolean;
   volumePosition: number;
   lyrics: Lyrics | null;
   lyricsTitle: string;
@@ -113,7 +114,6 @@ export interface PlayerSnapshot {
   activeLine: number;
   activeWord: number;
   lyricOffset: number;
-  wakeAvailable: boolean;
   toast: { message: string; bad: boolean; at: number } | null;
 }
 
@@ -126,10 +126,10 @@ const EMPTY: PlayerSnapshot = {
   radioSeedId: null,
   queue: [], queueIndex: -1, currentId: null,
   positionText: '0:00', remainingText: '−0:00', progress: 0,
-  canScrub: false, canPlay: false, volumePosition: 0.72,
+  canScrub: false, canPlay: false, canReconnect: false, volumePosition: 0.72,
   lyrics: null, lyricsTitle: 'Nothing playing', lyricsSource: 'Lyrics',
   activeLine: -1, activeWord: -1, lyricOffset: 0,
-  wakeAvailable: false, toast: null,
+  toast: null,
 };
 
 const artUrlFor = (albumId: string | null | undefined): string => {
@@ -203,7 +203,7 @@ class PlayerEngine {
         if (e.target !== this.audio) { this.prefetch = null; return; }
         if (!this.audio.src) return;
         if (this.resume()) return;
-        this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed' });
+        this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed', canReconnect: true });
         this.notify('Playback stopped. The archive may have gone offline.', true);
       });
     }
@@ -442,6 +442,7 @@ class PlayerEngine {
     const item = this.queue[this.queueIndex]!;
     this.patch({
       state: 'loading', canPlay: false, canScrub: false, progress: 0,
+      canReconnect: false,
       positionText: '0:00', remainingText: '−0:00',
       overline: 'Finding local file', title: item.name,
       byline: item.artists || 'Matching with Jellyfin…',
@@ -505,7 +506,7 @@ class PlayerEngine {
       radioSeedId: /^libtrack-/.test(track.id) ? track.id : null,
       canPlay: true,
       canScrub: true,
-      wakeAvailable: false,
+      canReconnect: false,
     });
     this.updateMediaSession(track);
     this.pushNowPlaying();
@@ -781,7 +782,7 @@ class PlayerEngine {
       byline: result.reason === 'not-matched'
         ? 'Not in the library — getting it now'
         : result.detail ?? 'No local audio source is available',
-      wakeAvailable: Boolean(result.wakeAvailable && result.reason === 'archive-offline'),
+      canReconnect: result.reason === 'archive-offline' || result.reason === 'player-error',
       lyrics: null, lyricsTitle: 'Nothing playing',
     });
     // Pressing play on a song we do not have IS the request for it.
@@ -802,22 +803,26 @@ class PlayerEngine {
     }
   }
 
-  async wake(): Promise<void> {
-    this.notify('Wake signal sent. Waiting for the archive…');
+  async reconnect(): Promise<void> {
+    this.notify('Reconnecting to the library…');
     try {
-      await post('/api/player/wake', {});
-      for (let attempt = 0; attempt < 15; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const status = await get<{ state: string }>('/api/player/status?refresh=1');
-        if (status.state === 'ready') {
-          this.notify('The archive is awake and ready');
-          if (this.queueIndex >= 0) void this.playAt(this.queueIndex);
-          return;
-        }
+      await post('/api/desktop/reconnect', {});
+      const status = await get<PlayerStatus>('/api/player/status?refresh=1');
+      if (status.state !== 'ready') {
+        this.notify(status.detail || 'The library is still unavailable', true);
+        return;
       }
-      this.notify('Eliot is taking longer than expected. Try again in a moment.', true);
+      this.notify('Connected to the library');
+      if (this.queueIndex >= 0 && this.snapshot.state === 'error') {
+        const item = this.queue[this.queueIndex]!;
+        const pos = this.audio.currentTime || this.resumeFrom;
+        if (pos > 0) this.pendingResume = { id: item.id, pos };
+        clearTimeout(this.resumeTimer);
+        this.resumeAttempts = 0;
+        void this.playAt(this.queueIndex);
+      }
     } catch (err) {
-      this.notify(err instanceof Error ? err.message : 'Could not send the wake signal', true);
+      this.notify(err instanceof Error ? err.message : 'Could not reconnect to the library', true);
     }
   }
 

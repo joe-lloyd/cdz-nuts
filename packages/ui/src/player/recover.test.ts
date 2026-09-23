@@ -3,7 +3,7 @@
 // On 2026-09-10 four /api/player/stream requests from a Mac got a 502 while
 // the server container was being redeployed. Each one stopped playback dead
 // with "Playback interrupted" and no way back except pressing play again. A
-// deploy, a WiFi blip or eliot waking up should cost a listener a second, not
+// deploy, a WiFi blip or the library reconnecting should cost a listener a second, not
 // the rest of the track.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -23,7 +23,7 @@ class FakeAudio {
   plays = 0;
   private listeners = new Map<string, Listener[]>();
 
-  load() { this.loads += 1; }
+  load() { this.loads += 1; this.currentTime = 0; }
   pause() { this.paused = true; }
   play(): Promise<void> { this.paused = false; this.plays += 1; return Promise.resolve(); }
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
@@ -40,7 +40,7 @@ const created: FakeAudio[] = [];
 vi.stubGlobal('Audio', class extends FakeAudio {
   constructor() { super(); created.push(this); }
 });
-vi.stubGlobal('fetch', vi.fn((url: string) => {
+const fetchMock = vi.fn((url: string) => {
   if (url.startsWith('/api/player/resolve')) {
     const id = new URL(url, 'http://localhost').searchParams.get('id') ?? '';
     return Promise.resolve(new Response(JSON.stringify({
@@ -51,8 +51,14 @@ vi.stubGlobal('fetch', vi.fn((url: string) => {
       track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: id === 'd1' ? 300_000 : 210_000 },
     }), { headers: { 'content-type': 'application/json' } }));
   }
+  if (url === '/api/player/status?refresh=1') {
+    return Promise.resolve(new Response(JSON.stringify({ state: 'ready' }), {
+      headers: { 'content-type': 'application/json' },
+    }));
+  }
   return Promise.resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }));
-}));
+});
+vi.stubGlobal('fetch', fetchMock);
 
 const { player } = await import('./engine.ts');
 
@@ -60,6 +66,31 @@ const active = () => created.find((el) => el.src) ?? created[0]!;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
+
+test('reconnect rebuilds the desktop connection before checking the library', async () => {
+  fetchMock.mockClear();
+  await player.reconnect();
+
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    '/api/desktop/reconnect',
+    '/api/player/status?refresh=1',
+  ]);
+});
+
+test('reconnect leaves a playing track at its current position', async () => {
+  player.setQueue([{ id: 'steady', name: 'Steady', artists: 'Someone', durationMs: 210_000 }], 'steady');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 64;
+  el.fire('play');
+  const plays = el.plays;
+
+  await player.reconnect();
+
+  expect(el.currentTime).toBe(64);
+  expect(el.plays).toBe(plays);
+  expect(player.getSnapshot().state).toBe('playing');
+});
 
 test('a stream that fails mid-track resumes where it stopped', async () => {
   player.setQueue([{ id: 't1', name: 'Track 1', artists: 'Someone', durationMs: 210_000 }], 't1');
@@ -155,4 +186,21 @@ test('the scrubber spans the real track, not the container is guess', async () =
   const snap = player.getSnapshot();
   expect(snap.progress).toBeCloseTo(0.5, 2);
   expect(snap.remainingText).toBe('−2:30');
+});
+
+test('reconnect resumes a failed track at the position where playback stopped', async () => {
+  player.setQueue([{ id: 'retry', name: 'Retry', artists: 'Someone', durationMs: 210_000 }], 'retry');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 87;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  expect(player.getSnapshot().state).toBe('error');
+  expect(player.getSnapshot().canReconnect).toBe(true);
+
+  await player.reconnect();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(el.src).toContain('retry');
+  expect(el.currentTime).toBe(87);
+  expect(el.paused).toBe(false);
 });
