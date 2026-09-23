@@ -16,7 +16,7 @@ import {
   absoluteUrl, hasNativeHost, installNativeCommands, sendGone, sendNowPlaying,
 } from './nativeBridge.ts';
 import { get, post } from '../api/client.ts';
-import type { Continuation, Lyrics, ResolveResult, Track } from '../api/types.ts';
+import type { Continuation, Lyrics, PlayerStatus, ResolveResult, Track } from '../api/types.ts';
 
 const STORAGE_KEY = 'music-taste-player-v1';
 const OFFSETS_KEY = 'music-taste-lyric-offsets-v1';
@@ -802,22 +802,19 @@ class PlayerEngine {
     }
   }
 
-  async wake(): Promise<void> {
-    this.notify('Wake signal sent. Waiting for the archive…');
+  async reconnect(): Promise<void> {
+    this.notify('Reconnecting to the library…');
     try {
-      await post('/api/player/wake', {});
-      for (let attempt = 0; attempt < 15; attempt += 1) {
-        await new Promise((r) => setTimeout(r, 3000));
-        const status = await get<{ state: string }>('/api/player/status?refresh=1');
-        if (status.state === 'ready') {
-          this.notify('The archive is awake and ready');
-          if (this.queueIndex >= 0) void this.playAt(this.queueIndex);
-          return;
-        }
+      await post('/api/desktop/reconnect', {});
+      const status = await get<PlayerStatus>('/api/player/status?refresh=1');
+      if (status.state !== 'ready') {
+        this.notify(status.detail || 'The library is still unavailable', true);
+        return;
       }
-      this.notify('Eliot is taking longer than expected. Try again in a moment.', true);
+      this.notify('Connected to the library');
+      if (this.queueIndex >= 0) void this.playAt(this.queueIndex);
     } catch (err) {
-      this.notify(err instanceof Error ? err.message : 'Could not send the wake signal', true);
+      this.notify(err instanceof Error ? err.message : 'Could not reconnect to the library', true);
     }
   }
 

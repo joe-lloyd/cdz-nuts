@@ -3,7 +3,7 @@
 // On 2026-09-10 four /api/player/stream requests from a Mac got a 502 while
 // the server container was being redeployed. Each one stopped playback dead
 // with "Playback interrupted" and no way back except pressing play again. A
-// deploy, a WiFi blip or eliot waking up should cost a listener a second, not
+// deploy, a WiFi blip or the library reconnecting should cost a listener a second, not
 // the rest of the track.
 
 import { afterEach, beforeEach, expect, test, vi } from 'vitest';
@@ -40,7 +40,7 @@ const created: FakeAudio[] = [];
 vi.stubGlobal('Audio', class extends FakeAudio {
   constructor() { super(); created.push(this); }
 });
-vi.stubGlobal('fetch', vi.fn((url: string) => {
+const fetchMock = vi.fn((url: string) => {
   if (url.startsWith('/api/player/resolve')) {
     const id = new URL(url, 'http://localhost').searchParams.get('id') ?? '';
     return Promise.resolve(new Response(JSON.stringify({
@@ -51,8 +51,14 @@ vi.stubGlobal('fetch', vi.fn((url: string) => {
       track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: id === 'd1' ? 300_000 : 210_000 },
     }), { headers: { 'content-type': 'application/json' } }));
   }
+  if (url === '/api/player/status?refresh=1') {
+    return Promise.resolve(new Response(JSON.stringify({ state: 'ready' }), {
+      headers: { 'content-type': 'application/json' },
+    }));
+  }
   return Promise.resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }));
-}));
+});
+vi.stubGlobal('fetch', fetchMock);
 
 const { player } = await import('./engine.ts');
 
@@ -60,6 +66,16 @@ const active = () => created.find((el) => el.src) ?? created[0]!;
 
 beforeEach(() => { vi.useFakeTimers(); });
 afterEach(() => { vi.useRealTimers(); });
+
+test('reconnect rebuilds the desktop connection before checking the library', async () => {
+  fetchMock.mockClear();
+  await player.reconnect();
+
+  expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+    '/api/desktop/reconnect',
+    '/api/player/status?refresh=1',
+  ]);
+});
 
 test('a stream that fails mid-track resumes where it stopped', async () => {
   player.setQueue([{ id: 't1', name: 'Track 1', artists: 'Someone', durationMs: 210_000 }], 't1');

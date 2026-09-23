@@ -88,7 +88,7 @@ export function Shell() {
             </div>
             <div className="page-head-tools">
               <VersionChip />
-              <WakeButton />
+              <ReconnectButton />
             </div>
           </header>
           <main id="main" tabIndex={-1}><Outlet /></main>
@@ -201,18 +201,26 @@ function ArchiveState() {
   );
 }
 
-function WakeButton() {
-  const { data } = usePlayerStatus();
+export function ReconnectButton() {
+  const { data: desktop } = useDesktop();
+  const { data, isError, isPending, refetch } = usePlayerStatus();
   const p = usePlayer();
-  const [waking, setWaking] = useState(false);
-  const offer = (data?.wakeAvailable && data.state === 'archive-offline') || p.wakeAvailable;
+  const [reconnecting, setReconnecting] = useState(false);
+  const offer = Boolean(desktop && (
+    isError || (!isPending && data?.state !== 'ready') || p.wakeAvailable
+  ));
   if (!offer) return null;
   return (
     <button
-      className="wake-button" type="button" disabled={waking}
-      onClick={() => { setWaking(true); void player.wake().finally(() => setWaking(false)); }}
+      className="wake-button" type="button" disabled={reconnecting}
+      onClick={() => {
+        setReconnecting(true);
+        void player.reconnect()
+          .then(() => refetch())
+          .finally(() => setReconnecting(false));
+      }}
     >
-      {waking ? 'Waking eliot…' : 'Wake eliot'}
+      {reconnecting ? 'Reconnecting…' : 'Reconnect'}
     </button>
   );
 }

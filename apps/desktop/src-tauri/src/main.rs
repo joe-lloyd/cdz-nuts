@@ -17,6 +17,7 @@ use std::sync::Arc;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::TrayIconBuilder;
+use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::RwLock;
 
@@ -42,16 +43,13 @@ impl AppState {
     /// Called at startup and whenever the path changes. Kept separate from
     /// detection so that a failure to build a client (no tunnel yet, say)
     /// leaves the previous working client in place rather than wedging the app.
-    async fn refresh_path(&self, tunnel: Option<std::net::SocketAddr>) {
+    async fn refresh_path(&self, tunnel: Option<std::net::SocketAddr>) -> anyhow::Result<Path> {
         let path = netpath::detect().await;
-        match Proxy::new(path, tunnel) {
-            Ok(p) => {
-                *self.proxy.write().await = Some(Arc::new(p));
-                *self.path.write().await = Some(path);
-                log::info!("network path: {}", path.label());
-            }
-            Err(e) => log::warn!("could not build a client for {}: {e:#}", path.label()),
-        }
+        let proxy = Proxy::new(path, tunnel)?;
+        *self.proxy.write().await = Some(Arc::new(proxy));
+        *self.path.write().await = Some(path);
+        log::info!("network path: {}", path.label());
+        Ok(path)
     }
 }
 
@@ -106,7 +104,9 @@ fn main() {
 
             // Decide the path before the window loads, so the first request
             // does not race the client being built.
-            tauri::async_runtime::block_on(state.refresh_path(None));
+            if let Err(error) = tauri::async_runtime::block_on(state.refresh_path(None)) {
+                log::warn!("could not build the initial network client: {error:#}");
+            }
 
             WebviewWindowBuilder::new(
                 app,
@@ -116,6 +116,10 @@ fn main() {
             .title("Homelab Music")
             .inner_size(1180.0, 820.0)
             .min_inner_size(420.0, 520.0)
+            // WKWebView otherwise suspends the document after a hidden window
+            // has been in the background for several minutes. The document
+            // owns the audio elements, so suspending it also pauses playback.
+            .background_throttling(BackgroundThrottlingPolicy::Disabled)
             .build()?;
 
             build_tray(app)?;
@@ -240,9 +244,8 @@ async fn handle(state: Arc<AppState>, request: http::Request<Vec<u8>>) -> http::
     }
 }
 
-/// The desktop shell's own small API: what version this is, and the update
-/// controls the settings page drives. Kept to three paths, because every one
-/// of them is a thing the web build has to cope with not having.
+/// The desktop shell's own small API: status, reconnection, and updates.
+/// Kept to four paths, because the web build has to cope without each one.
 async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<Vec<u8>> {
     let handle = state.app.read().await.clone();
     let Some(handle) = handle else {
@@ -260,6 +263,19 @@ async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<V
                 "update_pending": handle.state::<update::PendingUpdate>().is_pending(),
             }),
         ),
+        "/api/desktop/reconnect" => match state.refresh_path(None).await {
+            Ok(path) => json(
+                200,
+                &serde_json::json!({ "state": "connected", "path": path.label() }),
+            ),
+            Err(error) => {
+                log::warn!("could not reconnect to home: {error:#}");
+                json(
+                    503,
+                    &serde_json::json!({ "error": format!("could not reconnect: {error}") }),
+                )
+            }
+        },
         "/api/desktop/update/check" => {
             let found = update::check(handle, false, false).await;
             json(200, &found)
@@ -309,10 +325,14 @@ fn text(status: u16, message: &str) -> http::Response<Vec<u8>> {
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItemBuilder::with_id("show", "Show player").build(app)?;
+    let play = MenuItemBuilder::with_id("play", "Play").build(app)?;
+    let pause = MenuItemBuilder::with_id("pause", "Pause").build(app)?;
     let update_item = MenuItemBuilder::with_id("update", "Check for updates…").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app)
         .items(&[&show])
+        .separator()
+        .items(&[&play, &pause])
         .separator()
         .items(&[&update_item])
         .separator()
@@ -329,6 +349,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
+                }
+            }
+            "play" | "pause" => {
+                if let Some(w) = app.get_webview_window("main") {
+                    let _ = w.eval(format!(
+                        "window.__homearpaMusic?.command('{}')",
+                        event.id().as_ref()
+                    ));
                 }
             }
             // One item does both jobs: it checks when there is nothing
