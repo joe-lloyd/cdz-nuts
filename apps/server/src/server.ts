@@ -228,11 +228,29 @@ const SOURCE_HOSTS = new Set([
 // actually part of the taste. The raw `artists` table also holds every
 // feature credit and discography-crawl hydration (5000+ and growing
 // nightly), which made the old tile count meaningless.
-const TASTE_ARTISTS_SQL = `SELECT COUNT(DISTINCT a.id) n FROM artists a
-  WHERE a.is_followed = 1 OR EXISTS (
-    SELECT 1 FROM track_artists ta JOIN liked_tracks lt
-      ON lt.track_id = ta.track_id AND lt.removed_at IS NULL
-    WHERE ta.artist_id = a.id)`;
+//
+// The taste DB has no ANALYZE statistics, so left to itself SQLite drives
+// these joins from the 15,000 artists or the 150,000 track credits and probes
+// the few hundred likes. CROSS JOIN pins the small side first: SQLite never
+// reorders one. That took this count from about 400ms to 25ms on the Pi, and
+// every request queues behind it because the queries are synchronous.
+const TASTE_ARTISTS_SQL = `SELECT COUNT(*) n FROM (
+  SELECT id FROM artists WHERE is_followed = 1
+  UNION
+  SELECT a.id FROM liked_tracks lt
+    CROSS JOIN track_artists ta ON ta.track_id = lt.track_id
+    CROSS JOIN artists a ON a.id = ta.artist_id
+  WHERE lt.removed_at IS NULL)`;
+
+// Albums credited to a followed artist, either way round. Looked up from the
+// few hundred followed artists rather than per album: artist_albums is keyed
+// by artist, so a per-album EXISTS scanned the whole table for every row.
+const FOLLOWED_ALBUM_IDS_SQL = `
+  SELECT x.album_id FROM artists a CROSS JOIN artist_albums x ON x.artist_id = a.id
+  WHERE a.is_followed = 1
+  UNION
+  SELECT album_id FROM album_artists
+  WHERE artist_id IN (SELECT id FROM artists WHERE is_followed = 1)`;
 const RELEASE_LOOKBACK_DAYS = 30;
 
 function query(sql: string, ...args: (string | number)[]): unknown[] {
@@ -1025,14 +1043,23 @@ function likedAlbums() {
 }
 
 function likedArtists() {
+  // Counted once per table and joined, not once per artist: the correlated
+  // version ran two subqueries for each of 15,000 artists and took 1.6s.
   const rows = query(`
+    WITH liked AS (
+      SELECT ta.artist_id, COUNT(*) n FROM liked_tracks lt
+        CROSS JOIN track_artists ta ON ta.track_id = lt.track_id
+      WHERE lt.removed_at IS NULL GROUP BY ta.artist_id),
+    top AS (
+      SELECT artist_id, MIN(rank) r FROM top_artists
+      WHERE time_range = 'medium_term' GROUP BY artist_id)
     SELECT a.id, a.name, a.genres, a.popularity, a.followers, a.image_url, a.is_followed,
            a.unfollowed_at, a.removed_at,
-           (SELECT COUNT(*) FROM track_artists ta JOIN liked_tracks lt ON lt.track_id = ta.track_id
-             WHERE ta.artist_id = a.id AND lt.removed_at IS NULL) AS liked_count,
-           (SELECT MIN(rank) FROM top_artists t WHERE t.artist_id = a.id AND t.time_range = 'medium_term') AS top_rank
+           COALESCE(liked.n, 0) AS liked_count, top.r AS top_rank
     FROM artists a
-    WHERE a.is_followed = 1 OR liked_count > 0 OR top_rank IS NOT NULL OR a.unfollowed_at IS NOT NULL
+    LEFT JOIN liked ON liked.artist_id = a.id
+    LEFT JOIN top ON top.artist_id = a.id
+    WHERE a.is_followed = 1 OR liked.n > 0 OR top.r IS NOT NULL OR a.unfollowed_at IS NOT NULL
     ORDER BY liked_count DESC, a.followers DESC`) as Record<string, unknown>[];
   for (const row of rows) row.liked = Number(Boolean(row.is_followed) && !row.unfollowed_at);
   const merged = new Map(rows.map((row) => [String(row.id), row]));
@@ -1691,10 +1718,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
                  WHERE aa.album_id = al.id) AS artists
         FROM albums al
         WHERE al.release_date >= date('now', ?)
-          AND (EXISTS (SELECT 1 FROM artist_albums x JOIN artists a ON a.id = x.artist_id
-                        WHERE x.album_id = al.id AND a.is_followed = 1)
-            OR EXISTS (SELECT 1 FROM album_artists x JOIN artists a ON a.id = x.artist_id
-                        WHERE x.album_id = al.id AND a.is_followed = 1))
+          AND al.id IN (${FOLLOWED_ALBUM_IDS_SQL})
         ORDER BY al.release_date DESC LIMIT 36`, `-${RELEASE_LOOKBACK_DAYS} days`),
       history: (query('SELECT COUNT(*) n, SUM(ms_played) ms FROM history_plays')[0] as { n: number; ms: number }).n
         ? {
@@ -1995,10 +2019,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
                WHERE aa.album_id = al.id) AS artists
       FROM albums al
       WHERE al.release_date >= date('now', ?)
-        AND (EXISTS (SELECT 1 FROM artist_albums x JOIN artists a ON a.id = x.artist_id
-                      WHERE x.album_id = al.id AND a.is_followed = 1)
-          OR EXISTS (SELECT 1 FROM album_artists x JOIN artists a ON a.id = x.artist_id
-                      WHERE x.album_id = al.id AND a.is_followed = 1))
+        AND al.id IN (${FOLLOWED_ALBUM_IDS_SQL})
       ORDER BY al.release_date DESC LIMIT 36
     `, `-${RELEASE_LOOKBACK_DAYS} days`) as Record<string, string | number | null>[])
       .filter((row) => !known.has(albumMatchKey(String(row.artists ?? ''), String(row.name ?? ''))))
