@@ -269,12 +269,23 @@ export interface ScanInput {
   disc_number?: number | null;
 }
 
+export interface ProvenanceSummary {
+  sources: Record<string, number>;
+  tiers: Record<string, number>;
+  total: number;
+  scannedAt: string | null;
+}
+
 export class ProvenanceStore {
   private db: DatabaseSync | null = null;
   private readonly dbFile: string;
   private readonly now: () => number;
-  private cache: { at: number; map: Map<string, Badge> } | null = null;
-  private albumCache: { at: number; map: Map<string, Badge> } | null = null;
+  // Derived from every row, so each costs a full read: 200-500ms on the Pi.
+  // Kept until the data changes rather than for a fixed minute; see revalidate().
+  private cache: Map<string, Badge> | null = null;
+  private albumCache: Map<string, Badge> | null = null;
+  private summaryCache: ProvenanceSummary | null = null;
+  private seenVersion: number | null = null;
 
   constructor(dbFile?: string, now: () => number = Date.now) {
     this.dbFile = dbFile ?? PROVENANCE_FILE;
@@ -365,8 +376,34 @@ export class ProvenanceStore {
   close(): void {
     this.db?.close();
     this.db = null;
+    this.seenVersion = null;
+    this.forget();
+  }
+
+  private forget(): void {
     this.cache = null;
     this.albumCache = null;
+    this.summaryCache = null;
+  }
+
+  /**
+   * Drop the caches if another connection has written since we last looked.
+   *
+   * Writes through this store clear them on the spot. PRAGMA data_version
+   * moves only for other connections' commits, such as a script run by hand,
+   * so between the two every write is seen. The caches used to expire every
+   * minute instead, and whichever request came next paid for the rebuild
+   * while the whole server waited.
+   *
+   * data_version counts commits to the file, not to this table, so the
+   * nightly identify-files run, which keeps file_release in the same file,
+   * also clears them once per file it judges. That is a few rebuilds a night
+   * for new files, against one a minute all day before.
+   */
+  private revalidate(): void {
+    const { data_version: version } = this.handle().prepare('PRAGMA data_version').get() as { data_version: number };
+    if (version !== this.seenVersion) this.forget();
+    this.seenVersion = version;
   }
 
   /**
@@ -429,8 +466,7 @@ export class ProvenanceStore {
       db.exec('ROLLBACK');
       throw err;
     }
-    this.cache = null;
-    this.albumCache = null;
+    this.forget();
     return written;
   }
 
@@ -451,8 +487,7 @@ export class ProvenanceStore {
       db.exec('ROLLBACK');
       throw err;
     }
-    this.cache = null;
-    this.albumCache = null;
+    this.forget();
     return gone.length;
   }
 
@@ -463,12 +498,10 @@ export class ProvenanceStore {
     return (found as ProvenanceRow | undefined) ?? null;
   }
 
-  /**
-   * artist+title -> badge, for decorating track lists. Cached briefly because
-   * every list endpoint wants it and the scan only changes hourly.
-   */
-  badges(ttlMs = 60_000): Map<string, Badge> {
-    if (this.cache && this.now() - this.cache.at < ttlMs) return this.cache.map;
+  /** artist+title -> badge, for decorating track lists. Every list endpoint wants it. */
+  badges(): Map<string, Badge> {
+    this.revalidate();
+    if (this.cache) return this.cache;
     const map = new Map<string, Badge>();
     const best = new Map<string, ProvenanceRow>();
     for (const row of this.handle()
@@ -478,12 +511,14 @@ export class ProvenanceStore {
       best.set(row.match_key, seen ? betterBadge(seen, row) : row);
     }
     for (const [key, row] of best) map.set(key, badgeOf(row));
-    this.cache = { at: this.now(), map };
+    this.cache = map;
     return map;
   }
 
   /** Counts per source and per tier, for the Overview page. */
-  summary(): { sources: Record<string, number>; tiers: Record<string, number>; total: number; scannedAt: string | null } {
+  summary(): ProvenanceSummary {
+    this.revalidate();
+    if (this.summaryCache) return this.summaryCache;
     const db = this.handle();
     const sources: Record<string, number> = {};
     for (const row of db.prepare(
@@ -498,7 +533,8 @@ export class ProvenanceStore {
     }
     const total = Object.values(sources).reduce((sum, n) => sum + n, 0);
     const latest = db.prepare('SELECT MAX(scanned_at) at FROM track_provenance').get() as { at: string | null };
-    return { sources, tiers, total, scannedAt: latest?.at ?? null };
+    this.summaryCache = { sources, tiers, total, scannedAt: latest?.at ?? null };
+    return this.summaryCache;
   }
 
   /**
@@ -508,8 +544,9 @@ export class ProvenanceStore {
    * and not the worst: one bonus track in a different format should not
    * relabel a whole record in either direction. Source is picked the same way.
    */
-  albumBadges(ttlMs = 60_000): Map<string, Badge> {
-    if (this.albumCache && this.now() - this.albumCache.at < ttlMs) return this.albumCache.map;
+  albumBadges(): Map<string, Badge> {
+    this.revalidate();
+    if (this.albumCache) return this.albumCache;
     const groups = new Map<string, { tiers: Map<QualityTier, number>; sources: Map<Source, number>; sample: ProvenanceRow }>();
     for (const row of this.handle()
       .prepare("SELECT * FROM track_provenance WHERE album IS NOT NULL AND album <> ''")
@@ -542,7 +579,7 @@ export class ProvenanceStore {
         detail: group.sample.detail,
       });
     }
-    this.albumCache = { at: this.now(), map };
+    this.albumCache = map;
     return map;
   }
 

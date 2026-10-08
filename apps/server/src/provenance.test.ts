@@ -93,7 +93,7 @@ test('badges pick the best copy when the same song exists twice', () => {
       row({ path: '/lib/opus.opus', codec: 'opus', bitrate: 130, bit_depth: null, source: 'youtube' }),
       row({ path: '/lib/flac.flac', codec: 'flac', bit_depth: 16, source: 'usenet' }),
     ]);
-    const badge = store.badges(0).get(provenanceKey('Slayer', 'War Ensemble'));
+    const badge = store.badges().get(provenanceKey('Slayer', 'War Ensemble'));
     assert.equal(badge?.tier, 'lossless');
     assert.equal(badge?.source, 'usenet');
   });
@@ -105,7 +105,7 @@ test('rows without an artist or title never collide under the empty key', () => 
       row({ path: '/lib/a.flac', artist: '', title: '' }),
       row({ path: '/lib/b.flac', artist: '', title: '' }),
     ]);
-    assert.equal(store.badges(0).size, 0);
+    assert.equal(store.badges().size, 0);
     assert.equal(store.summary().total, 2);
   });
 });
@@ -128,7 +128,7 @@ test('an album badge reports the modal tier, not the best or worst track', () =>
       codec: 'mp3', bitrate: 320, bit_depth: null, source: 'torrent',
     }));
     store.upsert(tracks);
-    const badge = store.albumBadges(0).get(albumMatchKey('Slayer', 'Seasons in the Abyss (1990) [Album]'));
+    const badge = store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss (1990) [Album]'));
     assert.equal(badge?.tier, 'lossless');
     assert.equal(badge?.source, 'usenet');
   });
@@ -138,10 +138,49 @@ test('rescanning invalidates the album cache as well as the track cache', () => 
   withStore((store) => {
     store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
     assert.equal(store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier, 'high');
-    // Same default TTL, so a stale cache would still answer "high" here.
+    // Cached from the line above, so a cache the write missed would still answer "high".
     store.upsert([row({ path: '/lib/a.mp3' })]);
     assert.equal(store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier, 'lossless');
   });
+});
+
+test('a scan written by another connection shows up without waiting out a timer', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'prov-'));
+  const file = path.join(dir, 'provenance.db');
+  const store = new ProvenanceStore(file);
+  // A second process, such as a script run by hand, sharing the file.
+  const elsewhere = (fields: Partial<ScanInput>) => {
+    const other = new ProvenanceStore(file);
+    try {
+      other.upsert([row({ path: '/lib/a.mp3', ...fields })]);
+    } finally {
+      other.close();
+    }
+  };
+  const track = () => store.badges().get(provenanceKey('Slayer', 'War Ensemble'))?.tier;
+  const album = () => store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier;
+  try {
+    store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
+    assert.equal(track(), 'high');
+    assert.equal(album(), 'high');
+    assert.deepEqual(store.summary().tiers, { high: 1 });
+
+    // Each cache is read first after its own write, and all three are filled
+    // again before the next, so none relies on another noticing for it.
+    elsewhere({});
+    assert.deepEqual(store.summary().tiers, { lossless: 1 });
+    assert.equal(album(), 'lossless');
+    assert.equal(track(), 'lossless');
+    elsewhere({ bit_depth: 24 });
+    assert.equal(album(), 'hires');
+    assert.equal(track(), 'hires');
+    assert.deepEqual(store.summary().tiers, { hires: 1 });
+    elsewhere({ codec: 'mp3', bitrate: 320, bit_depth: null });
+    assert.equal(track(), 'high');
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('an album is the folder, so feature credits do not split a record', () => {
@@ -196,9 +235,13 @@ test('track order follows disc then track number, not filename luck', () => {
 
 test('prune drops files the scanner no longer sees', () => {
   withStore((store) => {
-    store.upsert([row({ path: '/lib/a.flac' }), row({ path: '/lib/b.flac' })]);
+    store.upsert([row({ path: '/lib/a.flac' }), row({ path: '/lib/b.flac', title: 'Raining Blood' })]);
+    // Read first, so a prune that left the caches alone would still show b.
+    assert.equal(store.summary().total, 2);
+    assert.ok(store.badges().has(provenanceKey('Slayer', 'Raining Blood')));
     assert.equal(store.prune(['/lib/a.flac']), 1);
     assert.equal(store.summary().total, 1);
+    assert.equal(store.badges().has(provenanceKey('Slayer', 'Raining Blood')), false);
     assert.equal(store.prune(['/lib/a.flac']), 0);
   });
 });
