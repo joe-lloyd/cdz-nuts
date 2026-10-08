@@ -446,9 +446,12 @@ export class UpgradeStore {
   // Kept until the queue changes. The Albums page asks once per cover, sixty
   // at a time, and a full read cost 30-40ms on the Pi with every other
   // request waiting. total_changes() moves on this store's own writes and
-  // data_version on any other connection's. Each caller gets copies, because
-  // the server decorates rows in place before it sends them.
+  // data_version on any other connection's. Inside an open transaction the
+  // rows may yet be rolled back, which moves neither, so those reads skip
+  // the cache. Each caller gets copies, so no caller can change what the
+  // next one sees.
   localTracks(): LocalTrack[] {
+    if (this.db.isTransaction) return this.readLocalTracks();
     const { version } = this.db.prepare(
       'SELECT total_changes() || \':\' || (SELECT data_version FROM pragma_data_version) AS version',
     ).get() as { version: string };

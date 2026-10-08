@@ -366,6 +366,22 @@ test('the local library follows writes from another connection, and hands out co
   }
 });
 
+test('a read inside a transaction that rolls back is not kept', () => {
+  const { store, close } = fixture();
+  try {
+    store.db.exec('BEGIN');
+    store.create({
+      sourceUrl: 'https://youtu.be/abc', artist: 'Igorrr', title: 'Cuisse', album: 'Maigre',
+      currentPath: '/data/library/music/_YouTube/Igorrr/Maigre/03 - Cuisse.opus', currentCodec: 'opus',
+    });
+    assert.equal(store.localTracks().length, 1);
+    store.db.exec('ROLLBACK');
+    assert.equal(store.localTracks().length, 0);
+  } finally {
+    close();
+  }
+});
+
 test('removing a batch parent forgets its generated tracks and reports their files', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'remove-'));
   const store = new UpgradeStore(path.join(dir, 'upgrades.db'));
