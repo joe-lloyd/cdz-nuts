@@ -334,6 +334,54 @@ test('two queue rows for one file are one track, keeping the album context', () 
   }
 });
 
+test('the local library follows writes from another connection, and hands out copies', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'local-cache-'));
+  const file = path.join(dir, 'upgrades.db');
+  const store = new UpgradeStore(file);
+  try {
+    store.create({
+      sourceUrl: 'https://youtu.be/abc', artist: 'Igorrr', title: 'Cuisse', album: 'Maigre',
+      currentPath: '/data/library/music/_YouTube/Igorrr/Maigre/03 - Cuisse.opus', currentCodec: 'opus',
+    });
+    const [first] = store.localTracks();
+    assert.equal(first.name, 'Cuisse');
+
+    // The server writes badges onto the rows it sends; the next caller must not see them.
+    (first as Record<string, unknown>).quality = 'lossless';
+    first.name = 'Changed by a caller';
+    assert.equal(store.localTracks()[0].name, 'Cuisse');
+    assert.equal('quality' in store.localTracks()[0], false);
+
+    // A second process, such as the worker's own tooling, renaming the track.
+    const other = new DatabaseSync(file);
+    try {
+      other.prepare("UPDATE upgrade_queue SET title = 'Barbecue'").run();
+    } finally {
+      other.close();
+    }
+    assert.deepEqual(store.localTracks().map((track) => track.name), ['Barbecue']);
+  } finally {
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a read inside a transaction that rolls back is not kept', () => {
+  const { store, close } = fixture();
+  try {
+    store.db.exec('BEGIN');
+    store.create({
+      sourceUrl: 'https://youtu.be/abc', artist: 'Igorrr', title: 'Cuisse', album: 'Maigre',
+      currentPath: '/data/library/music/_YouTube/Igorrr/Maigre/03 - Cuisse.opus', currentCodec: 'opus',
+    });
+    assert.equal(store.localTracks().length, 1);
+    store.db.exec('ROLLBACK');
+    assert.equal(store.localTracks().length, 0);
+  } finally {
+    close();
+  }
+});
+
 test('removing a batch parent forgets its generated tracks and reports their files', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'remove-'));
   const store = new UpgradeStore(path.join(dir, 'upgrades.db'));
