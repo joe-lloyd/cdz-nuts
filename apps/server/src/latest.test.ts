@@ -55,7 +55,9 @@ test('HTTP: /api/latest lists what landed on disk, newest first, from all three 
     }
     assert.match(output, /taste-db ui on/);
 
-    // Two requests at once share one walk and get the same answer.
+    // Both requests arrive before the first walk finishes and get the full list.
+    // This pins what the walk returns. That the walk no longer blocks the
+    // server is a timing property, checked against the deployed one.
     const [first, second] = await Promise.all([1, 2].map(async () => {
       const response = await fetch(`http://127.0.0.1:${port}/api/latest`);
       assert.equal(response.status, 200);
@@ -70,7 +72,9 @@ test('HTTP: /api/latest lists what landed on disk, newest first, from all three 
     const hoursAgo = (iso: string) => Math.round((Date.now() - Date.parse(iso)) / 3_600_000);
     assert.deepEqual(first.map(row => hoursAgo(row.added_at)), [1, 2, 3]);
   } finally {
-    const exited = once(child, 'exit'); child.kill(); await exited;
+    // A server that died at startup has already exited; waiting for that
+    // again would hang the test until its timeout and hide the output.
+    if (child.exitCode === null) { const exited = once(child, 'exit'); child.kill(); await exited; }
     rmSync(dir, { recursive: true, force: true });
   }
 });
