@@ -55,7 +55,7 @@ test('HTTP: /api/latest lists what landed on disk, newest first, from all three 
     }
     assert.match(output, /taste-db ui on/);
 
-    // Both requests arrive before the first walk finishes and get the full list.
+    // Two requests at once both get the full list, shared walk or not.
     // This pins what the walk returns. That the walk no longer blocks the
     // server is a timing property, checked against the deployed one.
     const [first, second] = await Promise.all([1, 2].map(async () => {
