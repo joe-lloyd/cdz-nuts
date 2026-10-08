@@ -394,6 +394,11 @@ export class ProvenanceStore {
    * so between the two every write is seen. The caches used to expire every
    * minute instead, and whichever request came next paid for the rebuild
    * while the whole server waited.
+   *
+   * data_version counts commits to the file, not to this table, so the
+   * nightly identify-files run, which keeps file_release in the same file,
+   * also clears them once per file it judges. That is a few rebuilds a night
+   * for new files, against one a minute all day before.
    */
   private revalidate(): void {
     const { data_version: version } = this.handle().prepare('PRAGMA data_version').get() as { data_version: number };

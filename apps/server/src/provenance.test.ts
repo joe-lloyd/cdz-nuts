@@ -148,22 +148,35 @@ test('a scan written by another connection shows up without waiting out a timer'
   const dir = mkdtempSync(path.join(tmpdir(), 'prov-'));
   const file = path.join(dir, 'provenance.db');
   const store = new ProvenanceStore(file);
-  try {
-    store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
-    assert.equal(store.badges().get(provenanceKey('Slayer', 'War Ensemble'))?.tier, 'high');
-    assert.equal(store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier, 'high');
-    assert.deepEqual(store.summary().tiers, { high: 1 });
-
-    // A second process, such as a script run by hand, sharing the file.
+  // A second process, such as a script run by hand, sharing the file.
+  const elsewhere = (fields: Partial<ScanInput>) => {
     const other = new ProvenanceStore(file);
     try {
-      other.upsert([row({ path: '/lib/a.mp3' })]);
+      other.upsert([row({ path: '/lib/a.mp3', ...fields })]);
     } finally {
       other.close();
     }
-    assert.equal(store.badges().get(provenanceKey('Slayer', 'War Ensemble'))?.tier, 'lossless');
-    assert.equal(store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier, 'lossless');
+  };
+  const track = () => store.badges().get(provenanceKey('Slayer', 'War Ensemble'))?.tier;
+  const album = () => store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier;
+  try {
+    store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
+    assert.equal(track(), 'high');
+    assert.equal(album(), 'high');
+    assert.deepEqual(store.summary().tiers, { high: 1 });
+
+    // Each cache is read first after its own write, and all three are filled
+    // again before the next, so none relies on another noticing for it.
+    elsewhere({});
     assert.deepEqual(store.summary().tiers, { lossless: 1 });
+    assert.equal(album(), 'lossless');
+    assert.equal(track(), 'lossless');
+    elsewhere({ bit_depth: 24 });
+    assert.equal(album(), 'hires');
+    assert.equal(track(), 'hires');
+    assert.deepEqual(store.summary().tiers, { hires: 1 });
+    elsewhere({ codec: 'mp3', bitrate: 320, bit_depth: null });
+    assert.equal(track(), 'high');
   } finally {
     store.close();
     rmSync(dir, { recursive: true, force: true });
@@ -222,9 +235,13 @@ test('track order follows disc then track number, not filename luck', () => {
 
 test('prune drops files the scanner no longer sees', () => {
   withStore((store) => {
-    store.upsert([row({ path: '/lib/a.flac' }), row({ path: '/lib/b.flac' })]);
+    store.upsert([row({ path: '/lib/a.flac' }), row({ path: '/lib/b.flac', title: 'Raining Blood' })]);
+    // Read first, so a prune that left the caches alone would still show b.
+    assert.equal(store.summary().total, 2);
+    assert.ok(store.badges().has(provenanceKey('Slayer', 'Raining Blood')));
     assert.equal(store.prune(['/lib/a.flac']), 1);
     assert.equal(store.summary().total, 1);
+    assert.equal(store.badges().has(provenanceKey('Slayer', 'Raining Blood')), false);
     assert.equal(store.prune(['/lib/a.flac']), 0);
   });
 });
