@@ -159,13 +159,15 @@ test('a scan written by another connection shows up without waiting out a timer'
   };
   const track = () => store.badges().get(provenanceKey('Slayer', 'War Ensemble'))?.tier;
   const album = () => store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'))?.tier;
+  const listed = () => store.albums().map((entry) => entry.name);
   try {
     store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
     assert.equal(track(), 'high');
     assert.equal(album(), 'high');
     assert.deepEqual(store.summary().tiers, { high: 1 });
+    assert.deepEqual(listed(), ['Seasons in the Abyss']);
 
-    // Each cache is read first after its own write, and all three are filled
+    // Each cache is read first after its own write, and all four are filled
     // again before the next, so none relies on another noticing for it.
     elsewhere({});
     assert.deepEqual(store.summary().tiers, { lossless: 1 });
@@ -177,6 +179,8 @@ test('a scan written by another connection shows up without waiting out a timer'
     assert.deepEqual(store.summary().tiers, { hires: 1 });
     elsewhere({ codec: 'mp3', bitrate: 320, bit_depth: null });
     assert.equal(track(), 'high');
+    elsewhere({ album: 'Reign in Blood' });
+    assert.deepEqual(listed(), ['Reign in Blood']);
   } finally {
     store.close();
     rmSync(dir, { recursive: true, force: true });
@@ -239,8 +243,10 @@ test('prune drops files the scanner no longer sees', () => {
     // Read first, so a prune that left the caches alone would still show b.
     assert.equal(store.summary().total, 2);
     assert.ok(store.badges().has(provenanceKey('Slayer', 'Raining Blood')));
+    assert.equal(store.albums()[0]?.total_tracks, 2);
     assert.equal(store.prune(['/lib/a.flac']), 1);
     assert.equal(store.summary().total, 1);
+    assert.equal(store.albums()[0]?.total_tracks, 1);
     assert.equal(store.badges().has(provenanceKey('Slayer', 'Raining Blood')), false);
     assert.equal(store.prune(['/lib/a.flac']), 0);
   });

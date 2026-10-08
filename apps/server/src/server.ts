@@ -30,9 +30,9 @@ import {
 } from './continuation.ts';
 import { APP_PLAYS_FILE, PlaysStore } from './plays.ts';
 import {
-  LIB_ALBUM_PREFIX, PROVENANCE_FILE, ProvenanceStore, RG_ALBUM_PREFIX, albumMatchKey, badgeOf, libAlbumId, libAlbumIdForFolder, releaseGroupCover,
+  LIB_ALBUM_PREFIX, PROVENANCE_FILE, ProvenanceStore, RG_ALBUM_PREFIX, albumMatchKey, albumNameKey, badgeOf, libAlbumId, libAlbumIdForFolder, releaseGroupCover,
   libTrackId,
-  provenanceKey, type ProvenanceRow, type ScanInput,
+  provenanceKey, type LibraryAlbum, type ProvenanceRow, type ScanInput,
 } from './provenance.ts';
 import {
   UpgradeStore, isLosslessCodec, localAlbumId, type BatchTrack, type LocalTrack,
@@ -675,6 +675,25 @@ function relOf(workerPath: string): string {
  */
 function isSinglesRel(rel: string): boolean {
   return relOf(rel).startsWith('_Singles/');
+}
+
+/** A _Singles folder gathers loose tracks; only a release identified inside it is a record. */
+function isSinglesCollection(album: LibraryAlbum): boolean {
+  return isSinglesRel(album.rel) && !album.id.startsWith(RG_ALBUM_PREFIX);
+}
+
+/** The fields every card for a library album shares, whichever list it sits in. */
+function libraryAlbumCard(album: LibraryAlbum) {
+  return {
+    id: album.id,
+    artists: album.artists,
+    total_tracks: album.total_tracks,
+    added_at: album.added_at,
+    image_url: album.image_url ?? `/img/folder?rel=${encodeURIComponent(relOf(album.rel))}`,
+    downloaded: 1,
+    local: 1,
+    source: album.source,
+  };
 }
 
 /**
@@ -1483,6 +1502,53 @@ function collapseEditions<T extends { id: string; name: string; release_date: st
   return out;
 }
 
+/**
+ * One name per release, however each source spells it.
+ *
+ * Spotify sometimes appends " - EP" or " - Single" and the files sometimes
+ * carry it in their tags, so it goes, along with everything from the first
+ * bracket on. A name that normalizes to nothing ("÷", "( )") keeps its raw
+ * form, or every such record would collide on the empty key.
+ */
+function releaseNameKey(name: string): string {
+  return albumNameKey(name.replace(/\s+-\s+(ep|single)$/i, '')) || name.trim().toLowerCase();
+}
+
+/**
+ * The library's albums by one artist that the Spotify listing lacks.
+ *
+ * An artist page used to list only what Spotify's crawl had recorded, so a
+ * record that arrived before the next crawl, or that Spotify never carried,
+ * was missing from the artist even though its own page linked there. The
+ * Lidarr folder name supplies what Spotify would have: "Title (2026) [EP]"
+ * gives the year and the release type.
+ */
+function libraryOnlyAlbums(artistName: string, listed: { name: string; editions: { name: string }[] }[]) {
+  // By name, not by the page's id: the artists table holds duplicates, and
+  // whichever id the page was opened under must find the same records.
+  const artistId = artistIdForName(artistName);
+  if (!artistId) return [];
+  const spotify = new Set(listed.flatMap((album) => [album, ...album.editions]).map((album) => releaseNameKey(album.name)));
+  // Two folders of one release (CD 01, CD 02) are one card. The EP and the
+  // single of the same name are two records, so the type is part of the key.
+  const seen = new Set<string>();
+  return provenance.albums().flatMap((album) => {
+    if (isSinglesCollection(album) || artistIdForName(album.artists) !== artistId) return [];
+    const key = releaseNameKey(album.name);
+    const folder = /\((\d{4})\)\s*\[([^\]]+)\]\//.exec(relOf(album.rel));
+    const type = album.album_group ?? folder?.[2] ?? '';
+    if (spotify.has(key) || seen.has(`${key}|${type}`)) return [];
+    seen.add(`${key}|${type}`);
+    return [{
+      ...libraryAlbumCard(album),
+      name: album.name,
+      release_date: folder?.[1] ?? null,
+      is_saved: 0,
+      album_group: /^(single|ep)$/i.test(type) ? 'single' : /^compilation$/i.test(type) ? 'compilation' : 'album',
+    }];
+  });
+}
+
 const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown>> = {
   '/api/player/status': (params) => jellyfin.status(params.get('refresh') === '1'),
 
@@ -1769,18 +1835,21 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       return { artist: albums.length ? { id, name } : null, albums, liked: likedTracks().filter(t => t.artists === name), topRanks: [] };
     }
 
+    const artist = recordQuery(`SELECT * FROM artists WHERE id = ?`, id)[0];
+    const spotifyAlbums = collapseEditions(query(`
+      SELECT DISTINCT al.id, al.name, al.album_type, al.release_date, al.image_url,
+             al.total_tracks, al.is_saved, al.unsaved_at, al.removed_at, al.label,
+             (SELECT downloaded FROM album_download_status ds WHERE ds.album_id = al.id) AS downloaded,
+             COALESCE(aa.album_group, al.album_type) AS album_group
+      FROM albums al
+      LEFT JOIN artist_albums aa ON aa.album_id = al.id AND aa.artist_id = ?1
+      WHERE aa.artist_id = ?1
+         OR al.id IN (SELECT album_id FROM album_artists WHERE artist_id = ?1)
+      ORDER BY al.release_date DESC`, id) as Parameters<typeof collapseEditions>[0]);
     return {
-      artist: query(`SELECT * FROM artists WHERE id = ?`, id)[0] ?? null,
-      albums: collapseEditions(query(`
-        SELECT DISTINCT al.id, al.name, al.album_type, al.release_date, al.image_url,
-               al.total_tracks, al.is_saved, al.unsaved_at, al.removed_at, al.label,
-               (SELECT downloaded FROM album_download_status ds WHERE ds.album_id = al.id) AS downloaded,
-               COALESCE(aa.album_group, al.album_type) AS album_group
-        FROM albums al
-        LEFT JOIN artist_albums aa ON aa.album_id = al.id AND aa.artist_id = ?1
-        WHERE aa.artist_id = ?1
-           OR al.id IN (SELECT album_id FROM album_artists WHERE artist_id = ?1)
-        ORDER BY al.release_date DESC`, id) as Parameters<typeof collapseEditions>[0]),
+      artist: artist ?? null,
+      albums: [...spotifyAlbums, ...(typeof artist?.name === 'string' ? libraryOnlyAlbums(artist.name, spotifyAlbums) : [])]
+        .sort((a, b) => String(b.release_date ?? '').localeCompare(String(a.release_date ?? ''))),
       liked: query(`
         SELECT t.id, t.name, t.duration_ms, lt.added_at, lt.removed_at,
                al.name AS album, al.id AS album_id, al.image_url
@@ -1963,18 +2032,11 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     // an album you own ("Fated" by Nosaj Thing, when you own one single from
     // it). Say what it is - the same music reads the same here as it does on
     // Latest, just gathered.
-    const isSingles = isSinglesRel(album.rel) && !album.id.startsWith(RG_ALBUM_PREFIX);
+    const isSingles = isSinglesCollection(album);
     return {
-      id: album.id,
+      ...libraryAlbumCard(album),
       name: isSingles ? 'Singles' : album.name,
-      artists: album.artists,
       album_group: isSingles ? 'singles collection' : album.album_group ?? null,
-      total_tracks: album.total_tracks,
-      added_at: album.added_at,
-      image_url: album.image_url ?? `/img/folder?rel=${encodeURIComponent(relOf(album.rel))}`,
-      downloaded: 1,
-      local: 1,
-      source: album.source,
     };
   }),
 
