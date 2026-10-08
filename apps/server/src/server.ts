@@ -4,7 +4,8 @@ import { PlaylistStore } from './playlists.ts';
 // player history and the lossless-upgrade queue. Zero runtime dependencies.
 import http from 'node:http';
 import path from 'node:path';
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { readdir, stat } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { Readable } from 'node:stream';
@@ -228,11 +229,29 @@ const SOURCE_HOSTS = new Set([
 // actually part of the taste. The raw `artists` table also holds every
 // feature credit and discography-crawl hydration (5000+ and growing
 // nightly), which made the old tile count meaningless.
-const TASTE_ARTISTS_SQL = `SELECT COUNT(DISTINCT a.id) n FROM artists a
-  WHERE a.is_followed = 1 OR EXISTS (
-    SELECT 1 FROM track_artists ta JOIN liked_tracks lt
-      ON lt.track_id = ta.track_id AND lt.removed_at IS NULL
-    WHERE ta.artist_id = a.id)`;
+//
+// The taste DB has no ANALYZE statistics, so left to itself SQLite drives
+// these joins from the 15,000 artists or the 150,000 track credits and probes
+// the few hundred likes. CROSS JOIN pins the small side first: SQLite never
+// reorders one. That took this count from about 400ms to 25ms on the Pi, and
+// every request queues behind it because the queries are synchronous.
+const TASTE_ARTISTS_SQL = `SELECT COUNT(*) n FROM (
+  SELECT id FROM artists WHERE is_followed = 1
+  UNION
+  SELECT a.id FROM liked_tracks lt
+    CROSS JOIN track_artists ta ON ta.track_id = lt.track_id
+    CROSS JOIN artists a ON a.id = ta.artist_id
+  WHERE lt.removed_at IS NULL)`;
+
+// Albums credited to a followed artist, either way round. Looked up from the
+// few hundred followed artists rather than per album: artist_albums is keyed
+// by artist, so a per-album EXISTS scanned the whole table for every row.
+const FOLLOWED_ALBUM_IDS_SQL = `
+  SELECT x.album_id FROM artists a CROSS JOIN artist_albums x ON x.artist_id = a.id
+  WHERE a.is_followed = 1
+  UNION
+  SELECT album_id FROM album_artists
+  WHERE artist_id IN (SELECT id FROM artists WHERE is_followed = 1)`;
 const RELEASE_LOOKBACK_DAYS = 30;
 
 function query(sql: string, ...args: (string | number)[]): unknown[] {
@@ -547,18 +566,22 @@ function continuationAlbumId(track: TasteTrack, albums?: ContinuationAlbum[]): s
 const AUDIO_EXT = new Set(['.mp3', '.opus', '.m4a', '.flac', '.ogg', '.aac', '.wav', '.wv', '.ape']);
 const DOWNLOAD_TTL_MS = 5 * 60 * 1000;
 let downloadCache: { at: number; rows: Record<string, unknown>[] } | null = null;
+let downloadScan: Promise<Record<string, unknown>[]> | null = null;
 
-function dirs(at: string): string[] {
+// Asynchronous on purpose. The walk is about 1,500 directory reads and 11,000
+// stats over NFS: one second warm, five cold. Done synchronously it froze every
+// other request for that long, the overview and the audio stream included.
+async function dirs(at: string): Promise<string[]> {
   try {
-    return readdirSync(at, { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name);
+    return (await readdir(at, { withFileTypes: true })).filter((e) => e.isDirectory()).map((e) => e.name);
   } catch {
     return [];
   }
 }
 
-function mtime(at: string): number {
+async function mtime(at: string): Promise<number> {
   try {
-    return statSync(at).mtimeMs;
+    return (await stat(at)).mtimeMs;
   } catch {
     return 0;
   }
@@ -696,24 +719,48 @@ function albumTitleOf(folderName: string): string {
  * Falls back to the directory for multi-disc releases, where the audio sits in
  * CD 01/ subfolders and the top level legitimately holds none.
  */
-function albumLanded(dir: string): number {
+async function albumLanded(dir: string): Promise<number> {
   let newest = 0;
   try {
-    for (const entry of readdirSync(dir, { withFileTypes: true })) {
-      if (!entry.isFile() || !AUDIO_EXT.has(path.extname(entry.name).toLowerCase())) continue;
-      newest = Math.max(newest, mtime(path.join(dir, entry.name)));
-    }
+    const audio = (await readdir(dir, { withFileTypes: true }))
+      .filter((entry) => entry.isFile() && AUDIO_EXT.has(path.extname(entry.name).toLowerCase()));
+    newest = Math.max(0, ...await Promise.all(audio.map((entry) => mtime(path.join(dir, entry.name)))));
   } catch { /* unreadable while eliot sleeps */ }
   return newest || mtime(dir);
 }
 
-function latestDownloads(limit = 60): Record<string, unknown>[] {
-  if (downloadCache && Date.now() - downloadCache.at < DOWNLOAD_TTL_MS) return downloadCache.rows.slice(0, limit);
+/**
+ * The newest downloads, from the last walk of the library.
+ *
+ * A stale list is served at once and refreshed behind the request, so only
+ * the first visit after a restart waits for the walk. Downloads land a few
+ * times a day; a list up to five minutes old is fine to show.
+ */
+async function latestDownloads(limit = 60): Promise<Record<string, unknown>[]> {
+  if (!downloadCache) return (await refreshDownloads()).slice(0, limit);
+  if (Date.now() - downloadCache.at >= DOWNLOAD_TTL_MS) {
+    refreshDownloads().catch((error) => console.error('latest downloads: refresh failed', error));
+  }
+  return downloadCache.rows.slice(0, limit);
+}
+
+/** One walk at a time, shared by every request that arrives while it runs. */
+function refreshDownloads(): Promise<Record<string, unknown>[]> {
+  downloadScan ??= scanDownloads()
+    .then((rows) => {
+      downloadCache = { at: Date.now(), rows };
+      return rows;
+    })
+    .finally(() => { downloadScan = null; });
+  return downloadScan;
+}
+
+async function scanDownloads(): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
-  const add = (name: string, artist: string, at: string, kind: string, albumId: string | null, isDir = true) => {
+  const add = async (name: string, artist: string, at: string, kind: string, albumId: string | null, isDir = true) => {
     // A single is one file, so stat it directly; an album dates from the
     // newest track inside it, never from the folder's own mtime.
-    const when = isDir ? albumLanded(at) : mtime(at);
+    const when = isDir ? await albumLanded(at) : await mtime(at);
     if (!when) return;
     // Library-relative path, kept so /api/latest can ask Jellyfin's index
     // whether this is actually servable yet rather than merely on disk.
@@ -721,27 +768,27 @@ function latestDownloads(limit = 60): Record<string, unknown>[] {
     rows.push({ name, artists: artist, added_at: new Date(when).toISOString(), kind, album_id: albumId, rel });
   };
 
-  for (const top of dirs(APP_LIBRARY_PREFIX)) {
+  for (const top of await dirs(APP_LIBRARY_PREFIX)) {
     const topPath = path.join(APP_LIBRARY_PREFIX, top);
     if (top === '_YouTube') {
-      for (const artist of dirs(topPath)) {
-        for (const album of dirs(path.join(topPath, artist))) {
-          add(album, artist, path.join(topPath, artist, album), 'imported', localAlbumId(artist, album));
+      for (const artist of await dirs(topPath)) {
+        for (const album of await dirs(path.join(topPath, artist))) {
+          await add(album, artist, path.join(topPath, artist, album), 'imported', localAlbumId(artist, album));
         }
       }
     } else if (top === '_Singles') {
-      for (const artist of dirs(topPath)) {
+      for (const artist of await dirs(topPath)) {
         const artistPath = path.join(topPath, artist);
         let files: string[] = [];
         try {
-          files = readdirSync(artistPath).filter((f) => AUDIO_EXT.has(path.extname(f).toLowerCase()));
+          files = (await readdir(artistPath)).filter((f) => AUDIO_EXT.has(path.extname(f).toLowerCase()));
         } catch { /* unreadable while eliot sleeps */ }
         for (const file of files) {
-          add(path.parse(file).name, artist, path.join(artistPath, file), 'single', null, false);
+          await add(path.parse(file).name, artist, path.join(artistPath, file), 'single', null, false);
         }
       }
     } else {
-      for (const album of dirs(topPath)) add(album, top, path.join(topPath, album), 'download', null);
+      for (const album of await dirs(topPath)) await add(album, top, path.join(topPath, album), 'download', null);
     }
   }
 
@@ -814,8 +861,7 @@ function latestDownloads(limit = 60): Record<string, unknown>[] {
     }
   }
 
-  downloadCache = { at: Date.now(), rows };
-  return rows.slice(0, limit);
+  return rows;
 }
 
 
@@ -1025,14 +1071,23 @@ function likedAlbums() {
 }
 
 function likedArtists() {
+  // Counted once per table and joined, not once per artist: the correlated
+  // version ran two subqueries for each of 15,000 artists and took 1.6s.
   const rows = query(`
+    WITH liked AS (
+      SELECT ta.artist_id, COUNT(*) n FROM liked_tracks lt
+        CROSS JOIN track_artists ta ON ta.track_id = lt.track_id
+      WHERE lt.removed_at IS NULL GROUP BY ta.artist_id),
+    top AS (
+      SELECT artist_id, MIN(rank) r FROM top_artists
+      WHERE time_range = 'medium_term' GROUP BY artist_id)
     SELECT a.id, a.name, a.genres, a.popularity, a.followers, a.image_url, a.is_followed,
            a.unfollowed_at, a.removed_at,
-           (SELECT COUNT(*) FROM track_artists ta JOIN liked_tracks lt ON lt.track_id = ta.track_id
-             WHERE ta.artist_id = a.id AND lt.removed_at IS NULL) AS liked_count,
-           (SELECT MIN(rank) FROM top_artists t WHERE t.artist_id = a.id AND t.time_range = 'medium_term') AS top_rank
+           COALESCE(liked.n, 0) AS liked_count, top.r AS top_rank
     FROM artists a
-    WHERE a.is_followed = 1 OR liked_count > 0 OR top_rank IS NOT NULL OR a.unfollowed_at IS NOT NULL
+    LEFT JOIN liked ON liked.artist_id = a.id
+    LEFT JOIN top ON top.artist_id = a.id
+    WHERE a.is_followed = 1 OR liked.n > 0 OR top.r IS NOT NULL OR a.unfollowed_at IS NOT NULL
     ORDER BY liked_count DESC, a.followers DESC`) as Record<string, unknown>[];
   for (const row of rows) row.liked = Number(Boolean(row.is_followed) && !row.unfollowed_at);
   const merged = new Map(rows.map((row) => [String(row.id), row]));
@@ -1691,10 +1746,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
                  WHERE aa.album_id = al.id) AS artists
         FROM albums al
         WHERE al.release_date >= date('now', ?)
-          AND (EXISTS (SELECT 1 FROM artist_albums x JOIN artists a ON a.id = x.artist_id
-                        WHERE x.album_id = al.id AND a.is_followed = 1)
-            OR EXISTS (SELECT 1 FROM album_artists x JOIN artists a ON a.id = x.artist_id
-                        WHERE x.album_id = al.id AND a.is_followed = 1))
+          AND al.id IN (${FOLLOWED_ALBUM_IDS_SQL})
         ORDER BY al.release_date DESC LIMIT 36`, `-${RELEASE_LOOKBACK_DAYS} days`),
       history: (query('SELECT COUNT(*) n, SUM(ms_played) ms FROM history_plays')[0] as { n: number; ms: number }).n
         ? {
@@ -1995,10 +2047,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
                WHERE aa.album_id = al.id) AS artists
       FROM albums al
       WHERE al.release_date >= date('now', ?)
-        AND (EXISTS (SELECT 1 FROM artist_albums x JOIN artists a ON a.id = x.artist_id
-                      WHERE x.album_id = al.id AND a.is_followed = 1)
-          OR EXISTS (SELECT 1 FROM album_artists x JOIN artists a ON a.id = x.artist_id
-                      WHERE x.album_id = al.id AND a.is_followed = 1))
+        AND al.id IN (${FOLLOWED_ALBUM_IDS_SQL})
       ORDER BY al.release_date DESC LIMIT 36
     `, `-${RELEASE_LOOKBACK_DAYS} days`) as Record<string, string | number | null>[])
       .filter((row) => !known.has(albumMatchKey(String(row.artists ?? ''), String(row.name ?? ''))))
@@ -2419,10 +2468,10 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   // still fills the page, and a heavy one is never truncated at an arbitrary
   // count — on a day the Soulseek sweep and Lidarr both run, 24 hours can be
   // a hundred albums and cutting it at 50 would hide the newest half of them.
-  '/api/latest': (params) => {
+  '/api/latest': async (params) => {
     const hours = Math.min(Math.max(Number(params.get('hours') ?? 24), 1), 24 * 30);
     const floor = Math.min(Math.max(Number(params.get('min') ?? 50), 1), 500);
-    const all = latestDownloads(1000);
+    const all = await latestDownloads(1000);
     const since = Date.now() - hours * 3_600_000;
     const recent = all.filter((row) => Date.parse(String(row.added_at)) >= since).length;
     const rows = all.slice(0, Math.min(Math.max(recent, floor), all.length));
