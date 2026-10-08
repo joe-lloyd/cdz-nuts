@@ -17,6 +17,11 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
   db.run("INSERT INTO artists (id, name, is_followed) VALUES ('artist', 'Porcupine Tree', 1)");
   db.run("INSERT INTO albums (id, name, release_date) VALUES ('album', 'Test album', date('now', '-31 days'))");
   db.run("INSERT INTO album_artists VALUES ('album', 'artist', 0)");
+  // A second row for the same artist, as discography crawls leave behind.
+  db.run("INSERT INTO artists (id, name) VALUES ('artist-again', 'Porcupine Tree')");
+  // Spotify spells this one with a suffix the files do not carry.
+  db.run("INSERT INTO albums (id, name, release_date) VALUES ('lazarus', 'Lazarus - Single', '2005-03-21')");
+  db.run("INSERT INTO album_artists VALUES ('lazarus', 'artist', 0)");
   for (const [id, name, number] of [['one', 'Even Less', 1], ['two', 'Dark Matter', 2]]) {
     db.run('INSERT INTO tracks (id, name, album_id, track_number, disc_number, duration_ms) VALUES (?, ?, ?, ?, 1, 180000)', id, name, 'album', number);
     db.run('INSERT INTO track_artists VALUES (?, ?, 0)', id, 'artist');
@@ -38,7 +43,12 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
   }
   db.db.close();
   const scanned = new ProvenanceStore(path.join(dir, 'provenance.db'));
-  scanned.upsert([{ path: '/data/library/music/CD/Even Less.flac', artist: 'Porcupine Tree', title: 'Even Less', album: 'Test album', codec: 'flac', duration_ms: 180000 }]);
+  scanned.upsert([
+    { path: '/data/library/music/CD/Even Less.flac', artist: 'Porcupine Tree', title: 'Even Less', album: 'Test album', codec: 'flac', duration_ms: 180000 },
+    // Spotify has never listed this EP. The artist page must still show it.
+    { path: '/data/library/music/Porcupine Tree/Nil Recurring (2007) [EP]/01 Nil Recurring.flac', artist: 'Porcupine Tree', title: 'Nil Recurring', album: 'Nil Recurring - EP', codec: 'flac', duration_ms: 370000 },
+    { path: '/data/library/music/Porcupine Tree/Lazarus (2005) [Single]/01 Lazarus.flac', artist: 'Porcupine Tree', title: 'Lazarus', album: 'Lazarus', codec: 'flac', duration_ms: 260000 },
+  ]);
   scanned.close();
   const jellyfin = http.createServer((_req, res) => {
     res.setHeader('content-type', 'application/json');
@@ -85,10 +95,24 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     assert.deepEqual(releases.counts, {
       total: 3, fromLidarr: 3, fromSpotify: 0, upcoming: 1, missing: 3,
     });
-    const artist = await (await fetch(base + '/api/artist?id=artist')).json() as {
-      albums: { name: string }[];
-    };
-    assert.equal(artist.albums.some(album => album.name === 'Test album'), true);
+    // Spotify's crawl never saw the EP; the library has it, so the page does.
+    // Lazarus is listed once, as Spotify's, though the names differ.
+    const monthAgo = new Date(Date.now() - 31 * 86_400_000).toISOString().slice(0, 10);
+    for (const id of ['artist', 'artist-again']) {
+      const artist = await (await fetch(base + '/api/artist?id=' + id)).json() as {
+        albums: { name: string; album_group: string | null; release_date: string | null; downloaded: number | null }[];
+      };
+      assert.deepEqual(artist.albums.map(({ name, album_group, release_date, downloaded }) => ({ name, album_group, release_date, downloaded })), id === 'artist' ? [
+        { name: 'Test album', album_group: null, release_date: monthAgo, downloaded: null },
+        { name: 'Nil Recurring - EP', album_group: 'single', release_date: '2007', downloaded: 1 },
+        { name: 'Lazarus - Single', album_group: null, release_date: '2005-03-21', downloaded: null },
+      ] : [
+        { name: 'Nil Recurring - EP', album_group: 'single', release_date: '2007', downloaded: 1 },
+        { name: 'Lazarus', album_group: 'single', release_date: '2005', downloaded: 1 },
+        // No Spotify albums hang off this id, so the library's copy stands in.
+        { name: 'Test album', album_group: 'album', release_date: null, downloaded: 1 },
+      ]);
+    }
     const playlists = await (await fetch(base + '/api/playlists')).json();
     assert.ok(Array.isArray(playlists));
     const seed = playlists.find((p: { name: string }) => p.name === 'Voyage 35');
@@ -110,18 +134,19 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     assert.ok(Array.isArray(saved));
     assert.deepEqual(saved.map((t: { id: string }) => t.id), ['two', 'one', 'two']);
     await post('/api/local-playlists', { id: created.id, action: 'delete' });
-    // A like is a standing order. Liking the artist covers the album's
-    // listing: the FLAC we own is left alone, the song we lack is fetched
-    // once, and the next like or sweep finds nothing new to do.
+    // A like is a standing order. Liking the artist covers every album on
+    // its page: the FLACs we own, including the library-only EP, are left
+    // alone, the song we lack is fetched once, and the next like or sweep
+    // finds nothing new to do.
     const likedArtist = await post('/api/likes', { id: 'artist', kind: 'artist', liked: true });
-    assert.deepEqual(likedArtist.grabbed, { queued: 1, skipped: 0, lossless: 1 });
+    assert.deepEqual(likedArtist.grabbed, { queued: 1, skipped: 0, lossless: 2 });
     const artists = await (await fetch(base + '/api/artists')).json() as { id: string; liked: number }[];
     assert.equal(artists.find((a: { id: string }) => a.id === 'artist')?.liked, 1);
     const likedAlbum = await post('/api/likes', { id: 'album', kind: 'album', liked: true });
     assert.deepEqual(likedAlbum.grabbed, { queued: 0, skipped: 1, lossless: 1 });
     const albums = await (await fetch(base + '/api/albums')).json() as { id: string; liked: number }[];
     assert.equal(albums.find((a: { id: string }) => a.id === 'album')?.liked, 1);
-    assert.deepEqual(await post('/api/likes/sweep', {}), { queued: 0, skipped: 2, lossless: 2, likes: 2 });
+    assert.deepEqual(await post('/api/likes/sweep', {}), { queued: 0, skipped: 2, lossless: 3, likes: 2 });
     const unliked = await post('/api/likes', { id: 'album', kind: 'album', liked: false });
     assert.equal(unliked.grabbed, null);
     const after = await (await fetch(base + '/api/albums')).json() as { id: string }[];

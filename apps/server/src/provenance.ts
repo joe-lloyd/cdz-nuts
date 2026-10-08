@@ -138,6 +138,12 @@ export function albumNameKey(album: string | null | undefined): string {
   return normalizeMusicText(String(album ?? '').replace(/\s*[([].*$/, ''));
 }
 
+/** One album the library physically holds, as `ProvenanceStore.albums` lists it. */
+export type LibraryAlbum = {
+  id: string; name: string; artists: string; total_tracks: number; added_at: string;
+  source: Source; rel: string; image_url?: string; album_group?: string | null;
+};
+
 export const LIB_ALBUM_PREFIX = 'libalbum-';
 export const LIB_TRACK_PREFIX = 'libtrack-';
 /**
@@ -285,6 +291,7 @@ export class ProvenanceStore {
   private cache: Map<string, Badge> | null = null;
   private albumCache: Map<string, Badge> | null = null;
   private summaryCache: ProvenanceSummary | null = null;
+  private libraryCache: readonly LibraryAlbum[] | null = null;
   private seenVersion: number | null = null;
 
   constructor(dbFile?: string, now: () => number = Date.now) {
@@ -384,6 +391,7 @@ export class ProvenanceStore {
     this.cache = null;
     this.albumCache = null;
     this.summaryCache = null;
+    this.libraryCache = null;
   }
 
   /**
@@ -601,7 +609,9 @@ export class ProvenanceStore {
    * album that arrived by usenet, torrent, Soulseek, YouTube or a CD rip is
    * as reachable as one Spotify happens to know.
    */
-  albums(): { id: string; name: string; artists: string; total_tracks: number; added_at: string; source: Source; rel: string; image_url?: string; album_group?: string | null }[] {
+  albums(): readonly LibraryAlbum[] {
+    this.revalidate();
+    if (this.libraryCache) return this.libraryCache;
     const folders = new Map<string, ProvenanceRow[]>();
     const releases = new Map<string, (ProvenanceRow & { release_title: string; release_type: string | null })[]>();
     const identified = this.hasTable('file_release');
@@ -660,7 +670,8 @@ export class ProvenanceStore {
       image_url: releaseGroupCover(rg),
       album_group: /single/i.test(rows[0].release_type ?? '') ? 'single' : /\bep\b/i.test(rows[0].release_type ?? '') ? 'ep' : null,
     }));
-    return [...byFolder, ...byRelease].sort((a, b) => b.added_at.localeCompare(a.added_at));
+    this.libraryCache = [...byFolder, ...byRelease].sort((a, b) => b.added_at.localeCompare(a.added_at));
+    return this.libraryCache;
   }
 
   /** The library's tracks of one identified release group, in release order. */
