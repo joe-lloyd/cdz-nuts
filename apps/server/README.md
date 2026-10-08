@@ -449,7 +449,7 @@ handoff exists and an API key is supplied. On the Pi:
 
 3. Recreate only the web container: `docker compose up -d --force-recreate web`.
 
-The compose defaults expect Jellyfin at `http://jellyfin:8096`, the music source
+The compose defaults expect Jellyfin on hasaki at `http://192.168.2.46:8096`, the music source
 at `192.168.2.34:2049`, and the existing wake endpoint at
 `http://192.168.2.23:7777/wake`. Override `JELLYFIN_URL`,
 `JELLYFIN_USER_ID`, `MUSIC_SOURCE_HOST`, `MUSIC_SOURCE_PORT`, or
