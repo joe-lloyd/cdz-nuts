@@ -181,6 +181,7 @@ export class UpgradeStore {
   readonly db: DatabaseSync;
   private readonly now: () => number;
   private readonly random: () => number;
+  private localCache: { version: string; tracks: LocalTrack[] } | null = null;
 
   constructor(
     file = UPGRADES_FILE,
@@ -441,8 +442,22 @@ export class UpgradeStore {
   // became of its lossless upgrade afterwards. A cancelled or exhausted
   // upgrade still leaves a perfectly good MP3 on disk, so membership keys
   // off current_path, never off status.
+  //
+  // Kept until the queue changes. The Albums page asks once per cover, sixty
+  // at a time, and a full read cost 30-40ms on the Pi with every other
+  // request waiting. total_changes() moves on this store's own writes and
+  // data_version on any other connection's. Each caller gets copies, because
+  // the server decorates rows in place before it sends them.
   localTracks(): LocalTrack[] {
-    return this.db.prepare(`
+    const { version } = this.db.prepare(
+      'SELECT total_changes() || \':\' || (SELECT data_version FROM pragma_data_version) AS version',
+    ).get() as { version: string };
+    if (this.localCache?.version !== version) this.localCache = { version, tracks: this.readLocalTracks() };
+    return this.localCache.tracks.map((track) => ({ ...track }));
+  }
+
+  private readLocalTracks(): LocalTrack[] {
+    return [...this.db.prepare(`
       SELECT id, artist, title, album, duration_ms, track_number, current_path, current_codec,
              created_at, parent_id, source_mode
       FROM upgrade_queue
@@ -472,12 +487,12 @@ export class UpgradeStore {
       // one - and without this the album shows it twice. The row carrying
       // track/disc context wins, because that is the one an album import
       // created; a bare re-queue has neither.
-      .reduce((keep: LocalTrack[], track) => {
-        const seen = keep.findIndex((other) => other.path === track.path);
-        if (seen < 0) keep.push(track);
-        else if (keep[seen].track_number == null && track.track_number != null) keep[seen] = track;
+      .reduce((keep: Map<string, LocalTrack>, track) => {
+        const seen = keep.get(track.path);
+        if (!seen || (seen.track_number == null && track.track_number != null)) keep.set(track.path, track);
         return keep;
-      }, []);
+      }, new Map<string, LocalTrack>())
+      .values()];
   }
 
   // Distinct artists whose music actually landed on disk.
