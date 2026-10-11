@@ -254,6 +254,15 @@ const FOLLOWED_ALBUM_IDS_SQL = `
   WHERE artist_id IN (SELECT id FROM artists WHERE is_followed = 1)`;
 const RELEASE_LOOKBACK_DAYS = 30;
 
+// The credited artist that sorts first on a track, as one name. `artists` on the
+// track routes is every credit joined with ", ", which cannot be split back
+// safely ("Emerson, Lake & Palmer" is one artist). The MCP taste_query tool
+// answers with this name alone. Expects the track row to be aliased `t`.
+const FIRST_ARTIST_SQL = `(SELECT a.name FROM track_artists ta
+                              JOIN artists a ON a.id = ta.artist_id
+                             WHERE ta.track_id = t.id
+                             ORDER BY ta.position LIMIT 1) AS artist`;
+
 function query(sql: string, ...args: (string | number)[]): unknown[] {
   const db = new DatabaseSync(DB_FILE, { readOnly: true });
   try {
@@ -1784,6 +1793,10 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       counts: {
         liked: one('SELECT COUNT(*) n FROM liked_tracks WHERE removed_at IS NULL').n,
         artists: one(TASTE_ARTISTS_SQL).n,
+        // Every row, feature credits and discography hydration included,
+        // where `artists` above counts only the taste. Read by the MCP summary.
+        all_artists: one('SELECT COUNT(*) n FROM artists').n,
+        all_tracks: one('SELECT COUNT(*) n FROM tracks').n,
         followed: one('SELECT COUNT(*) n FROM artists WHERE is_followed = 1').n,
         albums: one('SELECT COUNT(*) n FROM albums WHERE is_saved = 1').n,
         playlists: one('SELECT COUNT(*) n FROM playlists WHERE removed_at IS NULL').n,
@@ -2274,6 +2287,26 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       playlists: unique([...localPlaylists.list().filter(matches), ...playlists], 40) };
   },
 
+  // Artists in the taste DB whose name contains `name`, most popular first,
+  // with how many still-liked tracks each has. Read by the MCP find_artist
+  // tool, which answers from exactly this query: the pattern is not escaped, so
+  // `%` and `_` in `name` are LIKE wildcards, and the match is SQLite's
+  // case-insensitive-for-ASCII default. Unlike /api/search this matches every
+  // artist row, feature credits included, not only the library's artists.
+  '/api/artist-search': (params) => {
+    const name = (params.get('name') ?? '').slice(0, 200);
+    if (!name) return [];
+    const limit = Math.min(Math.max(Math.trunc(Number(params.get('limit') ?? 10)) || 10, 1), 50);
+    return query(`
+      SELECT a.name, a.genres, a.popularity, a.followers, a.is_followed,
+             (SELECT COUNT(*) FROM track_artists ta
+                JOIN liked_tracks lt ON lt.track_id = ta.track_id
+               WHERE ta.artist_id = a.id
+                 AND lt.removed_at IS NULL) AS liked_tracks
+      FROM artists a WHERE a.name LIKE ?
+      ORDER BY a.popularity DESC LIMIT ?`, `%${name}%`, limit);
+  },
+
   '/api/search-songs': (params) => {
     const term = (params.get('q') ?? '').trim();
     if (term.length < 2) return [];
@@ -2356,12 +2389,13 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     ORDER BY pt.removed_at IS NOT NULL, pt.position`, params.get('id') ?? ''),
 
   '/api/top-artists': (params) => query(`
-    SELECT ta.rank, a.id, a.name, a.genres, a.image_url, a.is_followed
+    SELECT ta.rank, a.id, a.name, a.genres, a.image_url, a.is_followed, a.popularity
     FROM top_artists ta JOIN artists a ON a.id = ta.artist_id
     WHERE ta.time_range = ? ORDER BY ta.rank`, params.get('range') ?? 'medium_term'),
 
   '/api/top-tracks': (params) => query(`
     SELECT tt.rank, t.id, t.name, al.name AS album, al.image_url,
+           ${FIRST_ARTIST_SQL},
            (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
               FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
              WHERE ta.track_id = t.id) AS artists
@@ -2483,6 +2517,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     const rows = query(`
       SELECT p.played_at, p.context_type, 'spotify' AS source, t.id, t.name,
              al.image_url, al.id AS album_id,
+             ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
                 FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
                WHERE ta.track_id = t.id) AS artists
@@ -2490,6 +2525,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       LEFT JOIN albums al ON al.id = t.album_id
       UNION ALL
       SELECT ap.played_at, NULL, 'app', t.id, t.name, al.image_url, al.id,
+             ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
                 FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
                WHERE ta.track_id = t.id)
@@ -2515,6 +2551,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
             image_url: null,
             album_id: track.album_id,
             artists: track.artists,
+            artist: null,
             local: 1,
           }];
         })

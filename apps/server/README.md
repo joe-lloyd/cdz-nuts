@@ -675,6 +675,23 @@ so a second machine invalidates the first's `tokens.json`. The Pi is the
 runner; re-authorize (delete `tokens.json`, run once interactively) if the
 token ever breaks.
 
+## Routes the homelab MCP reads
+
+The `taste_query` tool of the homelab MCP Worker answers from
+`http://192.168.2.23:8091`, and the answers equal what the tool used to read
+straight out of `spotify.db`. It needs four things the UI routes did not carry.
+All read-only, and the existing fields did not change:
+
+| Route | Added |
+|---|---|
+| `/api/top-tracks`, `/api/plays` | `artist`: the credited artist with the lowest `track_artists.position`, one name. `artists` stays the `A, B` string, which cannot be split back (`Emerson, Lake & Palmer` is one artist). `null` for a track with no credit. |
+| `/api/stats` | `counts.all_artists` and `counts.all_tracks`: every row of `artists` and `tracks`. `counts.artists` still counts only the taste. |
+| `/api/top-artists` | `popularity` |
+| `/api/artist-search?name=&limit=` | New. Artists whose name contains `name` (SQLite `LIKE`, unescaped, so `%` and `_` are wildcards), `popularity DESC`, `limit` 1 to 50 (default 10). Each row has `name`, `genres`, `popularity`, `followers`, `is_followed` and `liked_tracks` (still-liked tracks credited to the artist). Empty `name` gives `[]`. |
+
+`/api/plays` is the 300 newest plays of both sources, so a caller that wants
+only Spotify's plays filters on `source`.
+
 ## Concerts (Shows tab + ntfy alerts)
 
 Needs a free Ticketmaster Discovery API key: create one at
