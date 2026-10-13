@@ -77,7 +77,7 @@ export class LyricsService {
 
   constructor(dbFile?: string, fetchImpl?: typeof fetch) {
     this.dbFile = dbFile ?? process.env.LYRICS_DB ?? path.join(import.meta.dirname, '..', 'data', 'lyrics.db');
-    this.fetchImpl = fetchImpl ?? fetch;
+    this.fetchImpl = fetchImpl ?? ((input, init) => fetch(input, init)); // unbound: see typesafe.ts
   }
 
   private cache(): Sql {

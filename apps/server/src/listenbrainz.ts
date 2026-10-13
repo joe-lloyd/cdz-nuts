@@ -186,7 +186,7 @@ export class ListenBrainz {
       ?? path.join(import.meta.dirname, '..', 'data', 'listenbrainz.db');
     this.token = options?.token ?? process.env.LISTENBRAINZ_TOKEN ?? '';
     this.user = options?.user ?? process.env.LISTENBRAINZ_USER ?? '';
-    this.fetchImpl = options?.fetchImpl ?? fetch;
+    this.fetchImpl = options?.fetchImpl ?? ((input, init) => fetch(input, init)); // unbound: see typesafe.ts
   }
 
   /** Token-only endpoints (radio, lookup, scrobbling) are available. */
