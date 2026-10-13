@@ -7,7 +7,7 @@
 export class Reply {
   #status = 200;
   #headers = new Headers();
-  #body: BodyInit | null = null;
+  #body: string | Uint8Array | ReadableStream | null = null;
   #ended = false;
 
   writeHead(status: number, headers: Record<string, string> = {}): this {
