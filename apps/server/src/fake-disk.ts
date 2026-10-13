@@ -19,7 +19,7 @@ export function fakeDisk(root: string, options: { readOnly?: boolean } = {}): Fe
       if (method === 'PUT') {
         if (options.readOnly) return new Response('read only', { status: 403 });
         mkdirSync(path.dirname(target), { recursive: true });
-        writeFileSync(target, new Uint8Array(await new Response(init.body as BodyInit).arrayBuffer()));
+        writeFileSync(target, new Uint8Array(await new Response(init.body as ConstructorParameters<typeof Response>[0]).arrayBuffer()));
         return new Response(null, { status: 204 });
       }
       let info;

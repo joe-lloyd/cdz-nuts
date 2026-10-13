@@ -5,6 +5,10 @@ server behind `https://music.home.arpa`. Part of the `cdz-nuts` repository;
 the front end it serves is `packages/ui` and the desktop app that embeds the
 same front end is `apps/desktop`.
 
+The same code runs two ways: as Node processes (the web server and the
+exporter, which is how it is developed and tested), and as one Worker in
+workerd. See [Running on workerd](#running-on-workerd).
+
 Exports your Spotify library **metadata** (no audio) into a local SQLite database:
 liked songs, saved albums (with full track listings), followed artists, playlists,
 top artists/tracks per time range, and recently played. Artists are hydrated with
@@ -81,6 +85,103 @@ GROUP BY value ORDER BY n DESC LIMIT 25;
 -- Liked tracks added per month
 SELECT substr(added_at, 1, 7) AS month, COUNT(*) FROM liked_tracks GROUP BY month;
 ```
+
+## Running on workerd
+
+`src/worker.ts` runs the web app and the nightly export as a Worker in
+[workerd](https://github.com/cloudflare/workerd), the runtime behind Cloudflare
+Workers, on hasaki. The HomeLab repository holds the deployment
+(`hasaki/workerd/apps/music`: `worker.json`, a `SOURCE` file naming the commit
+of this repository it was built from, and `refresh.mjs`, which copies exactly
+the files the Worker loads). Development stays here, on Node.
+
+### Shape
+
+| Piece | Node (development, tests) | workerd |
+|---|---|---|
+| Routes | `src/app.ts`: one fetch handler, `handle(Request): Promise<Response>` | the same handler |
+| HTTP | `src/http-node.ts` wraps it in `node:http` (`src/server.ts` is the entry) | the Worker's `fetch` |
+| SQL | `src/sql-node.ts`: one `node:sqlite` file per database, as before | `src/sql-do.ts`: one Durable Object database |
+| Files (the library, cover images) | `src/files-node.ts`: the disk | `src/files.ts` `diskFiles()`: HTTP to disk bindings |
+| The front end | `src/ui-node.ts` reads `packages/ui` | `src/ui.ts` over an assets binding |
+| Periodic work | `setInterval` driving `src/background.ts` | a Durable Object alarm driving the same |
+| The export | `src/main.ts` (and the compose loop) | `src/nightly.ts`, started by a cron |
+| Spotify tokens | `tokens.json` | `spotify-tokens.json` in the Worker's own files folder |
+
+An entry point builds a `Runtime` (`src/runtime.ts`: SQL host, files, UI, a TCP
+probe), calls `provideRuntime()`, then loads `app.ts` and calls its `init()`.
+`app.ts` builds its stores when it loads, so the order matters. The routes keep
+the `res.writeHead(...).end(...)` shape they were written in: `src/reply.ts`
+collects that into a `Response`, and hands a streamed body (the audio) through
+without touching its chunks.
+
+### Decisions
+
+- **One Durable Object holds every database.** The code is synchronous SQL over
+  eight databases that join each other (`ATTACH` in two places), and a Durable
+  Object's SQLite is synchronous and local, so the whole app runs inside one
+  object against one database. The eight files' table names are unique, so they
+  merge without renames (`sql-do.test.ts` checks it). One object is also one
+  writer: `spotify.db` and `provenance.db` had two processes writing them.
+- **`app_plays` is a plain table in the Durable Object, an attached file in
+  Node.** The queries name `app_plays` without a schema prefix, which SQLite
+  resolves across attached databases, so one query text serves both.
+- **The object stays loaded.** workerd drops an idle object after about ten
+  seconds and the app keeps expensive state in memory (the Jellyfin index takes
+  seventeen seconds to build), so an alarm re-arms itself every five seconds and
+  also runs the periodic jobs. A cron each minute re-arms it after a restart.
+- **The nightly export runs inside the object, in the background.** Crons at
+  02:00 and 03:00 UTC cover 04:00 in Amsterdam in summer and winter; only the one
+  that is 04:00 there (by `TZ`) starts a run. It does not start twice.
+- **Spotify cannot sign in from a Worker.** Run `pnpm export` once where a
+  browser is, and send `tokens.json` to the Worker (below). If Spotify revokes
+  the refresh token the export stops and says so.
+- **The library is guarded.** workerd reads a disk binding on its one thread,
+  and eliot's NFS share, when eliot is asleep, takes about 30 seconds to fail.
+  Before any read under the library, `guardFiles()` asks a TCP probe of eliot's
+  NFS port (cached five seconds, one probe shared by concurrent requests) and,
+  if it fails, answers "unreadable" without touching the share.
+- **Time zones.** SQLite's `localtime` and JavaScript's local time follow the
+  process, which in workerd is always UTC. The overview now buckets plays in
+  JavaScript with `Intl` in the zone named by `TZ`, in both hosts.
+
+### What changed for Node
+
+Behaviour is the same; the code moved. `server.ts` became `app.ts` plus a small
+`server.ts`; `main.ts` became `exporter.ts` plus a small `main.ts`; the stores open
+databases through `sql.ts` and use `db.transaction(fn)` instead of
+hand-written `BEGIN`/`COMMIT`; `artwork.ts` and the latest-downloads walk are
+async because a disk binding is. A scratch `TEMP` table in `markMissing` became
+`json_each`, because a Durable Object has no temp tables. The compose files
+still work unchanged.
+
+### Moving data into the Worker
+
+`/_workers/*` routes need `Authorization: Bearer <ADMIN_TOKEN>` and answer 404
+without it: `status`, `schema`, `import/<table>?replace=1`, `export/<table>`,
+`spotify-tokens` and `export-run`. `hasaki/workerd/apps/music/move.mjs` in the
+HomeLab repository drives them: it copies the eight files' rows in, compares a
+sha256 per table, and can build the eight files again from the Worker (the
+rollback).
+
+### Tests
+
+`pnpm test` runs everything on Node, including the Worker's pieces on fakes:
+`sql-do.test.ts` and `admin.test.ts` use a Durable Object storage fake that
+refuses what the real one refuses; `files.test.ts` and `artwork.test.ts` run the
+disk code over a fake of workerd's disk binding; `hosts.test.ts` starts the app
+on both SQL hosts from the same fictional data (`scripts/fake-data.ts`) and
+requires identical answers; `exporter.test.ts` runs the whole export against a
+stand-in for Spotify. The HomeLab repository's `verify.mjs` runs the original
+Node server against the real Worker in workerd over every route (299 responses).
+
+### Not done yet
+
+- ListenBrainz radio, Discogs and the Ticketmaster concert sync are ported but not
+  exercised against their live services from a Worker; the differential run had
+  them off.
+- `lidarr-library-sync` on the Pi still writes `spotify.db` directly; it needs to
+  write through the Worker's import route once the Worker owns the data.
 
 ## Web UI
 
