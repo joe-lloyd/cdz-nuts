@@ -11,6 +11,7 @@
 //
 //   docker compose exec web node --disable-warning=ExperimentalWarning \
 //     src/backfill-listens.ts [--dry-run]
+import './sql-node-host.ts';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { ListenBrainz } from './listenbrainz.ts';

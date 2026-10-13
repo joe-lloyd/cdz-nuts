@@ -7,8 +7,7 @@
 // then cross-checked against the library so each disc shows as ripped or not.
 // Ripping itself happens elsewhere; this only tracks it.
 import path from 'node:path';
-import { mkdirSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 import { normalizeMusicText } from './jellyfin.ts';
 
 export const DISCOGS_FILE = process.env.DISCOGS_DB
@@ -270,7 +269,7 @@ export function albumKey(artist: string, title: string): string {
 }
 
 export class ShelfStore {
-  private db: DatabaseSync | null = null;
+  private db: Sql | null = null;
   private readonly dbFile: string;
   private readonly now: () => number;
 
@@ -279,10 +278,9 @@ export class ShelfStore {
     this.now = now;
   }
 
-  private handle(): DatabaseSync {
+  private handle(): Sql {
     if (!this.db) {
-      mkdirSync(path.dirname(this.dbFile), { recursive: true });
-      this.db = new DatabaseSync(this.dbFile);
+      this.db = openSql(this.dbFile);
       this.db.exec(`
         PRAGMA journal_mode = WAL;
         PRAGMA busy_timeout = 5000;
@@ -318,6 +316,11 @@ export class ShelfStore {
     return this.db;
   }
 
+  /** Creates the tables now, so nothing queries a database that lacks them. */
+  ready(): void {
+    this.handle();
+  }
+
   close(): void {
     this.db?.close();
     this.db = null;
@@ -346,8 +349,7 @@ export class ShelfStore {
     let added = 0;
     let updated = 0;
     const seen = new Set<number>();
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    return db.transaction(() => {
       for (const release of releases) {
         const item = toShelfItem(release);
         if (!item.release_id) continue;
@@ -371,12 +373,8 @@ export class ShelfStore {
         ON CONFLICT(id) DO UPDATE SET username = excluded.username,
           synced_at = excluded.synced_at, released = excluded.released
       `).run(username, at, seen.size);
-      db.exec('COMMIT');
       return { added, updated, removed };
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+    });
   }
 
   /** Add a single release found through search rather than the collection. */

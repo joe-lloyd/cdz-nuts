@@ -14,7 +14,7 @@
 // album the tag names. Verdicts are stored with their probabilities so the
 // nightly job never asks about a file twice.
 
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 
 import { nameKey, plainName } from './album-groups.ts';
 import { lengthsDisagree } from './jellyfin.ts';
@@ -307,10 +307,10 @@ export const emptyRun = (): IdentifyRun => ({
 });
 
 export class FileIdentityStore {
-  readonly db: DatabaseSync;
+  readonly db: Sql;
 
   constructor(file: string) {
-    this.db = new DatabaseSync(file);
+    this.db = openSql(file);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS file_release (
         path TEXT PRIMARY KEY,

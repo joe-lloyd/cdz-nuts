@@ -1,4 +1,5 @@
 // A small fictional library for local UI work. Never reads tokens or calls Spotify.
+import './sql-node-host.ts';
 import { rmSync } from 'node:fs';
 import path from 'node:path';
 import { TasteDb } from './db.ts';

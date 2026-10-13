@@ -17,7 +17,7 @@
 // Nothing is deleted or rewritten. `album_group` sits beside `albums`, and the
 // query layer folds members under their canonical row when it serves a page.
 
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 
 import { normalizeMusicText } from './jellyfin.ts';
 import type { ChoiceAnswer, ChoiceQuestion, TypeSafe } from './typesafe.ts';
@@ -261,10 +261,10 @@ export interface GroupRun {
 }
 
 export class AlbumGroupStore {
-  readonly db: DatabaseSync;
+  readonly db: Sql;
 
   constructor(file: string) {
-    this.db = new DatabaseSync(file);
+    this.db = openSql(file);
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS album_group (
         album_id TEXT PRIMARY KEY,
@@ -331,17 +331,12 @@ export class AlbumGroupStore {
   /** Replace the membership rows for these albums with the given ones. */
   replaceMembers(albumIds: string[], members: GroupMember[]): void {
     const now = new Date().toISOString();
-    this.db.exec('BEGIN');
-    try {
+    this.db.transaction(() => {
       const del = this.db.prepare('DELETE FROM album_group WHERE album_id = ?');
       for (const id of albumIds) del.run(id);
       const ins = this.db.prepare('INSERT OR REPLACE INTO album_group (album_id, group_id, relation, source, p, grouped_at) VALUES (?, ?, ?, ?, ?, ?)');
       for (const m of members) ins.run(m.album_id, m.group_id, m.relation, m.source, m.p, now);
-      this.db.exec('COMMIT');
-    } catch (error) {
-      this.db.exec('ROLLBACK');
-      throw error;
-    }
+    });
   }
 
   verdicts(): PairVerdict[] {

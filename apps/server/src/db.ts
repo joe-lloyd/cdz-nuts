@@ -1,6 +1,4 @@
-import { DatabaseSync, type StatementSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
-import path from 'node:path';
+import { openSql, type Sql, type Statement } from './sql.ts';
 
 const SCHEMA = `
 PRAGMA journal_mode = WAL;
@@ -226,12 +224,11 @@ export interface ApiTrack {
 }
 
 export class TasteDb {
-  readonly db: DatabaseSync;
-  private stmts = new Map<string, StatementSync>();
+  readonly db: Sql;
+  private stmts = new Map<string, Statement>();
 
   constructor(file: string) {
-    mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
+    this.db = openSql(file);
     this.db.exec(SCHEMA);
     // Migrations for columns added after the first release.
     for (const ddl of [
@@ -261,8 +258,7 @@ export class TasteDb {
     // its tombstone row intact. SQLite can't alter a PK — rebuild once.
     const pk = this.db.prepare(`SELECT COUNT(*) AS n FROM pragma_table_info('playlist_tracks') WHERE pk > 0`).get() as { n: number };
     if (pk.n === 2) {
-      this.db.exec(`
-        BEGIN;
+      this.db.transaction(() => this.db.exec(`
         CREATE TABLE playlist_tracks_new (
           playlist_id TEXT NOT NULL REFERENCES playlists(id),
           track_id TEXT NOT NULL REFERENCES tracks(id),
@@ -275,8 +271,7 @@ export class TasteDb {
         INSERT OR IGNORE INTO playlist_tracks_new SELECT playlist_id, track_id, position, added_at, added_by, removed_at FROM playlist_tracks;
         DROP TABLE playlist_tracks;
         ALTER TABLE playlist_tracks_new RENAME TO playlist_tracks;
-        COMMIT;
-      `);
+      `));
     }
   }
 
@@ -285,19 +280,18 @@ export class TasteDb {
   // item re-liked/re-followed/re-saved comes back to life, keeping history
   // simple: the current state plus when it last went away).
   markMissing(table: string, keyCol: string, col: string, presentIds: string[], extraWhere = '1=1'): number {
-    this.db.exec(`CREATE TEMP TABLE IF NOT EXISTS present_ids (id TEXT PRIMARY KEY)`);
-    this.db.exec(`DELETE FROM present_ids`);
-    const ins = this.db.prepare(`INSERT OR IGNORE INTO present_ids (id) VALUES (?)`);
-    for (const id of presentIds) ins.run(id);
+    // The present ids travel as one JSON array, not a scratch table: a Durable
+    // Object has no TEMP tables, and json_each() is the same on both hosts.
+    const present = JSON.stringify(presentIds);
     const res = this.db.prepare(`
       UPDATE ${table} SET ${col} = ?
-      WHERE ${col} IS NULL AND ${extraWhere} AND ${keyCol} NOT IN (SELECT id FROM present_ids)`
-    ).run(new Date().toISOString());
-    this.db.prepare(`UPDATE ${table} SET ${col} = NULL WHERE ${keyCol} IN (SELECT id FROM present_ids)`).run();
+      WHERE ${col} IS NULL AND ${extraWhere} AND ${keyCol} NOT IN (SELECT value FROM json_each(?))`
+    ).run(new Date().toISOString(), present);
+    this.db.prepare(`UPDATE ${table} SET ${col} = NULL WHERE ${keyCol} IN (SELECT value FROM json_each(?))`).run(present);
     return Number(res.changes);
   }
 
-  private prepare(sql: string): StatementSync {
+  private prepare(sql: string): Statement {
     let stmt = this.stmts.get(sql);
     if (!stmt) {
       stmt = this.db.prepare(sql);
@@ -306,7 +300,7 @@ export class TasteDb {
     return stmt;
   }
 
-  run(sql: string, ...args: unknown[]): { changes: number | bigint; lastInsertRowid: number | bigint } {
+  run(sql: string, ...args: unknown[]): { changes: number; lastInsertRowid: number } {
     return this.prepare(sql).run(...args.map(v));
   }
 
@@ -316,14 +310,7 @@ export class TasteDb {
   }
 
   transaction(fn: () => void): void {
-    this.db.exec('BEGIN');
-    try {
-      fn();
-      this.db.exec('COMMIT');
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    this.db.transaction(fn);
   }
 
   // COALESCE keeps hydrated fields (genres, followers, ...) when a later

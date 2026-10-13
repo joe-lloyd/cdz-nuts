@@ -3,7 +3,7 @@
 // separate means no write contention and no schema coupling). Combined
 // listening stats merge these with the Spotify plays at query time.
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 
 const MAX_MS = 60 * 60 * 1000; // one hour: longer than any sane single play
 
@@ -13,16 +13,16 @@ export const APP_PLAYS_FILE = process.env.APP_PLAYS_DB
   ?? path.join(import.meta.dirname, '..', 'data', 'app-plays.db');
 
 export class PlaysStore {
-  private db: DatabaseSync | null = null;
+  private db: Sql | null = null;
   private readonly dbFile: string;
 
   constructor(dbFile?: string) {
     this.dbFile = dbFile ?? APP_PLAYS_FILE;
   }
 
-  private handle(): DatabaseSync {
+  private handle(): Sql {
     if (!this.db) {
-      this.db = new DatabaseSync(this.dbFile);
+      this.db = openSql(this.dbFile);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS app_plays (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -36,6 +36,11 @@ export class PlaysStore {
       `);
     }
     return this.db;
+  }
+
+  /** Creates the table now, so a join against it never meets a database that lacks it. */
+  ready(): void {
+    this.handle();
   }
 
   close(): void {

@@ -1,7 +1,6 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 import { provenanceKey } from './provenance.ts';
 import type { ReferenceAlbum, ReferenceTrack } from './albumref.ts';
 
@@ -178,7 +177,7 @@ export function localAlbumId(artist: string, album: string): string {
 }
 
 export class UpgradeStore {
-  readonly db: DatabaseSync;
+  readonly db: Sql;
   private readonly now: () => number;
   private readonly random: () => number;
   private localCache: { version: string; tracks: LocalTrack[] } | null = null;
@@ -190,8 +189,7 @@ export class UpgradeStore {
   ) {
     this.now = now;
     this.random = random;
-    mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
+    this.db = openSql(file);
     this.db.exec(`
       PRAGMA journal_mode = WAL;
       PRAGMA foreign_keys = ON;
@@ -451,7 +449,7 @@ export class UpgradeStore {
   // the cache. Each caller gets copies, so no caller can change what the
   // next one sees.
   localTracks(): LocalTrack[] {
-    if (this.db.isTransaction) return this.readLocalTracks();
+    if (this.db.inTransaction) return this.readLocalTracks();
     const { version } = this.db.prepare(
       'SELECT total_changes() || \':\' || (SELECT data_version FROM pragma_data_version) AS version',
     ).get() as { version: string };
@@ -557,8 +555,7 @@ export class UpgradeStore {
     if (!album.releaseGroupMbid || !album.tracks.length) {
       throw new Error('a reference album needs a release group and at least one track');
     }
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    this.db.transaction(() => {
       this.db.prepare(`
         INSERT INTO reference_albums (
           release_group_mbid, release_mbid, title, artist, artist_mbid,
@@ -592,11 +589,7 @@ export class UpgradeStore {
           track.recordingMbid, track.title, track.lengthMs,
         );
       }
-      this.db.exec('COMMIT');
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    });
   }
 
   referenceAlbum(releaseGroupMbid: string): ReferenceAlbum | null {
@@ -920,8 +913,7 @@ export class UpgradeStore {
     const expires = new Date(this.now() + Math.max(300, leaseSeconds) * 1000).toISOString();
     const token = randomBytes(24).toString('hex');
 
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    const claimedId = this.db.transaction((): number | null => {
       this.expireLeases(at);
       // Fresh intake is FIFO. Retry-wait rows deliberately use random() so a
       // permanently awkward title cannot monopolize every scheduled sweep.
@@ -935,10 +927,7 @@ export class UpgradeStore {
           CASE WHEN status = 'retry_wait' THEN random() ELSE id END
         LIMIT 1
       `).get(at, phase ?? null, phase ?? null);
-      if (!row) {
-        this.db.exec('COMMIT');
-        return null;
-      }
+      if (!row) return null;
       const job = asJob(row);
       const attemptNo = job.phase === 'source' ? job.source_attempts + 1 : job.upgrade_attempts + 1;
       const counter = job.phase === 'source' ? 'source_attempts' : 'upgrade_attempts';
@@ -952,25 +941,22 @@ export class UpgradeStore {
         INSERT INTO upgrade_attempts (queue_id, phase, attempt_no, started_at)
         VALUES (?, ?, ?, ?)
       `).run(job.id, job.phase, attemptNo, at);
-      this.db.exec('COMMIT');
+      return job.id;
+    });
+    if (claimedId === null) return null;
 
-      const claimed = this.get(job.id)!;
-      const attemptedCandidates = (this.db.prepare(`
-        SELECT candidate FROM upgrade_attempts
-        WHERE queue_id = ? AND phase = 'upgrade' AND candidate IS NOT NULL
-        ORDER BY id
-      `).all(job.id) as { candidate: string }[]).map((item) => item.candidate);
-      return { ...claimed, attemptedCandidates };
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    const claimed = this.get(claimedId)!;
+    const attemptedCandidates = (this.db.prepare(`
+      SELECT candidate FROM upgrade_attempts
+      WHERE queue_id = ? AND phase = 'upgrade' AND candidate IS NOT NULL
+      ORDER BY id
+    `).all(claimedId) as { candidate: string }[]).map((item) => item.candidate);
+    return { ...claimed, attemptedCandidates };
   }
 
   finish(input: FinishUpgrade): UpgradeJob {
     const at = nowIso(this.now);
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    return this.db.transaction(() => {
       const job = this.get(input.id);
       if (!job || job.status !== 'working' || !job.claim_token || job.claim_token !== input.claimToken) {
         throw new Error('job is not owned by this worker lease');
@@ -1056,12 +1042,8 @@ export class UpgradeStore {
         SET finished_at = ?, outcome = ?, error = ?, candidate = ?
         WHERE id = (SELECT id FROM upgrade_attempts WHERE queue_id = ? AND finished_at IS NULL ORDER BY id DESC LIMIT 1)
       `).run(at, input.outcome, error, input.candidate?.trim() || null, job.id);
-      this.db.exec('COMMIT');
       return this.get(job.id)!;
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    });
   }
 
   finishBatch(input: FinishBatch): { job: UpgradeJob; children: UpgradeJob[] } {
@@ -1088,8 +1070,7 @@ export class UpgradeStore {
     }
 
     const at = nowIso(this.now);
-    this.db.exec('BEGIN IMMEDIATE');
-    try {
+    return this.db.transaction(() => {
       const parent = this.get(input.id);
       if (!parent || parent.status !== 'working' || !parent.claim_token || parent.claim_token !== input.claimToken) {
         throw new Error('job is not owned by this worker lease');
@@ -1125,12 +1106,8 @@ export class UpgradeStore {
         SET finished_at = ?, outcome = 'batch_ready', error = NULL
         WHERE id = (SELECT id FROM upgrade_attempts WHERE queue_id = ? AND finished_at IS NULL ORDER BY id DESC LIMIT 1)
       `).run(at, parent.id);
-      this.db.exec('COMMIT');
       return { job: this.get(parent.id)!, children };
-    } catch (err) {
-      this.db.exec('ROLLBACK');
-      throw err;
-    }
+    });
   }
 
   retry(id: number): UpgradeJob {
@@ -1170,15 +1147,7 @@ export class UpgradeStore {
     }
     const paths = family.map((row) => row.current_path).filter((value): value is string => Boolean(value));
     const remove = this.db.prepare('DELETE FROM upgrade_queue WHERE id = ? OR parent_id = ?');
-    const run = this.db.prepare('BEGIN');
-    run.run();
-    try {
-      remove.run(id, id);
-      this.db.prepare('COMMIT').run();
-    } catch (err) {
-      this.db.prepare('ROLLBACK').run();
-      throw err;
-    }
+    this.db.transaction(() => remove.run(id, id));
     return { removed: family.length, paths };
   }
 
