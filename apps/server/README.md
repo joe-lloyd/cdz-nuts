@@ -141,6 +141,10 @@ without touching its chunks.
   Before any read under the library, `guardFiles()` asks a TCP probe of eliot's
   NFS port (cached five seconds, one probe shared by concurrent requests) and,
   if it fails, answers "unreadable" without touching the share.
+- **Long loops hand the event loop back.** A disk binding answers inside the
+  process, so a walk of thousands of entries can finish its awaits without the loop
+  running, and the whole object (the audio stream too) stands still. The latest
+  downloads walk yields every 32 calls.
 - **Time zones.** SQLite's `localtime` and JavaScript's local time follow the
   process, which in workerd is always UTC. The overview now buckets plays in
   JavaScript with `Intl` in the zone named by `TZ`, in both hosts.
