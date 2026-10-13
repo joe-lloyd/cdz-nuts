@@ -8,6 +8,7 @@
 //   - Basic account data: StreamingHistory*.json
 //     ({endTime, artistName, trackName, msPlayed})
 // Re-importing overlapping exports is safe — rows dedupe on (ts, track, ms).
+import './sql-node-host.ts';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { TasteDb } from './db.ts';

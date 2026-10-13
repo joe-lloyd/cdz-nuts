@@ -1,6 +1,6 @@
-import net from 'node:net';
 import { readFileSync } from 'node:fs';
 import { splitWordTags } from './lyrics.ts';
+import { runtime } from './runtime.ts';
 
 export interface TasteTrack {
   id: string;
@@ -163,20 +163,6 @@ export function scoreJellyfinMatch(track: TasteTrack, item: JellyfinAudioItem): 
   return score;
 }
 
-function probe(host: string, port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.createConnection({ host, port });
-    const finish = (online: boolean) => {
-      socket.destroy();
-      resolve(online);
-    };
-    socket.setTimeout(1_500);
-    socket.once('connect', () => finish(true));
-    socket.once('timeout', () => finish(false));
-    socket.once('error', () => finish(false));
-  });
-}
-
 export class JellyfinBridge {
   private readonly baseUrl = (process.env.JELLYFIN_URL ?? '').replace(/\/$/, '');
   private readonly keyFile = process.env.JELLYFIN_API_KEY_FILE ?? '';
@@ -226,7 +212,7 @@ export class JellyfinBridge {
 
   async sourceOnline(): Promise<boolean | null> {
     if (!this.sourceHost) return null;
-    return probe(this.sourceHost, this.sourcePort);
+    return runtime().probe(this.sourceHost, this.sourcePort);
   }
 
   /**

@@ -1,5 +1,4 @@
-import { DatabaseSync } from 'node:sqlite';
-import { mkdirSync } from 'node:fs';
+import { openSql, type Sql } from './sql.ts';
 import path from 'node:path';
 
 export type LikeKind = 'track' | 'album' | 'artist';
@@ -8,10 +7,9 @@ export type LikeChoice = { id: string; liked: number; added_at: string };
 
 /** Local choices override the Spotify snapshot without changing its sync history. */
 export class LikesStore {
-  readonly db: DatabaseSync;
+  readonly db: Sql;
   constructor(file = process.env.LIKES_DB ?? path.join(import.meta.dirname, '..', 'data', 'likes.db')) {
-    if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
-    this.db = new DatabaseSync(file);
+    this.db = openSql(file);
     // Tracks came first and keep their table; albums and artists share one
     // keyed by kind, so a third kind is a row value rather than a migration.
     this.db.exec('CREATE TABLE IF NOT EXISTS app_likes (track_id TEXT PRIMARY KEY, liked INTEGER NOT NULL, added_at TEXT NOT NULL)');

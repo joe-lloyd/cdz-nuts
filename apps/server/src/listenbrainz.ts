@@ -21,7 +21,7 @@
 // main API now does ("bad actors and AI scrapers", per their own 401 body),
 // so `enabled` gates the token-only paths and the rest still works without it.
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 
 export interface RadioTrack {
   recordingMbid: string;
@@ -174,7 +174,7 @@ class SubmitError extends Error {
 }
 
 export class ListenBrainz {
-  private db: DatabaseSync | null = null;
+  private db: Sql | null = null;
   private readonly dbFile: string;
   private readonly fetchImpl: typeof fetch;
   private readonly token: string;
@@ -194,9 +194,9 @@ export class ListenBrainz {
     return Boolean(this.token);
   }
 
-  private handle(): DatabaseSync {
+  private handle(): Sql {
     if (!this.db) {
-      this.db = new DatabaseSync(this.dbFile);
+      this.db = openSql(this.dbFile);
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS lb_cache (
           key TEXT PRIMARY KEY,
@@ -220,6 +220,11 @@ export class ListenBrainz {
       `);
     }
     return this.db;
+  }
+
+  /** Creates the tables now, so nothing queries a database that lacks them. */
+  ready(): void {
+    this.handle();
   }
 
   close(): void {

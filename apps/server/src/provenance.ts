@@ -11,8 +11,7 @@
 // Nothing else writes it, and dropping the file loses nothing but a rescan.
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { mkdirSync } from 'node:fs';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 import { lengthsDisagree, normalizeMusicText } from './jellyfin.ts';
 
 export const PROVENANCE_FILE = process.env.PROVENANCE_DB
@@ -283,7 +282,7 @@ export interface ProvenanceSummary {
 }
 
 export class ProvenanceStore {
-  private db: DatabaseSync | null = null;
+  private db: Sql | null = null;
   private readonly dbFile: string;
   private readonly now: () => number;
   // Derived from every row, so each costs a full read: 200-500ms on the Pi.
@@ -306,10 +305,9 @@ export class ProvenanceStore {
       ORDER BY artist, title LIMIT 100`).all(q).map(row => row.track_id).filter((id): id is string => typeof id === 'string');
   }
 
-  private handle(): DatabaseSync {
+  private handle(): Sql {
     if (!this.db) {
-      mkdirSync(path.dirname(this.dbFile), { recursive: true });
-      this.db = new DatabaseSync(this.dbFile);
+      this.db = openSql(this.dbFile);
       this.db.exec(`
         PRAGMA journal_mode = WAL;
         PRAGMA busy_timeout = 5000;
@@ -366,18 +364,21 @@ export class ProvenanceStore {
       const stale = this.db.prepare('SELECT path FROM track_provenance WHERE album_id IS NULL').all() as { path: string }[];
       if (stale.length) {
         const fill = this.db.prepare('UPDATE track_provenance SET folder = ?, album_id = ?, track_id = ? WHERE path = ?');
-        this.db.exec('BEGIN IMMEDIATE');
         try {
-          for (const row of stale) {
-            fill.run(albumFolderOf(row.path), libAlbumId(row.path), libTrackId(row.path), row.path);
-          }
-          this.db.exec('COMMIT');
-        } catch {
-          this.db.exec('ROLLBACK');
-        }
+          this.db.transaction(() => {
+            for (const row of stale) {
+              fill.run(albumFolderOf(row.path), libAlbumId(row.path), libTrackId(row.path), row.path);
+            }
+          });
+        } catch { /* the backfill is retried on the next open */ }
       }
     }
     return this.db;
+  }
+
+  /** Creates the tables now, so nothing queries a database that lacks them. */
+  ready(): void {
+    this.handle();
   }
 
   close(): void {
@@ -438,8 +439,7 @@ export class ProvenanceStore {
         folder = excluded.folder, album_id = excluded.album_id, track_id = excluded.track_id
     `);
     let written = 0;
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    db.transaction(() => {
       for (const row of rows) {
         const file = String(row.path ?? '').trim();
         if (!file) continue;
@@ -469,11 +469,7 @@ export class ProvenanceStore {
         );
         written += 1;
       }
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+    });
     this.forget();
     return written;
   }
@@ -487,14 +483,9 @@ export class ProvenanceStore {
     const gone = existing.filter((file) => !keep.has(file));
     if (!gone.length) return 0;
     const stmt = db.prepare('DELETE FROM track_provenance WHERE path = ?');
-    db.exec('BEGIN IMMEDIATE');
-    try {
+    db.transaction(() => {
       for (const file of gone) stmt.run(file);
-      db.exec('COMMIT');
-    } catch (err) {
-      db.exec('ROLLBACK');
-      throw err;
-    }
+    });
     this.forget();
     return gone.length;
   }

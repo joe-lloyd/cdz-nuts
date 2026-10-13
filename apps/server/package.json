@@ -8,7 +8,7 @@
   },
   "scripts": {
     "export": "node --disable-warning=ExperimentalWarning src/main.ts",
-    "test": "node --disable-warning=ExperimentalWarning --test src/*.test.ts",
+    "test": "node --disable-warning=ExperimentalWarning --import ./src/sql-node-host.ts --test src/*.test.ts",
     "fixture": "node --disable-warning=ExperimentalWarning src/dev-fixture.ts",
     "verify:search": "node scripts/verify-search.mjs",
     "verify:likes": "node scripts/verify-likes.mjs"

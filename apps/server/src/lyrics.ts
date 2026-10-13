@@ -4,7 +4,7 @@
 // Only LRCLIB responses are cached on disk — hits forever, misses retried
 // weekly — so the third party is asked about each track at most once.
 import path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
+import { openSql, type Sql } from './sql.ts';
 
 export interface LyricLine { time: number; text: string; words?: { time: number; text: string }[]; }
 
@@ -71,7 +71,7 @@ export function parseLrc(text: string): LyricLine[] {
 }
 
 export class LyricsService {
-  private db: DatabaseSync | null = null;
+  private db: Sql | null = null;
   private readonly dbFile: string;
   private readonly fetchImpl: typeof fetch;
 
@@ -80,9 +80,9 @@ export class LyricsService {
     this.fetchImpl = fetchImpl ?? fetch;
   }
 
-  private cache(): DatabaseSync {
+  private cache(): Sql {
     if (!this.db) {
-      this.db = new DatabaseSync(this.dbFile);
+      this.db = openSql(this.dbFile);
       this.db.exec(`CREATE TABLE IF NOT EXISTS lrclib_cache (
         track_id TEXT PRIMARY KEY,
         found INTEGER NOT NULL,
@@ -93,6 +93,11 @@ export class LyricsService {
       )`);
     }
     return this.db;
+  }
+
+  /** Creates the tables now, so nothing queries a database that lacks them. */
+  ready(): void {
+    this.cache();
   }
 
   close(): void {
