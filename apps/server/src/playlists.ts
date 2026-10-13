@@ -12,8 +12,9 @@ export class PlaylistStore {
       CREATE TABLE IF NOT EXISTS playlist_seeds (id TEXT PRIMARY KEY);`);
     if (!this.db.prepare('SELECT id FROM playlist_seeds WHERE id = ?').get('voyage35')) {
       this.db.transaction(() => {
-        this.save(null, 'Voyage 35', 'Porcupine Tree setlist. Encore: Radioactive Toy.', voyage35.map((name) => ({
-          id: `setlist:${randomUUID()}`, name, artists: 'Porcupine Tree', album: null, album_id: null,
+        // Fixed ids, not random ones: workerd forbids random values while a module loads, and the seed runs then.
+        this.write('local-playlist:voyage35', 'Voyage 35', 'Porcupine Tree setlist. Encore: Radioactive Toy.', voyage35.map((name, index) => ({
+          id: `setlist:voyage35-${index}`, name, artists: 'Porcupine Tree', album: null, album_id: null,
           duration_ms: null, disc_number: null, track_number: null, image_url: null,
         })));
         this.db.prepare('INSERT INTO playlist_seeds VALUES (?)').run('voyage35');
@@ -41,6 +42,10 @@ export class PlaylistStore {
   save(id: string | null, name: string, description: string, tracks: TasteTrack[]) {
     const key = id ?? `local-playlist:${randomUUID()}`;
     if (id) this.tracks(id);
+    this.write(key, name, description, tracks);
+    return key;
+  }
+  private write(key: string, name: string, description: string, tracks: TasteTrack[]) {
     this.db.prepare(`INSERT INTO local_playlists VALUES (?, ?, ?, ?, NULL)
       ON CONFLICT(id) DO UPDATE SET name=excluded.name, description=excluded.description, tracks=excluded.tracks`).run(key, name, description, JSON.stringify(tracks));
     return key;

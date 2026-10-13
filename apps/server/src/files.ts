@@ -110,11 +110,12 @@ export function diskFiles(mounts: readonly Mount[]): Files {
  * for `ttlMs`.
  */
 export function guardFiles(inner: Files, prefix: string, available: () => Promise<boolean>, ttlMs = 5_000, now = Date.now): Files {
-  let answer: { at: number; ok: boolean } | null = null;
+  let answer: { at: number; ok: Promise<boolean> } | null = null;
   const under = (path: string) => path === prefix || path.startsWith(`${prefix}/`);
-  const open = async (path: string): Promise<boolean> => {
-    if (!under(path)) return true;
-    if (!answer || now() - answer.at >= ttlMs) answer = { at: now(), ok: await available() };
+  const open = (path: string): Promise<boolean> => {
+    if (!under(path)) return Promise.resolve(true);
+    // The promise itself is kept, so a burst of requests shares one probe in flight.
+    if (!answer || now() - answer.at >= ttlMs) answer = { at: now(), ok: available().catch(() => false) };
     return answer.ok;
   };
   return {

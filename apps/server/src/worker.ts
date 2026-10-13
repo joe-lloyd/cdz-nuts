@@ -110,8 +110,9 @@ export class Music extends DurableObject<Env> {
       new AlbumGroupStore(databaseFile);
 
       const app = await import('./app.ts');
+      app.init();
       this.#handle = app.handle;
-      this.#background = createBackground(app.backgroundJobs, Date.now());
+      this.#background = createBackground(app.backgroundJobs(), Date.now());
       this.#nightly = createNightly({
         files, imagesDir, databaseFile,
         tokens: diskTokenStore(env.STATE),
