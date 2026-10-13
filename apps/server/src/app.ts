@@ -586,11 +586,20 @@ let downloadScan: Promise<Record<string, unknown>[]> | null = null;
 // Asynchronous on purpose. The walk is about 1,500 directory reads and 11,000
 // stats over NFS: one second warm, five cold. Done synchronously it froze every
 // other request for that long, the overview and the audio stream included.
+// A disk binding answers inside the same process, so a walk of thousands of
+// entries can finish its awaits without the event loop ever running, and nothing
+// else (the audio stream included) is served until it ends: measured at 8
+// seconds on the real library. Every 32nd call hands the loop back.
+let walked = 0;
+const breathe = (): Promise<void> => (++walked % 32 === 0 ? new Promise((resolve) => setTimeout(resolve, 0)) : Promise.resolve());
+
 async function dirs(at: string): Promise<string[]> {
+  await breathe();
   return ((await disk.list(at)) ?? []).filter((e) => e.kind === 'directory').map((e) => e.name);
 }
 
 async function mtime(at: string): Promise<number> {
+  await breathe();
   return (await disk.stat(at))?.mtimeMs ?? 0;
 }
 
@@ -742,6 +751,7 @@ function albumTitleOf(folderName: string): string {
  */
 async function albumLanded(dir: string): Promise<number> {
   // list() answers null while eliot sleeps: nothing to date, so fall back to the folder.
+  await breathe();
   const audio = ((await disk.list(dir)) ?? [])
     .filter((entry) => entry.kind === 'file' && AUDIO_EXT.has(path.extname(entry.name).toLowerCase()));
   const newest = Math.max(0, ...await Promise.all(audio.map((entry) => mtime(path.join(dir, entry.name)))));
