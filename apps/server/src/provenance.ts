@@ -11,7 +11,7 @@
 // Nothing else writes it, and dropping the file loses nothing but a rescan.
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { openSql, type Sql } from './sql.ts';
+import { fitLike, openSql, type Sql } from './sql.ts';
 import { lengthsDisagree, normalizeMusicText } from './jellyfin.ts';
 
 export const PROVENANCE_FILE = process.env.PROVENANCE_DB
@@ -299,7 +299,7 @@ export class ProvenanceStore {
   }
 
   searchTrackIds(term: string): string[] {
-    const q = '%' + term.replace(/[\\%_]/g, '\\$&') + '%';
+    const q = fitLike('%' + term.replace(/[\\%_]/g, '\\$&') + '%');
     return this.handle().prepare(`SELECT track_id FROM track_provenance
       WHERE title LIKE ?1 ESCAPE '\\' OR artist LIKE ?1 ESCAPE '\\' OR album LIKE ?1 ESCAPE '\\'
       ORDER BY artist, title LIMIT 100`).all(q).map(row => row.track_id).filter((id): id is string => typeof id === 'string');

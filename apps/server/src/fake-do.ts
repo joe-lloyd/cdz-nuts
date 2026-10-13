@@ -1,7 +1,7 @@
 // Durable Object storage on node:sqlite, for the tests. It refuses what the
 // real thing refuses (measured on workerd 1.20261006.1): BEGIN and SAVEPOINT,
-// ATTACH, TEMP tables, the journal_mode and busy_timeout pragmas, and bindings
-// that are bigint. A boolean binds as the text "true", as it does there.
+// ATTACH, TEMP tables, the journal_mode and busy_timeout pragmas, bindings
+// that are bigint, and more than 100 bound parameters. A boolean binds as the text "true", as it does there.
 import { DatabaseSync } from 'node:sqlite';
 import type { DurableObjectStorage } from './sql-do.ts';
 
@@ -17,6 +17,9 @@ export function fakeDurableObjectStorage(): DurableObjectStorage {
   return {
     sql: {
       exec(query, ...bindings) {
+        // Measured on workerd 1.20261006.1: 100 bound parameters a statement, and LIKE patterns up to 50 bytes.
+        if (bindings.length > 100) throw new Error('too many SQL variables');
+        if (/\bLIKE\b/i.test(query) && bindings.some((v) => typeof v === 'string' && new TextEncoder().encode(v).length > 50 && /%/.test(v))) throw new Error('LIKE or GLOB pattern too complex');
         for (const [pattern, why] of REFUSED) if (pattern.test(query)) throw new Error(`SQLITE_AUTH: ${why}`);
         const values = bindings.map((value) => {
           if (typeof value === 'bigint') throw new Error('Cannot convert a BigInt value to a number');

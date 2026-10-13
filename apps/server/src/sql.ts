@@ -53,6 +53,18 @@ export function sqlParam(value: SqlParam): string | number | null {
   return value;
 }
 
+// A Durable Object's SQLite refuses a LIKE pattern over 50 bytes ("too complex"),
+// where node:sqlite takes any length. A search longer than that is cut to the
+// first 48 bytes between the two wildcards, which matches a superset of what
+// was typed, instead of failing. An escape character is never left dangling.
+export function fitLike(pattern: string): string {
+  const bytes = new TextEncoder().encode(pattern);
+  if (bytes.length <= 50) return pattern;
+  let head = new TextDecoder().decode(bytes.subarray(0, 49)).replace(/\uFFFD$/, '').replace(/%$/, '');
+  if (/(^|[^\\])(\\\\)*\\$/.test(head)) head = head.slice(0, -1);
+  return `${head}%`;
+}
+
 let host: SqlHost | null = null;
 
 /** Called once by the entry point of each runtime, before any store is built. */

@@ -17,7 +17,7 @@ import {
 // byte-identical files. Its routes.json -- not this file -- is the single
 // source of truth for what lives at which URL; ui.ts applies it.
 import { runtime } from './runtime.ts';
-import { openSql } from './sql.ts';
+import { fitLike, openSql } from './sql.ts';
 import type { BackgroundJob } from './background.ts';
 import { Reply } from './reply.ts';
 import { JellyfinBridge, LOCAL_LIBRARY_PREFIX, normalizeMusicText, type TasteTrack } from './jellyfin.ts';
@@ -91,15 +91,15 @@ export function init(): void {
 function ownedPathsFor(mbids: string[]): Map<string, string> {
   const wanted = [...new Set(mbids.filter(Boolean))];
   if (!wanted.length) return new Map();
-  const marks = wanted.map(() => '?').join(',');
+  // The ids go in as one JSON parameter (here and in the queries below): a Durable Object allows 100 bound parameters a query.
   // The files Lidarr never imported (singles folders, YouTube pulls) get
   // their recording ids from file-identity.ts instead. Lidarr's map wins
   // where both know a recording: its paths are exact by construction.
   const owned = identity.pathsByRecording(wanted);
   try {
     const rows = query(
-      `SELECT recording_mbid, path FROM lidarr_recording WHERE recording_mbid IN (${marks})`,
-      ...wanted,
+      'SELECT recording_mbid, path FROM lidarr_recording WHERE recording_mbid IN (SELECT value FROM json_each(?))',
+      JSON.stringify(wanted),
     ) as { recording_mbid: string; path: string }[];
     for (const row of rows) owned.set(row.recording_mbid.toLowerCase(), row.path);
   } catch {
@@ -1486,8 +1486,7 @@ interface EditionSummary { id: string; name: string; release_date: string | null
 function albumGroupRows(albumIds: string[]): AlbumGroupRow[] {
   if (!albumIds.length) return [];
   if (!query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'album_group'").length) return [];
-  const marks = albumIds.map(() => '?').join(',');
-  return query(`SELECT album_id, group_id, relation FROM album_group WHERE album_id IN (${marks})`, ...albumIds) as AlbumGroupRow[];
+  return query('SELECT album_id, group_id, relation FROM album_group WHERE album_id IN (SELECT value FROM json_each(?))', JSON.stringify(albumIds)) as AlbumGroupRow[];
 }
 
 /** Members of an album's group other than itself, with the canonical named. */
@@ -1746,11 +1745,10 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     const appTracks = appPlays.all<{ track_id: string; n: number }>(
       `SELECT track_id, COUNT(*) n FROM app_plays WHERE played_at >= datetime('now', '-30 days') GROUP BY track_id`);
     if (appTracks.length) {
-      const marks = appTracks.map(() => '?').join(',');
       const byTrack = new Map(appTracks.map((t) => [t.track_id, t.n]));
       for (const row of query(`SELECT ta.track_id tid, a.id id, a.name name FROM track_artists ta
-          JOIN artists a ON a.id = ta.artist_id WHERE ta.track_id IN (${marks})`,
-          ...appTracks.map((t) => t.track_id)) as { tid: string; id: string; name: string }[]) {
+          JOIN artists a ON a.id = ta.artist_id WHERE ta.track_id IN (SELECT value FROM json_each(?))`,
+          JSON.stringify(appTracks.map((t) => t.track_id))) as { tid: string; id: string; name: string }[]) {
         const bump = byTrack.get(row.tid) ?? 0;
         const entry = artistCounts.get(row.id) ?? { id: row.id, name: row.name, n: 0 };
         entry.n += bump;
@@ -2276,7 +2274,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   // Everything the discography crawl knows that isn't in the saved section.
   // Server-side paging + search — this grows to thousands of rows.
   '/api/albums-all': (params) => {
-    const q = `%${params.get('q') ?? ''}%`;
+    const q = fitLike(`%${params.get('q') ?? ''}%`);
     const limit = Math.min(Number(params.get('limit') ?? 120), 500);
     const offset = Number(params.get('offset') ?? 0);
     return query(`
@@ -2300,7 +2298,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     if (term.length < 2) return empty;
     const needle = term.toLocaleLowerCase();
     const matches = (row: { name?: unknown; artists?: unknown; description?: unknown }) => [row.name, row.artists, row.description].some(value => typeof value === 'string' && value.toLocaleLowerCase().includes(needle));
-    const q = '%' + term.replace(/[\\%_]/g, '\\$&') + '%';
+    const q = fitLike('%' + term.replace(/[\\%_]/g, '\\$&') + '%');
     const artists = recordQuery(`SELECT id, name, image_url FROM artists WHERE name LIKE ? ESCAPE '\\' ORDER BY name LIMIT 40`, q);
     const albums = recordQuery(`SELECT al.id, al.name, al.image_url, al.release_date,
       (SELECT group_concat(a.name, ', ') FROM album_artists aa JOIN artists a ON a.id = aa.artist_id WHERE aa.album_id = al.id) AS artists
@@ -2346,7 +2344,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   '/api/search-songs': (params) => {
     const term = (params.get('q') ?? '').trim();
     if (term.length < 2) return [];
-    const q = `%${term}%`;
+    const q = fitLike(`%${term}%`);
     return query(`
       SELECT t.id, t.name, t.duration_ms, t.album_id, al.name AS album, al.image_url,
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
@@ -2365,7 +2363,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   },
 
   '/api/songs': (params) => {
-    const q = `%${params.get('q') ?? ''}%`;
+    const q = fitLike(`%${params.get('q') ?? ''}%`);
     const limit = Math.min(Number(params.get('limit') ?? 40), 200);
     const offset = Number(params.get('offset') ?? 0);
     const albums = query(`
@@ -2380,13 +2378,12 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       ORDER BY al.release_date DESC
       LIMIT ?2 OFFSET ?3`, q, limit, offset) as { id: string }[];
     if (!albums.length) return [];
-    const marks = albums.map(() => '?').join(',');
     const tracks = query(`
       SELECT t.album_id, t.id, t.name, t.disc_number, t.track_number, t.duration_ms,
              (lt.track_id IS NOT NULL AND lt.removed_at IS NULL) AS liked
       FROM tracks t LEFT JOIN liked_tracks lt ON lt.track_id = t.id
-      WHERE t.album_id IN (${marks})
-      ORDER BY t.album_id, t.disc_number, t.track_number`, ...albums.map((a) => a.id)) as { album_id: string }[];
+      WHERE t.album_id IN (SELECT value FROM json_each(?))
+      ORDER BY t.album_id, t.disc_number, t.track_number`, JSON.stringify(albums.map((a) => a.id))) as { album_id: string }[];
     return albums.map((al) => ({ ...al, tracks: tracks.filter((t) => t.album_id === al.id) }));
   },
 

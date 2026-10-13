@@ -504,8 +504,8 @@ export class ListenBrainz {
       })),
     };
 
-    const ids = rows.map((row) => row.id);
-    const marks = ids.map(() => '?').join(',');
+    // The ids go in as one JSON parameter: a Durable Object allows 100 bound parameters a query.
+    const ids = JSON.stringify(rows.map((row) => row.id));
     try {
       await this.post(payload);
     } catch (err) {
@@ -517,13 +517,13 @@ export class ListenBrainz {
       // listens - the exact data this queue exists to protect.
       const permanent = err instanceof SubmitError ? err.permanent : true;
       this.handle().prepare(
-        `UPDATE lb_listens SET tries = tries + ?, last_error = ? WHERE id IN (${marks})`,
-      ).run(permanent ? 1 : 0, message.slice(0, 300), ...ids);
+        `UPDATE lb_listens SET tries = tries + ?, last_error = ? WHERE id IN (SELECT value FROM json_each(?))`,
+      ).run(permanent ? 1 : 0, message.slice(0, 300), ids);
       throw err;
     }
     this.handle()
-      .prepare(`UPDATE lb_listens SET submitted_at = ?, last_error = NULL WHERE id IN (${marks})`)
-      .run(new Date().toISOString(), ...ids);
+      .prepare('UPDATE lb_listens SET submitted_at = ?, last_error = NULL WHERE id IN (SELECT value FROM json_each(?))')
+      .run(new Date().toISOString(), ids);
     return rows.length;
   }
 }

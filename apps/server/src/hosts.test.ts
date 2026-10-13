@@ -27,8 +27,8 @@ const ROUTES = [
   '/api/ui-build', '/api/stats', '/api/overview', '/api/artists', '/api/albums', '/api/tracks', '/api/local-tracks', '/api/library-albums', '/api/releases',
   '/api/albums-all?limit=5&offset=3', '/api/playlists', '/api/events', '/api/lidarr-list', '/api/plays', '/api/latest', '/api/provenance',
   '/api/top-artists?range=short_term', '/api/top-tracks?range=long_term', '/api/wrapped', '/api/wrapped?from=2025-03&to=2025-06', '/api/songs?q=part&limit=10',
-  '/api/search?q=night', '/api/artist-search?name=mira', '/api/upgrades', '/api/albums/wants', '/api/playlist-tracks?id=pl01', '/api/playlist-tracks?id=local-playlist:voyage35',
-  '/api/album?id=al01', '/api/album?id=al13', '/api/artist?id=ar02', '/api/artist?id=ar11', '/', '/album/al01', '/img/albums/al01.jpg', '/img/folder?rel=Yppah',
+  '/api/search?q=night', `/api/search?q=${'night '.repeat(14)}`, `/api/songs?q=${'part '.repeat(14)}`, '/api/artist-search?name=mira', '/api/upgrades', '/api/albums/wants', '/api/playlist-tracks?id=pl01', '/api/playlist-tracks?id=local-playlist:voyage35',
+  '/api/album?id=al01', '/api/album?id=al13', '/api/artist?id=ar01', '/api/artist?id=ar02', '/api/artist?id=ar11', '/', '/album/al01', '/img/albums/al01.jpg', '/img/folder?rel=Yppah',
   '/img/folder?rel=Local%20Signals%2FNight%20Drive%20(2018)%20%5BAlbum%5D', '/img/folder?rel=..%2F..', '/api/nothing',
 ];
 const WRITES: [string, unknown][] = [

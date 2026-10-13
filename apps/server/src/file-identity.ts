@@ -377,8 +377,8 @@ export class FileIdentityStore {
   pathsByRecording(mbids: string[]): Map<string, string> {
     const wanted = [...new Set(mbids.filter(Boolean).map((m) => m.toLowerCase()))];
     if (!wanted.length) return new Map();
-    const marks = wanted.map(() => '?').join(',');
-    const rows = this.db.prepare(`SELECT recording_mbid, path FROM file_release WHERE recording_mbid IN (${marks})`).all(...wanted) as { recording_mbid: string; path: string }[];
+    // One JSON parameter, not one per id: a Durable Object allows 100 bound parameters a query.
+    const rows = this.db.prepare('SELECT recording_mbid, path FROM file_release WHERE recording_mbid IN (SELECT value FROM json_each(?))').all(JSON.stringify(wanted)) as { recording_mbid: string; path: string }[];
     return new Map(rows.map((r) => [r.recording_mbid.toLowerCase(), r.path]));
   }
 
