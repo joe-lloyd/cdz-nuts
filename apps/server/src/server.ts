@@ -7,10 +7,11 @@ import { nodeRuntime } from './runtime-node.ts';
 
 provideRuntime(await nodeRuntime());
 // Loaded after the runtime is provided: the app builds its stores on import.
-const { handle, backgroundJobs } = await import('./app.ts');
+const { handle, init, backgroundJobs } = await import('./app.ts');
+init();
 
 const PORT = Number(process.env.PORT ?? 8080);
-const background = createBackground(backgroundJobs, Date.now());
+const background = createBackground(backgroundJobs(), Date.now());
 setInterval(() => background.tick(Date.now()), 5_000);
 background.tick(Date.now());
 

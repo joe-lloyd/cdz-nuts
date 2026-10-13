@@ -55,18 +55,31 @@ const JELLYFIN_PREFIX = process.env.JELLYFIN_LIBRARY_PREFIX ?? '/eliot-media/mus
 const jellyfin = new JellyfinBridge();
 const lyrics = new LyricsService();
 const appPlays = new PlaysStore();
-appPlays.ready();
-const upgrades = new UpgradeStore();
-const localPlaylists = new PlaylistStore();
-const appLikes = new LikesStore();
 const provenance = new ProvenanceStore();
-const identity = new FileIdentityStore(PROVENANCE_FILE);
 const shelf = new ShelfStore();
 const discogs = new DiscogsClient();
 const listenbrainz = new ListenBrainz();
-// Open every lazily opened database now, so each one's tables exist before the
-// first query or the first data import, in a Durable Object as much as on disk.
-for (const store of [provenance, shelf, listenbrainz, lyrics]) store.ready();
+// These four create their tables as they are built. workerd allows no SQL (and
+// no random values) while a module loads, so they are built by init(), which
+// the entry point calls once the module is in.
+let upgrades: UpgradeStore;
+let localPlaylists: PlaylistStore;
+let appLikes: LikesStore;
+let identity: FileIdentityStore;
+
+/**
+ * Creates every table the routes read, in whichever database host this is, and
+ * must be called once before handle(). Each lazily opened store is opened now,
+ * so its tables exist before the first query or the first data import.
+ */
+export function init(): void {
+  upgrades = new UpgradeStore();
+  localPlaylists = new PlaylistStore();
+  appLikes = new LikesStore();
+  identity = new FileIdentityStore(PROVENANCE_FILE);
+  for (const store of [appPlays, provenance, shelf, listenbrainz, lyrics]) store.ready();
+  ensureLidarrTables();
+}
 
 /**
  * Recording MBID -> library path, from the map the Lidarr sync caches.
@@ -3624,14 +3637,12 @@ async function route(req: Request, res: Reply): Promise<void> {
   }
 }
 
-ensureLidarrTables();
-
 /**
  * Work the app does on its own clock. This file keeps no timers: the host runs
  * these on whatever clock it has (an interval in Node, a Durable Object alarm
  * in workerd) through background.ts.
  */
-export const backgroundJobs: BackgroundJob[] = [
+export const backgroundJobs = (): BackgroundJob[] => [
   /**
    * Drain queued listens to ListenBrainz.
    *
