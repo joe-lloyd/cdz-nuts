@@ -1363,18 +1363,46 @@ function json(res: Reply, status: number, body: unknown, extra: Record<string, s
 // (HomeLab repo: pi-server/lidarr-library-sync) that pulls what Lidarr has
 // actually downloaded. Ensure they exist so the read queries below never
 // throw on a fresh DB before that poller's first run; the poller then keeps
-// them populated. Additive only — never touches the exporter's tables.
+// them populated. Additive only — never touches the exporter's tables. In a
+// Durable Object this is also what creates them, as the poller cannot.
 function ensureLidarrTables(): void {
   try {
     tasteDb.exec(`
+      CREATE TABLE IF NOT EXISTS lidarr_library (
+        mbid TEXT PRIMARY KEY, artist_name TEXT, album_count INTEGER,
+        track_files INTEGER, total_tracks INTEGER, size_on_disk INTEGER, synced_at TEXT);
+      CREATE TABLE IF NOT EXISTS lidarr_album (
+        foreign_album_id TEXT, mbid TEXT, title TEXT, year INTEGER,
+        norm_title TEXT, track_files INTEGER);
+      CREATE TABLE IF NOT EXISTS album_download_status (
+        album_id TEXT PRIMARY KEY, downloaded INTEGER, lidarr_title TEXT,
+        match_score REAL, synced_at TEXT);
       CREATE TABLE IF NOT EXISTS lidarr_sync (
         id INTEGER PRIMARY KEY CHECK (id = 1), synced_at TEXT,
         downloaded_album_count INTEGER, artists_in_lidarr INTEGER,
         artists_matched INTEGER, tastedb_albums_checked INTEGER,
-        tastedb_albums_downloaded INTEGER);
-      CREATE TABLE IF NOT EXISTS album_download_status (
-        album_id TEXT PRIMARY KEY, downloaded INTEGER, lidarr_title TEXT,
-        match_score REAL, synced_at TEXT);`);
+        tastedb_albums_downloaded INTEGER, releases_tracked INTEGER,
+        recordings_mapped INTEGER);
+      CREATE TABLE IF NOT EXISTS lidarr_release (
+        foreign_album_id TEXT PRIMARY KEY, artist_mbid TEXT, artist_name TEXT,
+        title TEXT, album_type TEXT, release_date TEXT, cover_url TEXT,
+        track_files INTEGER, total_tracks INTEGER, monitored INTEGER,
+        folder TEXT, synced_at TEXT);
+      CREATE TABLE IF NOT EXISTS lidarr_recording (
+        recording_mbid TEXT, path TEXT, artist_mbid TEXT, artist_name TEXT,
+        title TEXT, album_title TEXT, duration_ms INTEGER,
+        PRIMARY KEY (recording_mbid, path));
+      CREATE INDEX IF NOT EXISTS lidarr_release_date ON lidarr_release(release_date);
+      CREATE INDEX IF NOT EXISTS lidarr_recording_rec ON lidarr_recording(recording_mbid);
+      CREATE INDEX IF NOT EXISTS lidarr_recording_artist ON lidarr_recording(artist_mbid);`);
+    // lidarr_sync and lidarr_release were widened after the first poller ran.
+    for (const ddl of [
+      'ALTER TABLE lidarr_sync ADD COLUMN releases_tracked INTEGER',
+      'ALTER TABLE lidarr_sync ADD COLUMN recordings_mapped INTEGER',
+      'ALTER TABLE lidarr_release ADD COLUMN folder TEXT',
+    ]) {
+      try { tasteDb.exec(ddl); } catch { /* already there */ }
+    }
   } catch (err) {
     console.error('ensureLidarrTables:', (err as Error).message);
   }
