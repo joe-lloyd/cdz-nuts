@@ -10,6 +10,8 @@ class NodeSql implements Sql {
   constructor(file: string, options: OpenOptions = {}) {
     if (file !== ':memory:') mkdirSync(path.dirname(file), { recursive: true });
     this.#db = new DatabaseSync(file);
+    // Wait for another process's write instead of failing: the server and the exporter, or two servers, can share a file.
+    this.#db.exec('PRAGMA busy_timeout = 5000');
     for (const [name, other] of Object.entries(options.attach ?? {})) {
       this.#db.exec(`ATTACH DATABASE '${other.replaceAll("'", "''")}' AS ${name}`);
     }
