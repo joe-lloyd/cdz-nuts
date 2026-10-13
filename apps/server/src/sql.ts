@@ -41,6 +41,8 @@ export type OpenOptions = {
 };
 
 export interface SqlHost {
+  /** True when every name opens the same database, as in a Durable Object. */
+  readonly singleDatabase?: boolean;
   /** `:memory:` is a private, empty database on a host that has files. */
   open(file: string, options?: OpenOptions): Sql;
 }

@@ -62,5 +62,5 @@ class DurableObjectSql implements Sql {
 
 export function durableObjectSql(storage: DurableObjectStorage): SqlHost {
   const sql = new DurableObjectSql(storage);
-  return { open: () => sql };
+  return { singleDatabase: true, open: () => sql };
 }

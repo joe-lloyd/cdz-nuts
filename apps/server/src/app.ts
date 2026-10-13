@@ -68,16 +68,20 @@ let appLikes: LikesStore;
 let identity: FileIdentityStore;
 
 /**
- * Creates every table the routes read, in whichever database host this is, and
- * must be called once before handle(). Each lazily opened store is opened now,
- * so its tables exist before the first query or the first data import.
+ * Creates the tables the routes read, and must be called once before handle().
+ * Plays are always created, because the routes join them. In a Durable Object every
+ * lazily opened store is opened too, so its tables exist before the first query or
+ * the first data import.
  */
 export function init(): void {
   upgrades = new UpgradeStore();
   localPlaylists = new PlaylistStore();
   appLikes = new LikesStore();
   identity = new FileIdentityStore(PROVENANCE_FILE);
-  for (const store of [appPlays, provenance, shelf, listenbrainz, lyrics]) store.ready();
+  // Node opens the rest when they are first used, as it always has. A Durable Object has
+  // one database, so there every table is created now.
+  const lazy = runtime().sql.singleDatabase ? [provenance, shelf, listenbrainz, lyrics] : [];
+  for (const store of [appPlays, ...lazy]) store.ready();
   ensureLidarrTables();
 }
 
