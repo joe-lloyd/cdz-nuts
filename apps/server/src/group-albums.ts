@@ -52,6 +52,7 @@ export async function groupAlbums(options: { artist?: string; write?: boolean; s
 }
 
 if (process.argv[1] && import.meta.filename === path.resolve(process.argv[1])) {
+  await import('./sql-node-host.ts');
   const { values } = parseArgs({
     options: {
       artist: { type: 'string' },

@@ -100,3 +100,30 @@ export function diskFiles(mounts: readonly Mount[]): Files {
     },
   };
 }
+
+/**
+ * Answers "unreadable" for a folder without touching it while `available()` is
+ * false. The library is eliot's NFS share, and workerd reads a disk binding on
+ * its one thread: a read against an NFS server that is asleep would stall every
+ * app in the process until the mount times out. So the app asks first, with a
+ * connection test that costs a moment and cannot hang, and remembers the answer
+ * for `ttlMs`.
+ */
+export function guardFiles(inner: Files, prefix: string, available: () => Promise<boolean>, ttlMs = 5_000, now = Date.now): Files {
+  let answer: { at: number; ok: boolean } | null = null;
+  const under = (path: string) => path === prefix || path.startsWith(`${prefix}/`);
+  const open = async (path: string): Promise<boolean> => {
+    if (!under(path)) return true;
+    if (!answer || now() - answer.at >= ttlMs) answer = { at: now(), ok: await available() };
+    return answer.ok;
+  };
+  return {
+    async list(dir) { return await open(dir) ? inner.list(dir) : null; },
+    async stat(path) { return await open(path) ? inner.stat(path) : null; },
+    async read(file) { return await open(file) ? inner.read(file) : null; },
+    async write(file, body) {
+      if (!await open(file)) throw new Error(`${file} is unavailable`);
+      return inner.write(file, body);
+    },
+  };
+}

@@ -1,12 +1,10 @@
-import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync, writeFileSync } from 'node:fs';
-import http from 'node:http';
-import { spawn } from 'node:child_process';
-import path from 'node:path';
+// Spotify tokens for the exporter. The token handling is portable: where the
+// tokens are kept is a TokenStore (a file in Node, the Worker's own files
+// folder in workerd), and the interactive PKCE sign-in, which needs a browser
+// and a loopback port, is an Authorizer that only the Node entry provides.
 
-const TOKEN_FILE = path.join(import.meta.dirname, '..', 'tokens.json');
-const REDIRECT_URI = 'http://127.0.0.1:8888/callback';
-const SCOPES = [
+export const REDIRECT_URI = 'http://127.0.0.1:8888/callback';
+export const SCOPES = [
   'user-library-read',
   'user-follow-read',
   'playlist-read-private',
@@ -15,29 +13,21 @@ const SCOPES = [
   'user-read-recently-played',
 ].join(' ');
 
-interface TokenSet {
+export interface TokenSet {
   access_token: string;
   refresh_token: string;
   expires_at: number; // epoch ms
 }
 
-function b64url(buf: Buffer): string {
-  return buf.toString('base64url');
+export interface TokenStore {
+  load(): Promise<TokenSet | null>;
+  save(tokens: TokenSet): Promise<void>;
 }
 
-function loadTokens(): TokenSet | null {
-  try {
-    return JSON.parse(readFileSync(TOKEN_FILE, 'utf8')) as TokenSet;
-  } catch {
-    return null;
-  }
-}
+/** Signs in through the user's browser. Absent where nobody can click: the Worker. */
+export type Authorizer = (clientId: string) => Promise<TokenSet>;
 
-function saveTokens(tokens: TokenSet): void {
-  writeFileSync(TOKEN_FILE, JSON.stringify(tokens, null, 2) + '\n', { mode: 0o600 });
-}
-
-async function tokenRequest(params: Record<string, string>): Promise<TokenSet> {
+export async function tokenRequest(params: Record<string, string>): Promise<TokenSet> {
   const res = await fetch('https://accounts.spotify.com/api/token', {
     method: 'POST',
     headers: { 'content-type': 'application/x-www-form-urlencoded' },
@@ -59,85 +49,31 @@ async function tokenRequest(params: Record<string, string>): Promise<TokenSet> {
   };
 }
 
-async function authorize(clientId: string): Promise<TokenSet> {
-  const verifier = b64url(randomBytes(64));
-  const challenge = b64url(createHash('sha256').update(verifier).digest());
-  const state = b64url(randomBytes(16));
-
-  const authUrl = new URL('https://accounts.spotify.com/authorize');
-  authUrl.search = new URLSearchParams({
-    client_id: clientId,
-    response_type: 'code',
-    redirect_uri: REDIRECT_URI,
-    scope: SCOPES,
-    code_challenge_method: 'S256',
-    code_challenge: challenge,
-    state,
-  }).toString();
-
-  const code = await new Promise<string>((resolve, reject) => {
-    const server = http.createServer((req, res) => {
-      const url = new URL(req.url ?? '/', REDIRECT_URI);
-      if (url.pathname !== '/callback') {
-        res.writeHead(404).end();
-        return;
-      }
-      const error = url.searchParams.get('error');
-      const gotCode = url.searchParams.get('code');
-      const gotState = url.searchParams.get('state');
-      if (error || !gotCode || gotState !== state) {
-        res.writeHead(400, { 'content-type': 'text/plain' });
-        res.end(`Authorization failed: ${error ?? 'state mismatch or missing code'}`);
-        server.close();
-        reject(new Error(`Authorization failed: ${error ?? 'state mismatch or missing code'}`));
-        return;
-      }
-      res.writeHead(200, { 'content-type': 'text/html' });
-      res.end('<body style="font-family:sans-serif"><h2>Authorized ✓</h2>You can close this tab and return to the terminal.</body>');
-      server.close();
-      resolve(gotCode);
-    });
-    server.on('error', reject);
-    server.listen(8888, '127.0.0.1', () => {
-      console.log(`\nOpen this URL to authorize (it should open automatically):\n\n  ${authUrl}\n`);
-      if (process.platform === 'darwin') {
-        spawn('open', [authUrl.toString()], { stdio: 'ignore', detached: true }).unref();
-      }
-    });
-  });
-
-  return tokenRequest({
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: REDIRECT_URI,
-    client_id: clientId,
-    code_verifier: verifier,
-  });
-}
-
 let cached: TokenSet | null = null;
 let clientId = '';
+let store: TokenStore | null = null;
+let authorizer: Authorizer | undefined;
+
+export function configureAuth(options: { clientId: string; store: TokenStore; authorize?: Authorizer }): void {
+  clientId = options.clientId;
+  store = options.store;
+  authorizer = options.authorize;
+  cached = null;
+}
 
 export async function initAuth(): Promise<void> {
-  const id = process.env.SPOTIFY_CLIENT_ID;
-  if (!id) {
-    console.error('SPOTIFY_CLIENT_ID is not set.');
-    console.error('Create an app at https://developer.spotify.com/dashboard,');
-    console.error(`add ${REDIRECT_URI} as a redirect URI, then run:`);
-    console.error('  SPOTIFY_CLIENT_ID=<your client id> pnpm export');
-    process.exit(1);
-  }
-  clientId = id;
-  cached = loadTokens();
+  if (!store || !clientId) throw new Error('Spotify is not configured: SPOTIFY_CLIENT_ID and a token store are required');
+  cached = await store.load();
   if (!cached) {
-    cached = await authorize(clientId);
-    saveTokens(cached);
+    if (!authorizer) throw new Error('No Spotify tokens are stored, and this host cannot sign in. Run the export once where a browser is available and import its tokens.');
+    cached = await authorizer(clientId);
+    await store.save(cached);
     console.log('Authorized. Tokens saved to tokens.json (gitignored).');
   }
 }
 
 export async function getAccessToken(): Promise<string> {
-  if (!cached) throw new Error('initAuth() was not called');
+  if (!cached || !store) throw new Error('initAuth() was not called');
   if (Date.now() > cached.expires_at - 60_000) {
     try {
       cached = await tokenRequest({
@@ -146,11 +82,12 @@ export async function getAccessToken(): Promise<string> {
         client_id: clientId,
       });
     } catch (err) {
-      // Refresh token revoked or expired — fall back to a fresh authorization.
+      // Refresh token revoked or expired: fall back to a fresh authorization, where one is possible.
+      if (!authorizer) throw err;
       console.warn(`Token refresh failed (${(err as Error).message}), re-authorizing...`);
-      cached = await authorize(clientId);
+      cached = await authorizer(clientId);
     }
-    saveTokens(cached);
+    await store.save(cached);
   }
   return cached.access_token;
 }
