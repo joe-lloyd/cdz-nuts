@@ -79,6 +79,12 @@ export async function handleAdmin(request: Request, host: AdminHost): Promise<Re
       return json(200, { tables: counts, columns: Object.fromEntries(tables(host.sql)), nightly: host.nightly.status(), spotifyTokens: tokens.ok });
     }
 
+    if (route[0] === 'schema' && request.method === 'GET') {
+      // The statements that build the app's tables and indexes, for an export into files.
+      const statements = host.sql.prepare("SELECT name, tbl_name AS \"table\", sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite\\_%' ESCAPE '\\' AND name NOT LIKE '\\_cf\\_%' ESCAPE '\\' ORDER BY type DESC, name").all();
+      return json(200, { statements });
+    }
+
     if (route[0] === 'import' && route[1] && request.method === 'POST') {
       const columns = tables(host.sql).get(route[1]);
       if (!columns) return json(404, { error: `no table ${route[1]}` });
@@ -93,10 +99,18 @@ export async function handleAdmin(request: Request, host: AdminHost): Promise<Re
       const insert = host.sql.prepare(
         `INSERT OR REPLACE INTO ${quote(route[1])} (${batch.columns.map(quote).join(', ')}) VALUES (${batch.columns.map(() => '?').join(', ')})`,
       );
-      host.sql.transaction(() => {
-        if (url.searchParams.get('replace') === '1') host.sql.prepare(`DELETE FROM ${quote(route[1])}`).run();
-        for (const row of batch.rows) insert.run(...row);
-      });
+      // The rows come from files SQLite never checked against their foreign keys
+      // (the old connections enforced them only on write), so a dump taken in
+      // table order can hold children whose parent is in the next batch.
+      host.sql.exec('PRAGMA foreign_keys = OFF');
+      try {
+        host.sql.transaction(() => {
+          if (url.searchParams.get('replace') === '1') host.sql.prepare(`DELETE FROM ${quote(route[1])}`).run();
+          for (const row of batch.rows) insert.run(...row);
+        });
+      } finally {
+        host.sql.exec('PRAGMA foreign_keys = ON');
+      }
       return json(200, { table: route[1], inserted: batch.rows.length });
     }
 
