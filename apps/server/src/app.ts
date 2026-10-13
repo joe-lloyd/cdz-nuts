@@ -2348,7 +2348,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
                WHERE ta.artist_id = a.id
                  AND lt.removed_at IS NULL) AS liked_tracks
       FROM artists a WHERE a.name LIKE ?
-      ORDER BY a.popularity DESC LIMIT ?`, `%${name}%`, limit);
+      ORDER BY a.popularity DESC LIMIT ?`, fitLike(`%${name}%`), limit);
   },
 
   '/api/search-songs': (params) => {
