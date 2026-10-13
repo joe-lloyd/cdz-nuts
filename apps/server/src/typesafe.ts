@@ -74,7 +74,9 @@ export class TypeSafe {
   private readonly key: string;
   private readonly fetchImpl: typeof fetch;
 
-  constructor(key: string, model: string = TYPESAFE_MODEL, fetchImpl: typeof fetch = fetch) {
+  // The default wraps the global: workerd throws "Illegal invocation" when fetch
+  // is called as a method of another object, which `this.fetchImpl(...)` does.
+  constructor(key: string, model: string = TYPESAFE_MODEL, fetchImpl: typeof fetch = (input, init) => fetch(input, init)) {
     this.key = key;
     this.model = model;
     this.fetchImpl = fetchImpl;
