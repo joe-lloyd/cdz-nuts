@@ -145,6 +145,16 @@ without touching its chunks.
   process, which in workerd is always UTC. The overview now buckets plays in
   JavaScript with `Intl` in the zone named by `TZ`, in both hosts.
 
+### What a Durable Object's SQLite refuses
+
+Found on real data, so `fake-do.ts` now refuses them too and the tests fail where
+workerd would: a statement takes at most 100 bound parameters (id lists go in as
+one JSON parameter and `json_each()`), a `LIKE` pattern may be at most 50 bytes
+(`fitLike()` cuts a longer search to its first 48 bytes between the wildcards, in
+Node as well), and there are no `TEMP` tables, `ATTACH`, `BEGIN` or file
+pragmas. A search that was a literal over 48 bytes now matches a little more
+than it did.
+
 ### What changed for Node
 
 Behaviour is the same; the code moved. `server.ts` became `app.ts` plus a small
@@ -180,8 +190,9 @@ Node server against the real Worker in workerd over every route (299 responses).
 - ListenBrainz radio, Discogs and the Ticketmaster concert sync are ported but not
   exercised against their live services from a Worker; the differential run had
   them off.
-- `lidarr-library-sync` on the Pi still writes `spotify.db` directly; it needs to
-  write through the Worker's import route once the Worker owns the data.
+- The Pi's `lidarr-library-sync` can write through the Worker's admin routes
+  (`MUSIC_WORKER_URL`, see its README in the HomeLab repository); it still writes the
+  file until the cutover.
 
 ## Web UI
 

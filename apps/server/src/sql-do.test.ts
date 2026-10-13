@@ -16,7 +16,7 @@ import { PlaysStore } from './plays.ts';
 import { ProvenanceStore } from './provenance.ts';
 import { durableObjectSql } from './sql-do.ts';
 import { nodeSql } from './sql-node.ts';
-import { provideSql, type SqlHost } from './sql.ts';
+import { fitLike, provideSql, type SqlHost } from './sql.ts';
 import { UpgradeStore } from './upgrades.ts';
 
 // Every store the app opens, each on the file it uses in production.
@@ -120,4 +120,17 @@ test('the real stores work on it: a queue claim, a like and a playlist', () => {
 
   const playlists = new PlaylistStore('playlists');
   assert.deepEqual(playlists.list().map((p) => p.name), ['Voyage 35']);
+});
+
+test('fitLike leaves a short pattern alone and cuts a long one to 50 bytes without breaking an escape or a character', () => {
+  assert.equal(fitLike('%night%'), '%night%');
+  const long = fitLike(`%${'a'.repeat(80)}%`);
+  assert.equal(long, `%${'a'.repeat(48)}%`);
+  assert.equal(new TextEncoder().encode(long).length, 50);
+  // Cut right after an escaping backslash: the backslash goes too, not the character it protects.
+  const escaped = fitLike(`%${'b'.repeat(47)}\\_${'c'.repeat(20)}%`);
+  assert.ok(!/(^|[^\\])\\%$/.test(escaped) && escaped.endsWith('%'), escaped);
+  assert.ok(new TextEncoder().encode(escaped).length <= 50);
+  const accented = fitLike(`%${'é'.repeat(40)}%`);
+  assert.ok(new TextEncoder().encode(accented).length <= 50 && !accented.includes('�'));
 });

@@ -112,6 +112,14 @@ for (const album of albums) {
     }
   });
 }
+// A long discography: more albums than a Durable Object allows bound parameters in one query.
+for (let i = 1; i <= 130; i += 1) {
+  const id = `fl${String(i).padStart(3, '0')}`;
+  taste.upsertAlbum({ id, name: `Filler ${i}`, album_type: 'album', release_date: `${2000 + (i % 20)}-06-01`, release_date_precision: 'day', total_tracks: 1, label: 'Filler', popularity: 10, artists: [artists[0]], images: [] }, i % 2 ? { savedAt: daysAgo(200 + i) } : {});
+  taste.run('UPDATE albums SET tracks_synced = 1 WHERE id = ?', id);
+  taste.run('INSERT OR REPLACE INTO artist_albums (artist_id, album_id, album_group) VALUES (?, ?, ?)', 'ar01', id, 'album');
+  taste.upsertTrack({ id: `${id}t1`, name: `Filler Song ${i}`, album: { id, name: `Filler ${i}` }, artists: [artists[0]], disc_number: 1, track_number: 1, duration_ms: 150_000, popularity: 5 });
+}
 // Editions the grouping module would have judged.
 const groups = new AlbumGroupStore(path.join(data, 'spotify.db'));
 groups.replaceMembers(['al01', 'al13'], [
