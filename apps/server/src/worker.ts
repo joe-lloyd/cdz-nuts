@@ -118,6 +118,7 @@ export class Music extends DurableObject<Env> {
         tokens: diskTokenStore(env.STATE),
         clientId: () => process.env.SPOTIFY_CLIENT_ID ?? '',
       });
+      this.#background.tick(Date.now());
       await ctx.storage.setAlarm(Date.now() + ALARM_EVERY_MS);
     });
   }
