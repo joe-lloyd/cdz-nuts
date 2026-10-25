@@ -11,7 +11,8 @@
     "test": "node --disable-warning=ExperimentalWarning --import ./src/sql-node-host.ts --test src/*.test.ts",
     "fixture": "node --disable-warning=ExperimentalWarning src/dev-fixture.ts",
     "verify:search": "node scripts/verify-search.mjs",
-    "verify:likes": "node scripts/verify-likes.mjs"
+    "verify:likes": "node scripts/verify-likes.mjs",
+    "verify:player": "node scripts/verify-player.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",
