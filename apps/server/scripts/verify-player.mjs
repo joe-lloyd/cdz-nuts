@@ -1,4 +1,4 @@
-// Run after installing dependencies in both this repo and ui/.
+// Run after installing this workspace and Playwright Chromium.
 // Exercises the real audio engine with short WAV tracks and no archive access.
 import assert from 'node:assert/strict';
 import http from 'node:http';
@@ -56,11 +56,21 @@ try {
     const page = await browser.newPage();
     await page.addInitScript(mode => {
       window.played = [];
+      window.injected = false;
+      window.audioElements = [];
+      const NativeAudio = window.Audio;
+      window.Audio = class extends NativeAudio {
+        constructor(...args) { super(...args); window.audioElements.push(this); }
+      };
+      // Hold the first track until the standby is ready. This isolates the
+      // gapless swap from network or browser scheduling during prefetch.
+      let held = false;
       const play = HTMLMediaElement.prototype.play;
       let injected = false;
       HTMLMediaElement.prototype.play = function () {
         if (!injected && this.src.endsWith('id=b') && mode !== 'none') {
           injected = true;
+          window.injected = true;
           return mode === 'reject'
             ? Promise.reject(new DOMException('Playback refused', 'NotAllowedError'))
             : new Promise(() => {});
@@ -68,6 +78,7 @@ try {
         this.addEventListener('timeupdate', () => {
           const id = new URL(this.src).searchParams.get('id');
           if (id && this.currentTime > 0.3 && !window.played.includes(id)) window.played.push(id);
+          if (id === 'a' && this.currentTime > 0.3 && !held) { held = true; this.pause(); }
         }, { once: false });
         return play.call(this);
       };
@@ -78,8 +89,16 @@ try {
       p.setQueue(['a', 'b', 'c'].map(id => ({ id, name: id, artists: 'Fixture', durationMs: 2000 })), 'a', false);
       void p.playAt(0);
     });
-    await page.waitForFunction(() => window.played.includes('c'), null, { timeout: 20000 });
+    await page.waitForFunction(() => window.played.includes('a') && window.audioElements.some(el => el.src.endsWith('id=b') && el.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA));
+    await page.evaluate(() => MusicPlayer.player.toggle());
+    try {
+      await page.waitForFunction(() => window.played.includes('c'), null, { timeout: 20000 });
+    } catch (error) {
+      console.error('Playback diagnostic', failure, await page.evaluate(() => ({ played: window.played, state: MusicPlayer.player.getSnapshot() })));
+      throw error;
+    }
     assert.deepEqual(await page.evaluate(() => window.played), ['a', 'b', 'c']);
+    assert.equal(await page.evaluate(() => window.injected), failure !== 'none');
     console.log(`PASS: three tracks made playback progress, second-track failure=${failure}`);
     await page.close();
   }
