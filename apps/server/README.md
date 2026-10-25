@@ -775,6 +775,13 @@ a checkout of <https://github.com/joe-lloyd/cdz-nuts>; update with:
 ssh pi 'cd cdz-nuts && git pull && docker compose -f apps/server/docker-compose.yml up -d --force-recreate'
 ```
 
+Album and artist images live on the mounted MyCloud share at
+`/mnt/myCloud/homelab/music-artwork/images`, bind-mounted into both containers
+at `data/images`. The Pi's `spotify-taste-db.service` starts Compose after
+`mnt-myCloud.mount`; the bind mount requires the source directory to exist so
+a missing share cannot create an empty image directory on the Pi. The Pi's
+nightly restic job backs up the images to pi-nas.
+
 The repository is public, so this needs no credentials on the Pi — which is
 exactly why it is public.
 
