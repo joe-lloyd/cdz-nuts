@@ -7,6 +7,7 @@
 
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
+mod audio_output;
 mod netpath;
 mod proxy;
 mod routes;
@@ -113,6 +114,7 @@ fn main() {
                 "main",
                 WebviewUrl::CustomProtocol("homelab://localhost/".parse()?),
             )
+            .initialization_script(audio_output::initialization_script())
             .title("Homelab Music")
             .inner_size(1180.0, 820.0)
             .min_inner_size(420.0, 520.0)
@@ -122,6 +124,7 @@ fn main() {
             .background_throttling(BackgroundThrottlingPolicy::Disabled)
             .build()?;
 
+            audio_output::start(app.handle().clone());
             build_tray(app)?;
 
             // After the path is settled, not before: a check that races the
@@ -245,7 +248,7 @@ async fn handle(state: Arc<AppState>, request: http::Request<Vec<u8>>) -> http::
 }
 
 /// The desktop shell's own small API: status, reconnection, and updates.
-/// Kept to four paths, because the web build has to cope without each one.
+/// The web build has to cope without these native-only endpoints.
 async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<Vec<u8>> {
     let handle = state.app.read().await.clone();
     let Some(handle) = handle else {
@@ -256,6 +259,7 @@ async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<V
     };
 
     match path {
+        "/api/desktop/audio-output" => json(200, &audio_output::current()),
         "/api/desktop/status" => json(
             200,
             &serde_json::json!({
