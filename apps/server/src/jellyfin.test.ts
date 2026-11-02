@@ -327,9 +327,12 @@ test('installed downloads trigger bounded music discovery and retry the index af
   try {
     const bridge = new JellyfinBridge();
     const file = '/data/library/music/Local Signals/downloaded.flac';
-    assert.equal(await bridge.preparePath(file), null);
+    const cold = await Promise.all(Array.from({ length: 40 }, () => bridge.preparePath(file)));
+    assert.ok(cold.every(result => result === null));
     assert.equal(asked.filter(at => at === 'POST /Items/music-id/Refresh').length, 1);
     const indexRequests = asked.filter(at => at === 'GET /Items').length;
+    assert.equal(indexRequests, 1, 'cold misses must share one rebuild, without an immediate second rebuild');
+    assert.ok(asked.indexOf('POST /Items/music-id/Refresh') < asked.indexOf('GET /Items'), 'request discovery before the first index attempt');
     await Promise.all(Array.from({ length: 40 }, () => bridge.preparePath(file)));
     assert.equal(asked.filter(at => at === 'POST /Items/music-id/Refresh').length, 1, 'one scan across a batch');
     assert.equal(asked.filter(at => at === 'GET /Items').length, indexRequests, 'polls share the index retry limit');

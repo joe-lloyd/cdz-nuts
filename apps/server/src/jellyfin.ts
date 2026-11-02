@@ -178,6 +178,7 @@ export class JellyfinBridge {
   private itemCount = 0;
   private indexedAt = 0;
   private lastDownloadScanAt = -Infinity;
+  private downloadScanPromise: Promise<void> | null = null;
   private lastDownloadIndexAt = -Infinity;
   // Set when a Jellyfin scan is asked for, so the next lookup rebuilds in the
   // background instead of throwing away an index it can still answer from.
@@ -379,18 +380,29 @@ export class JellyfinBridge {
     return this.settled(this.matchPathLoaded(workerPath), () => this.matchPathLoaded(workerPath));
   }
 
+  private async requestDownloadScan(): Promise<void> {
+    if (this.downloadScanPromise) return this.downloadScanPromise;
+    const now = Date.now();
+    if (now - this.lastDownloadScanAt < 5 * 60_000) return;
+    // Share both the throttle and the request across concurrent cold lookups.
+    this.lastDownloadScanAt = now;
+    this.downloadScanPromise = this.refreshLibrary(true)
+      .catch((err) => { console.error('Jellyfin download discovery:', (err as Error).message); })
+      .finally(() => { this.downloadScanPromise = null; });
+    return this.downloadScanPromise;
+  }
+
   /** Installed files can precede Jellyfin's discovery of a newly created folder. */
   async preparePath(workerPath: string): Promise<PlayerMatch | null> {
+    // Request discovery first on a cold start. Its initial rebuild is already
+    // an index attempt, so a miss must not immediately fetch the index again.
+    if (!this.indexedAt) await this.requestDownloadScan();
+    const before = this.indexedAt;
     const found = await this.matchPath(workerPath);
+    if (this.indexedAt !== before) this.lastDownloadIndexAt = Date.now();
     if (found) return found;
+    await this.requestDownloadScan();
     const now = Date.now();
-    if (now - this.lastDownloadScanAt >= 5 * 60_000) {
-      // Shared across all rows and batches: a list of missing singles must
-      // not turn into a scan per song. Never scan unrelated libraries.
-      this.lastDownloadScanAt = now;
-      try { await this.refreshLibrary(true); }
-      catch (err) { console.error('Jellyfin download discovery:', (err as Error).message); }
-    }
     if (now - this.lastDownloadIndexAt >= 30_000) {
       // The scan is asynchronous. Retry its results without holding a fresh
       // negative lookup in the normal five-minute cache.
