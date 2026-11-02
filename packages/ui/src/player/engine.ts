@@ -181,6 +181,7 @@ class PlayerEngine {
   private resumeAttempts = 0;
   private resumeFrom = 0;
   private resumeTimer: ReturnType<typeof setTimeout> | undefined;
+  private resumeCleanup: (() => void) | undefined;
 
   constructor() {
     this.audioA = new Audio();
@@ -449,6 +450,7 @@ class PlayerEngine {
 
   async playAt(index: number): Promise<void> {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
+    this.cancelResume();
     const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
@@ -595,12 +597,14 @@ class PlayerEngine {
     // reloaded often enough to hide that; the tray app runs for days.
     if (Date.now() < this.advancingUntil) return;
     this.advancingUntil = Date.now() + ADVANCE_GUARD_MS;
+    const advancePlaybackId = this.playbackId;
     try {
       this.flushPlay(true);
       let index = this.queueIndex + 1;
       if (index >= this.queue.length) {
         this.patch({ state: 'loading', overline: 'Finding what plays next', canPlay: false });
         await this.appendContinuation();
+        if (this.playbackId !== advancePlaybackId) return;
         index = this.queueIndex + 1;
         if (index >= this.queue.length) {
           this.audio.pause();
@@ -686,6 +690,7 @@ class PlayerEngine {
 
   private pause() {
     ++this.playbackId;
+    this.cancelResume();
     clearTimeout(this.swapWatchdog);
     this.audio.pause();
   }
@@ -747,22 +752,34 @@ class PlayerEngine {
       byline: `Picking up where it stopped, attempt ${this.resumeAttempts} of ${RESUME_ATTEMPTS}`,
     });
 
-    clearTimeout(this.resumeTimer);
+    this.cancelResume();
+    const playbackId = this.playbackId;
     this.resumeTimer = setTimeout(() => {
+      if (this.playbackId !== playbackId || element !== this.audio) return;
       // Seek only once the element knows the track again: setting currentTime
       // on an element with no metadata is either ignored or throws.
       const seek = () => {
-        element.removeEventListener('loadedmetadata', seek);
-        if (element !== this.audio) return;
+        cleanup();
+        if (this.resumeCleanup === cleanup) this.resumeCleanup = undefined;
+        if (this.playbackId !== playbackId || element !== this.audio) return;
         element.currentTime = at;
         void element.play();
       };
+      const cleanup = () => element.removeEventListener('loadedmetadata', seek);
+      this.resumeCleanup = cleanup;
       element.addEventListener('loadedmetadata', seek);
       element.src = src;
       element.load();
     }, RESUME_BACKOFF_MS * this.resumeAttempts);
 
     return true;
+  }
+
+  /** A deliberate pause or new track invalidates pending network-recovery playback. */
+  private cancelResume() {
+    clearTimeout(this.resumeTimer);
+    this.resumeCleanup?.();
+    this.resumeCleanup = undefined;
   }
 
   private onPlayState(state: 'playing' | 'paused') {

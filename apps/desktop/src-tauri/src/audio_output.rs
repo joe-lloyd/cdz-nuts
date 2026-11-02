@@ -26,6 +26,7 @@ mod mac {
 
     #[link(name = "CoreAudio", kind = "framework")]
     extern "C" {
+        fn AudioObjectHasProperty(object: u32, address: *const Address) -> u8;
         fn AudioObjectGetPropertyData(
             object: u32,
             address: *const Address,
@@ -108,7 +109,13 @@ mod mac {
         let device = device()?;
         let uid = string(device, b"uid ")?;
         let name = string(device, b"lnam")?;
-        let source: Option<u32> = unsafe { property(device, SOURCE) };
+        // Unsupported sources use a device-only identity. A supported source that
+        // fails to read is unknown, never a reusable UID-only profile.
+        let source: Option<u32> = if unsafe { AudioObjectHasProperty(device, &SOURCE) } != 0 {
+            Some(unsafe { property(device, SOURCE) }?)
+        } else {
+            None
+        };
         let transport: Option<u32> = unsafe { property(device, address(b"tran", b"glob")) };
         // A built-in analogue jack can share a device UID with the speakers.
         // Include its data source so plugging headphones in gets a distinct profile.
