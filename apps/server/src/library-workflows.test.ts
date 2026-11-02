@@ -185,6 +185,12 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     assert.equal(progress.phase, 'upgrade');
     assert.equal(progress.status, 'queued');
     assert.equal(progress.track.playable, true);
+    const clientKey = JSON.stringify(['Porcupine Tree', 'Dark Matter', 'Test album', 180000]);
+    const keyed = await post('/api/radio/resolve', { tracks: [{ ...spec, clientKey, album: 'Test album', durationMs: 180000 }] });
+    assert.equal((keyed.results as { key: string; ready: boolean }[])[0].key, clientKey);
+    assert.equal((keyed.results as { ready: boolean }[])[0].ready, true);
+    assert.equal((done.results as { key: string }[])[0].key, 'Porcupine Tree|Dark Matter', 'legacy radio response keys remain compatible');
+
     // The catalog ID used by the liked-song play button resolves too.
     const playable = await (await fetch(base + '/api/player/resolve?id=two')).json();
     assert.equal(playable.available, true);

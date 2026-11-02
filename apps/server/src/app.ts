@@ -21,6 +21,7 @@ import { fitLike, openSql } from './sql.ts';
 import type { BackgroundJob } from './background.ts';
 import { Reply } from './reply.ts';
 import { JellyfinBridge, LOCAL_LIBRARY_PREFIX, normalizeMusicText, type TasteTrack } from './jellyfin.ts';
+import { indexInstalledTracks, matchInstalledTrack } from './installed-tracks.ts';
 import { FileIdentityStore } from './file-identity.ts';
 import { LyricsService } from './lyrics.ts';
 import { resolveViaSearch } from './musicbrainz.ts';
@@ -444,7 +445,7 @@ async function resolveMatch(track: TasteTrack) {
   if (track.id.startsWith('setlist:')) {
     const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name), { durationMs: track.duration_ms });
     if (owned) return jellyfin.matchPath(owned.path);
-    const imported = upgrades.localTracks().find(item => provenanceKey(item.artists, item.name) === provenanceKey(track.artists, track.name));
+    const imported = matchInstalledTrack(indexInstalledTracks(upgrades.localTracks()), track.artists ?? '', track.name, { album: track.album, durationMs: track.duration_ms });
     if (imported) return jellyfin.matchPath(imported.path);
   }
   const local = localTrack(track.id);
@@ -455,7 +456,7 @@ async function resolveMatch(track: TasteTrack) {
   if (scanned) return jellyfin.matchPath(scanned.path);
   // A freshly installed single may not be in the provenance scan yet. Its
   // worker-owned exact path is already sufficient to resolve the Spotify row.
-  const imported = upgrades.localTracks().find(item => provenanceKey(item.artists, item.name) === provenanceKey(track.artists, track.name));
+  const imported = matchInstalledTrack(indexInstalledTracks(upgrades.localTracks()), track.artists ?? '', track.name, { album: track.album, durationMs: track.duration_ms });
   if (imported) return jellyfin.matchPath(imported.path);
   return jellyfin.match(track);
 }
@@ -3222,17 +3223,21 @@ async function route(req: Request, res: Reply): Promise<void> {
       try {
         const body = await readJson(req);
         const wanted = Array.isArray(body.tracks) ? body.tracks.slice(0, 40) : [];
-        const imported = upgrades.localTracks();
+        const imported = indexInstalledTracks(upgrades.localTracks());
         const results = await Promise.all((wanted as Record<string, unknown>[]).map(async (raw) => {
           const artist = String(raw.artist ?? '').trim();
           const title = String(raw.title ?? '').trim();
-          const key = String(raw.recordingMbid ?? `${artist}|${title}`);
+          // Echo the new client's complete identity; retain legacy station keys
+          // for existing desktop versions and the radio poller.
+          const key = String(raw.clientKey ?? raw.recordingMbid ?? `${artist}|${title}`);
+          const album = raw.album ? String(raw.album) : null;
+          const durationMs = Number(raw.durationMs) || null;
+          const recordingMbid = raw.recordingMbid ? String(raw.recordingMbid) : null;
           const matchKey = provenanceKey(artist, title);
           const row = provenance.byMatchKey(matchKey, {
-            album: raw.album ? String(raw.album) : null,
-            durationMs: Number(raw.durationMs) || null,
+            album, durationMs, recordingMbid,
           });
-          const local = imported.find(track => provenanceKey(track.artists, track.name) === matchKey);
+          const local = matchInstalledTrack(imported, artist, title, { album, durationMs });
           const job = upgrades.latest(artist, title) ?? upgrades.latest(artist.split(',')[0].trim(), title);
           const progress = {
             key, status: job?.status ?? 'not-queued', phase: job?.phase ?? null,

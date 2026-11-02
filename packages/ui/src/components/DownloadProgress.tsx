@@ -1,9 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query';
 import { post } from '../api/client.ts';
 import type { Track } from '../api/types.ts';
 
-type Spec = { artist: string; title: string; album: string | null; durationMs: number | null };
+type Spec = { clientKey: string; artist: string; title: string; album: string | null; durationMs: number | null; recordingMbid: string | null };
 export type DownloadStatus = {
   key: string; ready: boolean; stage: string; status: string; phase: string | null;
   sourceAttempts: number; nextAttemptAt: string | null; error: string | null;
@@ -43,7 +43,7 @@ export function DownloadProgressProvider({ children }: { children: ReactNode }) 
       }
       return results;
     },
-    staleTime: 0, retry: 1,
+    staleTime: 0, retry: 1, placeholderData: keepPreviousData,
     refetchInterval: query => query.state.data?.some(item => !item.ready && (item.stage === 'indexing' || !['not-queued', 'exhausted', 'cancelled'].includes(item.status))) ? 5_000 : 30_000,
   });
   const statuses = useMemo(() => new Map(query.data?.map(status => [status.key, status])), [query.data]);
@@ -58,10 +58,11 @@ export function useDownloadProgress(track: Track, held: boolean) {
   const title = track.name;
   const album = track.album ?? null;
   const durationMs = track.duration_ms ?? null;
-  const key = `${artist}|${title}`;
+  const recordingMbid = track.recording_mbid || null;
+  const key = recordingMbid ?? JSON.stringify([artist, title, album, durationMs]);
   useEffect(() => {
-    if (!held && track.id && register) return register(key, { artist, title, album, durationMs });
-  }, [held, track.id, register, key, artist, title, album, durationMs]);
+    if (!held && track.id && register) return register(key, { clientKey: key, artist, title, album, durationMs, recordingMbid });
+  }, [held, track.id, register, key, artist, title, album, durationMs, recordingMbid]);
   return { status: context?.statuses.get(key), failed: context?.failed ?? false, refresh: context?.refresh };
 }
 
