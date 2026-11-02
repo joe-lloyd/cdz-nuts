@@ -574,3 +574,27 @@ test('media changes and discovery during a rebuild remain invalidated for ordina
     });
   }
 });
+
+test('download discovery rejects sibling roots and normalized escapes before library selection', async () => {
+  for (const file of [
+    '/data/library/music-archive/track.flac',
+    '/data/library/music/../music-archive/track.flac',
+    '/eliot-media/music-archive/track.flac',
+    String.raw`\data\library\music\..\music-archive\track.flac`,
+  ]) {
+    const scans: string[] = [];
+    await withDiscoveryFixture((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+        { ItemId: 'archive', CollectionType: 'music', Locations: ['/eliot-media/music-archive'] },
+        { ItemId: 'music', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+      ]));
+      if (req.method === 'POST') { scans.push(req.url!); return res.writeHead(204).end(); }
+      res.end(JSON.stringify({ Items: [], TotalRecordCount: 0 }));
+    }, async bridge => {
+      assert.equal(await bridge.preparePath(file), null);
+      await bridge.mediaChanged([file]);
+      assert.deepEqual(scans, [], file);
+    });
+  }
+});

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { posix } from 'node:path';
 import { splitWordTags } from './lyrics.ts';
 import { runtime } from './runtime.ts';
 
@@ -407,6 +408,7 @@ export class JellyfinBridge {
 
   /** Installed files can precede Jellyfin's discovery of a newly created folder. */
   async preparePath(workerPath: string): Promise<PlayerMatch | null> {
+    if (!this.asJellyfinPath(workerPath)) return null;
     // Request discovery first on a cold start. Its initial rebuild is already
     // an index attempt, so a miss must not immediately fetch the index again.
     if (!this.indexedAt) await this.requestDownloadScan(workerPath);
@@ -587,12 +589,15 @@ export class JellyfinBridge {
   }
 
   private asJellyfinPath(at: string): string {
-    const normalized = String(at ?? '').replace(/\\/g, '/');
-    if (!normalized) return '';
-    if (normalized.startsWith(JELLYFIN_LIBRARY_PREFIX)) return normalized;
-    if (normalized.startsWith(LOCAL_LIBRARY_PREFIX)) {
-      return JELLYFIN_LIBRARY_PREFIX + normalized.slice(LOCAL_LIBRARY_PREFIX.length);
-    }
+    const slash = (value: string) => value.replace(/\\/g, '/');
+    if (!at) return '';
+    const normalized = posix.normalize(slash(at));
+    const localRoot = posix.normalize(slash(LOCAL_LIBRARY_PREFIX)).replace(/\/+$/, '') || '/';
+    const jellyfinRoot = posix.normalize(slash(JELLYFIN_LIBRARY_PREFIX)).replace(/\/+$/, '') || '/';
+    const contains = (root: string) => normalized === root
+      || normalized.startsWith(root.endsWith('/') ? root : root + '/');
+    if (contains(jellyfinRoot)) return normalized;
+    if (contains(localRoot)) return posix.join(jellyfinRoot, posix.relative(localRoot, normalized));
     return '';                          // not ours to report
   }
 
