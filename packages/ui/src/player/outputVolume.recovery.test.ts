@@ -58,6 +58,10 @@ test.each([0, 1000])('output changes cancel recovery after %i ms, including its 
 });
 
 test('an output change also cancels auto-advance waiting for a continuation album', async () => {
+  await vi.advanceTimersByTimeAsync(0);
+  window.dispatchEvent(new CustomEvent('homearpa-audio-output', {
+    detail: { id: 'continuation-initial', name: 'Speakers', builtInSpeakers: true },
+  }));
   let finish!: (response: Response) => void;
   vi.stubGlobal('fetch', vi.fn((url: string) => {
     if (url.startsWith('/api/player/continuation')) return new Promise<Response>(resolve => { finish = resolve; });
@@ -71,7 +75,7 @@ test('an output change also cancels auto-advance waiting for a continuation albu
   const advancing = player.next();
   expect(player.getSnapshot().state).toBe('loading');
   window.dispatchEvent(new CustomEvent('homearpa-audio-output', {
-    detail: { id: 'speakers', name: 'Speakers', builtInSpeakers: true },
+    detail: { id: 'continuation-headphones', name: 'Headphones', builtInSpeakers: false },
   }));
   const plays = active.play.mock.calls.length;
   finish(new Response(JSON.stringify({ available: true, tracks: [{ id: 'next', name: 'Next' }] })));
