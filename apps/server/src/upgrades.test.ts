@@ -701,3 +701,30 @@ test('a mixed album preserves existing FLAC paths and only queues the new rip', 
     assert.equal(f.store.claim('worker')?.id, result.children[1].id);
   } finally { f.close(); }
 });
+
+test('queue lookup separates recordings and preserves metadata-free reuse in every state', () => {
+  const f = fixture();
+  try {
+    const studio = f.store.create({ artist: 'Artist', title: 'Song', album: 'Studio', durationMs: 180000,
+      recordingMbid: 'studio-recording', sourceUrl: 'ytsearch5:Artist Song' });
+    for (const terminal of [false, true]) {
+      if (terminal) {
+        const claimed = f.store.claim('worker')!;
+        f.store.finish({ id: studio.id, claimToken: claimed.claim_token!, outcome: 'source_ready', currentPath: '/studio.opus', currentCodec: 'opus' });
+        const upgrade = f.store.claim('worker')!;
+        f.store.finish({ id: studio.id, claimToken: upgrade.claim_token!, outcome: 'upgraded', resultPath: '/studio.flac', currentCodec: 'flac' });
+      }
+      for (const lookup of [f.store.latest.bind(f.store), f.store.findQueued.bind(f.store)]) {
+        assert.equal(lookup('Artist', 'Song')?.id, studio.id, 'metadata-free clients still reuse the job');
+        assert.equal(lookup('Artist', 'Song', { recordingMbid: 'STUDIO-RECORDING', album: 'Compilation' })?.id, studio.id);
+        assert.equal(lookup('Artist', 'Song', { recordingMbid: 'live-recording' }), null);
+        assert.equal(lookup('Artist', 'Song', { album: 'Live', durationMs: 500000 }), null);
+        assert.equal(lookup('Artist', 'Song', { album: 'Other album' }), null);
+      }
+    }
+    const live = f.store.create({ artist: 'Artist', title: 'Song', album: 'Live', durationMs: 500000,
+      recordingMbid: 'live-recording', sourceUrl: 'ytsearch5:Artist Song live' });
+    assert.equal(f.store.findQueued('Artist', 'Song', { recordingMbid: 'studio-recording' })?.id, studio.id, 'find the matching older job, not just the newest name');
+    assert.equal(f.store.latest('Artist', 'Song', { recordingMbid: 'live-recording' })?.id, live.id);
+  } finally { f.close(); }
+});

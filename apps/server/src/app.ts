@@ -21,6 +21,7 @@ import { fitLike, openSql } from './sql.ts';
 import type { BackgroundJob } from './background.ts';
 import { Reply } from './reply.ts';
 import { JellyfinBridge, LOCAL_LIBRARY_PREFIX, normalizeMusicText, type TasteTrack } from './jellyfin.ts';
+import { indexInstalledTracks, matchInstalledTrack } from './installed-tracks.ts';
 import { FileIdentityStore } from './file-identity.ts';
 import { LyricsService } from './lyrics.ts';
 import { resolveViaSearch } from './musicbrainz.ts';
@@ -444,7 +445,7 @@ async function resolveMatch(track: TasteTrack) {
   if (track.id.startsWith('setlist:')) {
     const owned = provenance.byMatchKey(provenanceKey(track.artists ?? '', track.name), { durationMs: track.duration_ms });
     if (owned) return jellyfin.matchPath(owned.path);
-    const imported = upgrades.localTracks().find(item => provenanceKey(item.artists, item.name) === provenanceKey(track.artists, track.name));
+    const imported = matchInstalledTrack(indexInstalledTracks(upgrades.localTracks()), track.artists ?? '', track.name, { album: track.album, durationMs: track.duration_ms });
     if (imported) return jellyfin.matchPath(imported.path);
   }
   const local = localTrack(track.id);
@@ -453,6 +454,10 @@ async function resolveMatch(track: TasteTrack) {
   // title - the same reasoning as intake files, applied to the whole library.
   const scanned = provenance.trackById(track.id);
   if (scanned) return jellyfin.matchPath(scanned.path);
+  // A freshly installed single may not be in the provenance scan yet. Its
+  // worker-owned exact path is already sufficient to resolve the Spotify row.
+  const imported = matchInstalledTrack(indexInstalledTracks(upgrades.localTracks()), track.artists ?? '', track.name, { album: track.album, durationMs: track.duration_ms });
+  if (imported) return jellyfin.matchPath(imported.path);
   return jellyfin.match(track);
 }
 
@@ -1188,7 +1193,7 @@ function grabTrack(track: LikedTrackShape): keyof GrabCounts {
   const artist = String(track.artists ?? '').replace(/[\r\n]/g, ' ').trim();
   const title = String(track.name ?? '').replace(/[\r\n]/g, ' ').trim();
   if (!artist || !title) return 'skipped';
-  const last = upgrades.latest(artist, title);
+  const last = upgrades.latest(artist, title, { album: track.album ?? null, durationMs: track.duration_ms ?? null });
   if (last && (last.status === 'exhausted' || (last.status === 'cancelled' && !last.current_path))) return 'skipped';
   // Already on the full path: promoting it again would only touch a timestamp.
   if (last && last.auto_upgrade && last.status !== 'cancelled') return 'skipped';
@@ -1241,7 +1246,7 @@ type WantResult = {
  *   - on disk, lossy, no job -> queue the lossless hunt from the file
  */
 function wantTrack({ artist, title, album = null, durationMs = null, recordingMbid = null, releaseMbid = null }: WantInput): WantResult {
-  const existing = upgrades.findQueued(artist, title);
+  const existing = upgrades.findQueued(artist, title, { recordingMbid, album, durationMs });
   if (existing) {
     const { job, changed } = upgrades.promote(existing.id);
     return {
@@ -1253,14 +1258,14 @@ function wantTrack({ artist, title, album = null, durationMs = null, recordingMb
 
   // On disk already but never queued - the lossless hunt can start from
   // the file itself, no download needed.
-  const row = provenance.byMatchKey(provenanceKey(artist, title), { album, durationMs });
+  const row = provenance.byMatchKey(provenanceKey(artist, title), { album, durationMs, recordingMbid });
   if (row) {
     if (isLosslessCodec(row.codec)) return { outcome: 'already-lossless', detail: 'Already lossless in the library' };
     const job = upgrades.create({
       artist, title, album: row.album ?? album,
       durationMs: row.duration_ms ?? durationMs,
       currentPath: row.path, currentCodec: row.codec,
-      autoUpgrade: true,
+      autoUpgrade: true, recordingMbid, releaseMbid,
     });
     return { outcome: 'upgrading', job, detail: 'Hunting for a lossless copy' };
   }
@@ -3159,12 +3164,13 @@ async function route(req: Request, res: Reply): Promise<void> {
           const artist = String(raw.artist ?? '').replace(/[\r\n]/g, ' ').trim();
           const title = String(raw.title ?? '').replace(/[\r\n]/g, ' ').trim();
           if (!artist || !title) continue;
-          // Already on disk under this name — nothing to fetch.
-          if (provenance.byMatchKey(provenanceKey(artist, title))) {
+          const hint = { album: raw.album ? String(raw.album) : null, durationMs: Number(raw.durationMs) || null, recordingMbid: raw.recordingMbid ? String(raw.recordingMbid) : null };
+          // Already on disk for this recording — nothing to fetch.
+          if (provenance.byMatchKey(provenanceKey(artist, title), hint)) {
             skipped.push({ artist, title, reason: 'already in the library' });
             continue;
           }
-          const existing = upgrades.findQueued(artist, title);
+          const existing = upgrades.findQueued(artist, title, hint);
           if (existing) {
             skipped.push({ artist, title, reason: `already queued (#${existing.id})` });
             continue;
@@ -3218,31 +3224,45 @@ async function route(req: Request, res: Reply): Promise<void> {
       try {
         const body = await readJson(req);
         const wanted = Array.isArray(body.tracks) ? body.tracks.slice(0, 40) : [];
-        const results = (wanted as Record<string, unknown>[]).map((raw) => {
+        const imported = indexInstalledTracks(upgrades.localTracks());
+        const results = await Promise.all((wanted as Record<string, unknown>[]).map(async (raw) => {
           const artist = String(raw.artist ?? '').trim();
           const title = String(raw.title ?? '').trim();
-          const key = String(raw.recordingMbid ?? `${artist}|${title}`);
-          const row = provenance.byMatchKey(provenanceKey(artist, title));
-          if (row) {
-            return {
-              key,
-              ready: true,
-              track: radioTrack({
-                recordingMbid: String(raw.recordingMbid ?? ''),
-                title, artist, artistMbids: [], album: row.album,
-                releaseMbid: null, durationMs: row.duration_ms,
-                owned: true, trackId: libTrackId(row.path), path: row.path, row,
-              }),
-            };
-          }
-          const job = upgrades.findQueued(artist, title);
-          return {
-            key,
-            ready: false,
-            status: job ? job.status : 'not-queued',
+          // Echo the new client's complete identity; retain legacy station keys
+          // for existing desktop versions and the radio poller.
+          const key = String(raw.clientKey ?? raw.recordingMbid ?? `${artist}|${title}`);
+          const album = raw.album ? String(raw.album) : null;
+          const durationMs = Number(raw.durationMs) || null;
+          const recordingMbid = raw.recordingMbid ? String(raw.recordingMbid) : null;
+          const matchKey = provenanceKey(artist, title);
+          const row = provenance.byMatchKey(matchKey, {
+            album, durationMs, recordingMbid,
+          });
+          const local = matchInstalledTrack(imported, artist, title, { recordingMbid, album, durationMs });
+          const hint = { recordingMbid, album, durationMs };
+          const job = upgrades.latest(artist, title, hint) ?? upgrades.latest(artist.split(',')[0].trim(), title, hint);
+          const progress = {
+            key, status: job?.status ?? 'not-queued', phase: job?.phase ?? null,
+            sourceAttempts: job?.source_attempts ?? 0,
+            nextAttemptAt: job?.next_attempt_at ?? null,
             error: job?.last_error ?? null,
           };
-        });
+          const candidate = row ? radioTrack({
+            recordingMbid: String(raw.recordingMbid ?? ''),
+            title, artist, artistMbids: [], album: row.album,
+            releaseMbid: null, durationMs: row.duration_ms,
+            owned: true, trackId: libTrackId(row.path), path: row.path, row,
+          }) : local ? localAsTasteTrack(local) : null;
+          const file = row?.path ?? local?.path;
+          if (candidate && file) {
+            try {
+              const match = await jellyfin.matchPath(file);
+              if (match) return { ...progress, ready: true, stage: 'ready', track: { ...candidate, playable: true } };
+            } catch { /* File exists; keep showing indexing/offline progress until playback can resolve. */ }
+            return { ...progress, ready: false, stage: 'indexing' };
+          }
+          return { ...progress, ready: false, stage: job ? 'downloading' : 'not-requested' };
+        }));
         res.writeHead(200, { 'content-type': 'application/json' })
           .end(JSON.stringify({ results }));
       } catch (err) {

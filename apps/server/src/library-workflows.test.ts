@@ -52,7 +52,7 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
   scanned.close();
   const jellyfin = http.createServer((_req, res) => {
     res.setHeader('content-type', 'application/json');
-    res.end(JSON.stringify({ Items: [{ Id: 'audio-one', Name: 'Even Less', Artists: ['Porcupine Tree'], Album: 'Test album', Container: 'flac', RunTimeTicks: 1800000000, Path: '/eliot-media/music/CD/Even Less.flac' }], TotalRecordCount: 1 }));
+    res.end(JSON.stringify({ Items: [{ Id: 'audio-one', Name: 'Even Less', Artists: ['Porcupine Tree'], Album: 'Test album', Container: 'flac', RunTimeTicks: 1800000000, Path: '/eliot-media/music/CD/Even Less.flac' }, { Id: 'audio-two', Name: 'Dark Matter', Artists: ['Porcupine Tree'], Album: 'Test album', Container: 'opus', RunTimeTicks: 1800000000, Path: '/eliot-media/music/_Singles/Dark Matter.opus' }], TotalRecordCount: 2 }));
   });
   jellyfin.listen(0, '127.0.0.1'); await once(jellyfin, 'listening');
   const jellyfinAddress = jellyfin.address();
@@ -162,6 +162,56 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     const batch = await post('/api/upgrades', { sourceUrl: 'https://youtu.be/album', sourceMode: 'chapters', artist: 'Porcupine Tree', album: 'Test album' });
     assert.ok('job' in batch && batch.job && typeof batch.job === 'object' && 'source_mode' in batch.job);
     assert.equal(batch.job.source_mode, 'chapters');
+    // Source completion precedes the provenance scan. The liked Spotify row
+    // must become playable while its lossless upgrade is still queued.
+    const spec = { artist: 'Porcupine Tree', title: 'Dark Matter' };
+    const before = await post('/api/radio/resolve', { tracks: [spec] });
+    assert.equal((before.results as { ready: boolean }[])[0].ready, false);
+    async function worker(route: string, body: unknown) {
+      const response = await fetch(base + route, { method: 'POST', headers: {
+        'content-type': 'application/json', Authorization: 'Bearer fixture-worker-token-123',
+      }, body: JSON.stringify(body) });
+      assert.equal(response.status, 200);
+      return response.json();
+    }
+    const claimed = (await worker('/api/upgrades/claim', { workerId: 'test-worker', phase: 'source' })).job;
+    assert.equal(claimed.title, 'Dark Matter');
+    await worker('/api/upgrades/complete', { id: claimed.id, claimToken: claimed.claim_token,
+      outcome: 'source_ready', currentPath: '/data/library/music/_Singles/Dark Matter.opus', currentCodec: 'opus' });
+    const done = await post('/api/radio/resolve', { tracks: [spec] });
+    const progress = (done.results as { ready: boolean; stage: string; phase: string; status: string; track: { playable: boolean } }[])[0];
+    assert.equal(progress.ready, true);
+    assert.equal(progress.stage, 'ready');
+    assert.equal(progress.phase, 'upgrade');
+    assert.equal(progress.status, 'queued');
+    assert.equal(progress.track.playable, true);
+    const clientKey = JSON.stringify(['Porcupine Tree', 'Dark Matter', 'Test album', 180000]);
+    const keyed = await post('/api/radio/resolve', { tracks: [{ ...spec, clientKey, album: 'Test album', durationMs: 180000 }] });
+    assert.equal((keyed.results as { key: string; ready: boolean }[])[0].key, clientKey);
+    assert.equal((keyed.results as { ready: boolean }[])[0].ready, true);
+    assert.equal((done.results as { key: string }[])[0].key, 'Porcupine Tree|Dark Matter', 'legacy radio response keys remain compatible');
+
+    // The catalog ID used by the liked-song play button resolves too.
+    const playable = await (await fetch(base + '/api/player/resolve?id=two')).json();
+    assert.equal(playable.available, true);
+    assert.equal(playable.streamUrl, '/api/player/stream?id=two');
+    assert.equal(playable.track.duration_ms, 180000);
+    const unscanned = new ProvenanceStore(path.join(dir, 'provenance.db'));
+    assert.equal(unscanned.row('/data/library/music/_Singles/Dark Matter.opus'), null);
+    unscanned.close();
+    const liveSpec = { ...spec, album: 'Live album', durationMs: 500000, recordingMbid: 'live-recording' };
+    const distinct = await post('/api/radio/resolve', { tracks: [liveSpec] });
+    const other = (distinct.results as { ready: boolean; status: string }[])[0];
+    assert.equal(other.ready, false);
+    assert.equal(other.status, 'not-queued', 'the studio recording job must not disable a distinct live recording');
+    const wantedLive = await post('/api/tracks/want', liveSpec);
+    const liveJob = wantedLive.job as { id: number; recording_mbid: string };
+    assert.notEqual(liveJob.id, claimed.id, 'requesting the live version creates its own job');
+    assert.equal(liveJob.recording_mbid, 'live-recording');
+    const repeatLive = await post('/api/tracks/want', liveSpec);
+    assert.equal((repeatLive.job as { id: number }).id, liveJob.id, 'matching repeat requests remain idempotent');
+
+
   } finally {
     const exited = once(child, 'exit'); child.kill(); await exited;
     await new Promise<void>(resolve => jellyfin.close(() => resolve()));

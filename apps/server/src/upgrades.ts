@@ -1,3 +1,4 @@
+import { sameRecording, type RecordingHint } from './recording-identity.ts';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 import { openSql, type Sql } from './sql.ts';
@@ -160,6 +161,7 @@ export interface LocalTrack {
   duration_ms: number | null;
   track_number: number | null;
   codec: string | null;
+  recording_mbid?: string | null;
   standalone: boolean;
   path: string;          // worker-side path, e.g. /data/library/music/...
   added_at: string;
@@ -315,6 +317,8 @@ export class UpgradeStore {
         ON album_wants(status, requested_at);
       CREATE INDEX IF NOT EXISTS idx_upgrade_due
         ON upgrade_queue(status, next_attempt_at);
+      CREATE INDEX IF NOT EXISTS idx_upgrade_artist_title
+        ON upgrade_queue(artist COLLATE NOCASE, title COLLATE NOCASE, id DESC);
       CREATE INDEX IF NOT EXISTS idx_upgrade_attempts_job
         ON upgrade_attempts(queue_id, id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrade_active_track
@@ -459,7 +463,7 @@ export class UpgradeStore {
 
   private readLocalTracks(): LocalTrack[] {
     return [...this.db.prepare(`
-      SELECT id, artist, title, album, duration_ms, track_number, current_path, current_codec,
+      SELECT id, artist, title, album, duration_ms, track_number, current_path, current_codec, recording_mbid,
              created_at, parent_id, source_mode
       FROM upgrade_queue
       WHERE current_path IS NOT NULL AND current_path <> ''
@@ -477,6 +481,7 @@ export class UpgradeStore {
         duration_ms: r.duration_ms == null ? null : Number(r.duration_ms),
         track_number: r.track_number == null ? null : Number(r.track_number),
         codec: (r.current_codec as string) ?? null,
+        recording_mbid: (r.recording_mbid as string) ?? null,
         // A one-off download rather than a track of an imported album.
         standalone: r.parent_id == null && r.source_mode === 'single' && r.track_number == null,
         path: String(r.current_path ?? ''),
@@ -820,8 +825,8 @@ export class UpgradeStore {
    * the same unowned track would be re-queued on every tick — and the worker
    * would download it once per duplicate.
    */
-  findQueued(artist: string, title: string): UpgradeJob | null {
-    const row = this.db.prepare(`
+  findQueued(artist: string, title: string, hint: RecordingHint = {}): UpgradeJob | null {
+    const rows = this.db.prepare(`
       SELECT * FROM upgrade_queue
       WHERE artist = ? COLLATE NOCASE AND title = ? COLLATE NOCASE
         AND status != 'exhausted'
@@ -830,9 +835,11 @@ export class UpgradeStore {
         -- window before the library scanner notices the file. A job cancelled
         -- with no file was abandoned by hand and may be asked for again.
         AND (status != 'cancelled' OR current_path IS NOT NULL)
-      ORDER BY id DESC LIMIT 1
-    `).get(artist, title);
-    return row ? asJob(row) : null;
+      ORDER BY id DESC
+    `).all(artist, title);
+    return rows.map(asJob).find(job => sameRecording({
+      recordingMbid: job.recording_mbid, album: job.album, durationMs: job.duration_ms,
+    }, hint)) ?? null;
   }
 
   /**
@@ -840,13 +847,15 @@ export class UpgradeStore {
    * included. findQueued deliberately forgets those so a person can ask
    * again; the likes sweep must not, or it asks again every six hours.
    */
-  latest(artist: string, title: string): UpgradeJob | null {
-    const row = this.db.prepare(`
+  latest(artist: string, title: string, hint: RecordingHint = {}): UpgradeJob | null {
+    const rows = this.db.prepare(`
       SELECT * FROM upgrade_queue
       WHERE artist = ? COLLATE NOCASE AND title = ? COLLATE NOCASE
-      ORDER BY id DESC LIMIT 1
-    `).get(artist, title);
-    return row ? asJob(row) : null;
+      ORDER BY id DESC
+    `).all(artist, title);
+    return rows.map(asJob).find(job => sameRecording({
+      recordingMbid: job.recording_mbid, album: job.album, durationMs: job.duration_ms,
+    }, hint)) ?? null;
   }
 
   get(id: number): UpgradeJob | null {
