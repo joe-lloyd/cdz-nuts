@@ -177,6 +177,8 @@ export class JellyfinBridge {
   private relPathsAt = 0;
   private itemCount = 0;
   private indexedAt = 0;
+  private lastDownloadScanAt = -Infinity;
+  private lastDownloadIndexAt = -Infinity;
   // Set when a Jellyfin scan is asked for, so the next lookup rebuilds in the
   // background instead of throwing away an index it can still answer from.
   private stale = false;
@@ -377,6 +379,28 @@ export class JellyfinBridge {
     return this.settled(this.matchPathLoaded(workerPath), () => this.matchPathLoaded(workerPath));
   }
 
+  /** Installed files can precede Jellyfin's discovery of a newly created folder. */
+  async preparePath(workerPath: string): Promise<PlayerMatch | null> {
+    const found = await this.matchPath(workerPath);
+    if (found) return found;
+    const now = Date.now();
+    if (now - this.lastDownloadScanAt >= 5 * 60_000) {
+      // Shared across all rows and batches: a list of missing singles must
+      // not turn into a scan per song. Never scan unrelated libraries.
+      this.lastDownloadScanAt = now;
+      try { await this.refreshLibrary(true); }
+      catch (err) { console.error('Jellyfin download discovery:', (err as Error).message); }
+    }
+    if (now - this.lastDownloadIndexAt >= 30_000) {
+      // The scan is asynchronous. Retry its results without holding a fresh
+      // negative lookup in the normal five-minute cache.
+      this.lastDownloadIndexAt = now;
+      try { await this.refresh(true); }
+      catch { return null; }
+    }
+    return this.settled(this.matchPathLoaded(workerPath), () => this.matchPathLoaded(workerPath));
+  }
+
   async match(track: TasteTrack): Promise<PlayerMatch | null> {
     try {
       await this.refresh();
@@ -551,8 +575,9 @@ export class JellyfinBridge {
    * Prefer mediaChanged() when the caller knows which paths moved; this is
    * for when it does not.
    */
-  async refreshLibrary(): Promise<void> {
+  async refreshLibrary(musicOnly = false): Promise<void> {
     const id = await this.musicLibraryId();
+    if (!id && musicOnly) return;
     const target = id
       ? `/Items/${encodeURIComponent(id)}/Refresh?Recursive=true&ImageRefreshMode=Default`
         + '&MetadataRefreshMode=Default&ReplaceAllImages=false&ReplaceAllMetadata=false'

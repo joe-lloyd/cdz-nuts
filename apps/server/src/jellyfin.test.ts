@@ -304,3 +304,62 @@ test('changed paths are reported as Jellyfin spells them, folders deduped', asyn
     await new Promise<void>((resolve, reject) => mock.close((err) => err ? reject(err) : resolve()));
   }
 });
+
+test('installed downloads trigger bounded music discovery and retry the index after the async scan', async () => {
+  let now = 1000000;
+  const realNow = Date.now;
+  const asked: string[] = [];
+  let discovered = false;
+  const mock = http.createServer((req, res) => {
+    asked.push(`${req.method} ${req.url?.split('?')[0]}`);
+    res.setHeader('content-type', 'application/json');
+    if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+      { ItemId: 'music-id', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+    ]));
+    if (req.url?.startsWith('/Items/music-id/Refresh')) return res.writeHead(204).end();
+    return res.end(JSON.stringify({ Items: discovered ? [indexed('downloaded', track.name)] : [], TotalRecordCount: discovered ? 1 : 0 }));
+  });
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const address = mock.address(); assert(address && typeof address === 'object');
+  process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`;
+  process.env.JELLYFIN_API_KEY = 'fixture-key';
+  Date.now = () => now;
+  try {
+    const bridge = new JellyfinBridge();
+    const file = '/data/library/music/Local Signals/downloaded.flac';
+    assert.equal(await bridge.preparePath(file), null);
+    assert.equal(asked.filter(at => at === 'POST /Items/music-id/Refresh').length, 1);
+    const indexRequests = asked.filter(at => at === 'GET /Items').length;
+    await Promise.all(Array.from({ length: 40 }, () => bridge.preparePath(file)));
+    assert.equal(asked.filter(at => at === 'POST /Items/music-id/Refresh').length, 1, 'one scan across a batch');
+    assert.equal(asked.filter(at => at === 'GET /Items').length, indexRequests, 'polls share the index retry limit');
+    // Jellyfin's scan completes after its HTTP request has returned.
+    discovered = true;
+    now += 30001;
+    assert.equal((await bridge.preparePath(file))?.itemId, 'downloaded', 'retry a negative index before its five-minute TTL');
+    assert.ok(!asked.includes('POST /Library/Refresh'));
+  } finally {
+    Date.now = realNow;
+    delete process.env.JELLYFIN_URL; delete process.env.JELLYFIN_API_KEY;
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+  }
+});
+
+test('download discovery never falls back to a whole-server scan without a matching music library', async () => {
+  const asked: string[] = [];
+  const mock = http.createServer((req, res) => {
+    asked.push(`${req.method} ${req.url?.split('?')[0]}`);
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify(req.url?.startsWith('/Library/VirtualFolders') ? [] : { Items: [], TotalRecordCount: 0 }));
+  });
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const address = mock.address(); assert(address && typeof address === 'object');
+  process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`; process.env.JELLYFIN_API_KEY = 'fixture-key';
+  try {
+    assert.equal(await new JellyfinBridge().preparePath('/data/library/music/new.opus'), null);
+    assert.equal(asked.filter(at => at.startsWith('POST ')).length, 0);
+  } finally {
+    delete process.env.JELLYFIN_URL; delete process.env.JELLYFIN_API_KEY;
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+  }
+});
