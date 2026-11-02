@@ -150,6 +150,34 @@ patching it. There is no delta mechanism. The macOS and Windows bundles are
 AppImage is ~79 MB because it carries its own WebKit; if that becomes annoying,
 the `.deb` is 5 MB and uses the system one.
 
+## Volume on macOS
+
+The player remembers its own volume separately for each audio output. A new
+headphone, USB device, or Bluetooth output starts at 25% on the player's slider
+(or lower if the previous saved level was already lower). Adjust it once and
+that device keeps its level. Existing built-in speaker volume is carried over.
+This does not change the Mac's system volume.
+
+Changing outputs pauses playback and applies the destination's remembered
+level; press Play to continue. Both audio elements, including the one buffering
+the next song, get the same volume. While the native output is unknown, the
+player starts quietly rather than inheriting a potentially loud speaker level.
+
+Core Audio watches the default output and its data source, so an analogue jack
+that shares a device with the speakers still gets its own profile. The profile
+uses the device's persistent UID and data-source ID rather than its name or its
+transient numeric device ID. The web, phone and other desktop platforms retain
+their existing volume controls.
+
+This addresses switching hardware. Song loudness normalization is a separate
+feature and is not applied here. The app cannot infer acoustic loudness from a
+slider percentage, and output notifications arrive after macOS routes the audio;
+this is volume convenience, not a calibrated hearing-protection limit.
+
+References: [Core Audio default output](https://developer.apple.com/documentation/coreaudio/kaudiohardwarepropertydefaultoutputdevice),
+[persistent device UID](https://developer.apple.com/documentation/coreaudio/kaudiodevicepropertydeviceuid),
+[Spotify's explanation of normalization](https://support.spotify.com/us/article/volume-normalization/).
+
 ## Releasing
 
 Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, then:

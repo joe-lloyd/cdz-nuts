@@ -11,6 +11,7 @@
 // odd (previous restarting past four seconds, say) it is kept, because those
 // tests exist to catch it changing.
 
+import { OutputVolume, usesOutputVolume } from './outputVolume.ts';
 import { clamp, formatTime } from '../lib/format.ts';
 import {
   absoluteUrl, hasNativeHost, installNativeCommands, sendGone, sendNowPlaying,
@@ -175,6 +176,7 @@ class PlayerEngine {
   private listeners = new Set<() => void>();
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private blessed = false;
+  private outputVolume?: OutputVolume;
   private swapWatchdog: ReturnType<typeof setTimeout> | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
@@ -210,6 +212,23 @@ class PlayerEngine {
     }
 
     this.restore();
+    if (usesOutputVolume()) {
+      this.outputVolume = new OutputVolume(
+        gain => { this.audioA.volume = gain; this.audioB.volume = gain; this.emit(); },
+        name => {
+          const playing = !this.audio.paused;
+          this.pause();
+          this.audioA.pause();
+          this.audioB.pause();
+          if (playing) this.notify(`Audio output changed to ${name}. Press play to continue.`);
+        },
+        this.audio.volume,
+      );
+      window.addEventListener('homearpa-audio-output', event => {
+        this.outputVolume!.select((event as CustomEvent<unknown>).detail);
+      });
+      void this.outputVolume.load();
+    }
     this.installMediaSession();
     addEventListener('pagehide', () => { this.save(); this.flushPlay(false); });
   }
@@ -689,6 +708,7 @@ class PlayerEngine {
     const gain = clamp(position, 0, 1) ** 2;
     this.audioA.volume = gain;
     this.audioB.volume = gain;
+    this.outputVolume?.remember(gain);
     this.save();
     this.emit();
   }
