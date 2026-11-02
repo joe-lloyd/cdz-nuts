@@ -44,7 +44,7 @@ export class OutputVolume {
     this.output = next;
     const saved = this.profiles[next.id];
     // Only migrate the old global level to positively identified built-in speakers.
-    const gain = saved ?? (!previous && next.builtInSpeakers === true ? this.legacyGain : Math.min(this.legacyGain, QUIET_GAIN));
+    const gain = saved ?? (next.builtInSpeakers === true ? this.legacyGain : Math.min(this.legacyGain, QUIET_GAIN));
     if (previous) this.changed(next.name);
     this.apply(gain);
     this.remember(gain);

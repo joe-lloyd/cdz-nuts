@@ -73,3 +73,11 @@ test('an existing mute is preserved for unfamiliar headphones', () => {
   profiles.select(headphones);
   expect(apply).toHaveBeenLastCalledWith(0);
 });
+
+test('speaker migration also works when headphones were connected at startup', () => {
+  const apply = vi.fn();
+  const profiles = new OutputVolume(apply, vi.fn(), 0.52);
+  profiles.select(headphones);
+  profiles.select(speakers);
+  expect(apply).toHaveBeenLastCalledWith(0.52);
+});
