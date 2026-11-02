@@ -2779,3 +2779,11 @@ input[type="range"] {
 .like-button { border-color: transparent; padding: 0; }
 .like-button:hover, .global-search-bar button:hover { background: var(--accent-soft); }
 .like-button:focus-visible, .global-search-bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Keep radio beside each queue item, outside its playback button. */
+.queue-entry { display: flex; align-items: center; }
+.queue-entry .queue-item { flex: 1; min-width: 0; }
+.track-radio { width: auto; padding: 0 6px; gap: 4px; font-size: 10px; }
+.track-radio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.song-actions { display: flex; align-items: center; gap: 2px; }

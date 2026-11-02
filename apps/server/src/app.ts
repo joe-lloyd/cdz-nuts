@@ -40,6 +40,7 @@ import {
 import { resolveArtwork as resolveArtworkIn } from './artwork.ts';
 import { ListenBrainz, type RadioMode } from './listenbrainz.ts';
 import { resolveAlbum } from './albumref.ts';
+import { resolveSongRadioSeed } from './radio-seed.ts';
 import { RadioEngine, primaryArtist, type RadioEntry, type RadioSeed } from './radio.ts';
 
 const { files: disk, ui } = runtime();
@@ -2207,9 +2208,9 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
    * A station from a seed. Owned tracks come back ready to play; the rest
    * come back as candidates the client can ask to have fetched.
    *
-   * Seeding by track resolves the artist behind it, because LB Radio's prompt
-   * language takes artists and tags, not recordings — the recording id is
-   * kept for the similarity fallback, which does take one.
+   * Track seeds resolve a recording for song similarity, looking up catalog
+   * metadata when needed. The artist remains available for widening a sparse
+   * station or falling back when the recording cannot be identified.
    */
   '/api/radio': async (params) => {
     if (!listenbrainz.enabled) {
@@ -2226,19 +2227,22 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     // what actually drives "songs like this song".
     const from = String(params.get('from') ?? '').trim();
     let seedTrack: { title: string; artist: string } | null = null;
-    if (from) {
-      const row = provenance.trackById(from);
-      if (row) {
-        const known = recordingForPath(row.path);
-        seedTrack = { title: row.title, artist: known.artistName || row.artist };
-        if (!recordingMbid) recordingMbid = known.recordingMbid ?? undefined;
-        // An MBID is unambiguous and gives a wider net than the name does;
-        // Lidarr's artist name is next best; the file's credit string is the
-        // last resort, and only after the guest credits are stripped off it.
-        value = value
-          || known.artistMbid
-          || known.artistName
-          || primaryArtist(row.artist);
+    if (kind === 'track' && from) {
+      const seed = await resolveSongRadioSeed({
+        from, recordingMbid, title: params.get('title'), artist: params.get('artist'),
+      }, id => {
+        const row = provenance.trackById(id);
+        if (row) {
+          const known = recordingForPath(row.path);
+          return { title: row.title, artist: known.artistName || row.artist, ...known };
+        }
+        const track = tasteTrack(id);
+        return track ? { title: track.name, artist: track.artists ?? '' } : null;
+      }, (artist, title) => listenbrainz.lookup(artist, title));
+      if (seed) {
+        seedTrack = { title: seed.title, artist: seed.artist };
+        recordingMbid = seed.recordingMbid || undefined;
+        value = value || seed.artistMbid || seed.artist;
       }
     }
     if (kind === 'stats' || kind === 'recs') value = value || listenbrainz.user;

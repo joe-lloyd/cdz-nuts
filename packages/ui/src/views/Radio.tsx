@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 
 import { useListenBrainz, useStats, useStation, useTopArtists } from '../api/hooks.ts';
 import { post } from '../api/client.ts';
@@ -90,10 +90,14 @@ interface ResolveResponse {
 export function Station() {
   const params = useParams();
   const kind = params.kind;
-  // A station seed is an artist name or a genre, not an id -- it can contain
-  // slashes and spaces -- so it arrives as the splat rather than a segment.
-  const value = params['*'] ? decodeURIComponent(params['*']) : undefined;
-  const { data, isPending, error } = useStation(kind, value);
+  // Artist names and track IDs can contain slashes or percent signs. The router
+  // already decodes the splat; decoding it again would corrupt those seeds.
+  const value = params['*'];
+  const [search] = useSearchParams();
+  const stationKey = JSON.stringify([kind, value, kind === 'track' ? search.toString() : '']);
+  const { data, isPending, error, refetch } = useStation(kind, value, kind === 'track' ? {
+    artist: search.get('artist') ?? '', title: search.get('title') ?? '', mbid: search.get('mbid') ?? '',
+  } : undefined);
   const playAll = usePlayAll();
 
   const [resolved, setResolved] = useState<Record<string, Track>>({});
@@ -109,7 +113,7 @@ export function Station() {
     requested.current = new Set();
     setResolved({});
     setStates({});
-  }, [kind, value]);
+  }, [stationKey]);
 
   useEffect(() => {
     if (!pending.length) return;
@@ -152,21 +156,25 @@ export function Station() {
         // carries on into tracks it just went and got.
         if (arrived.length) player.append(arrived.map(toQueueItem));
       } catch { /* the next tick tries again */ }
+      if (!live) return;
       topUp();
     };
 
     topUp();
     const timer = setInterval(() => void poll(), 12_000);
     return () => { live = false; clearInterval(timer); };
-  }, [pending.length, kind, value, states]);
+  }, [pending.length, stationKey, states]);
 
-  if (isPending) return <Skeleton />;
-  if (error) return <Empty>{error.message}</Empty>;
+  if (isPending) return <><div role="status"><h1>{kind === 'track' ? 'Song radio' : 'Radio'}</h1>
+    <p>Building your station… Finding related songs with ListenBrainz.</p></div><Skeleton /></>;
+  if (error) return <div role="alert"><p>Could not build this station. {error.message}</p>
+    <button type="button" onClick={() => void refetch()}>Try again</button></div>;
   if (data?.error || !tracks.length) {
     const why = data?.error === 'ListenBrainz is not configured'
       ? 'Radio is off — no ListenBrainz token is configured.'
       : `Nothing came back for this station${data?.error ? ` (${data.error})` : ''}.`;
-    return <Empty>{why} <Link to="/radio">Pick another</Link></Empty>;
+    return <Empty>{why} {data?.error !== 'ListenBrainz is not configured'
+      ? <button type="button" onClick={() => void refetch()}>Try again</button> : null} <Link to="/radio">Pick another</Link></Empty>;
   }
 
   const seed = data!.seedTrack;
@@ -195,7 +203,7 @@ export function Station() {
           {basis ? <div className="meta dim">{basis}</div> : null}
         </div>
         <div className="hero-actions">
-          <button className="primary-action play-station" type="button" onClick={() => playAll(playable, false)}>
+          <button className="primary-action play-station" type="button" disabled={!playable.length} onClick={() => playAll(playable, false)}>
             {PLAY_ICON} Play station
           </button>
           {kind === 'track' && seed ? (
@@ -219,6 +227,7 @@ export function Station() {
               <div className="end radio-state">
                 {RADIO_STATE[states[keyOf(t)] ?? 'not-queued'] ?? states[keyOf(t)]}
               </div>
+              <RadioControl track={t} />
             </div>
           ) : (
             <div className="row" key={`${t.id}-${i}`} data-track-id={t.id}>

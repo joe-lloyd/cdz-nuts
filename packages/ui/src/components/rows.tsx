@@ -58,7 +58,7 @@ export function SongCard({ track, meta }: { track: Track; meta?: string | undefi
       </div>
       <MediaBadges row={track} />
       <div className="song-end">
-        <LikeButton track={track} />
+        <div className="song-actions"><RadioControl track={track} /><LikeButton track={track} /></div>
         <span className="song-dur">{dur(track.duration_ms)}</span>
         {meta ? <small>{meta}</small> : null}
       </div>

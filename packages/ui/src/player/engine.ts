@@ -79,6 +79,7 @@ export interface QueueItem {
   albumId?: string | undefined;
   imageUrl?: string | undefined;
   continuationAlbumId?: string | undefined;
+  recordingMbid?: string | null | undefined;
 }
 
 export type BarState = 'idle' | 'loading' | 'playing' | 'paused' | 'error';
@@ -402,6 +403,7 @@ class PlayerEngine {
           albumId: t.album_id ?? data.album?.id ?? '',
           imageUrl: t.image_url ?? '',
           continuationAlbumId: t.continuation_album_id ?? data.album?.id ?? '',
+          recordingMbid: t.recording_mbid ?? null,
         })), { allowPlayedDuplicates: Boolean(data.reset) });
         if (!added) { this.continuationStopped = true; return 0; }
         this.rememberContinuationAlbum(data.album?.id);
@@ -463,6 +465,7 @@ class PlayerEngine {
         albumId: track.album_id ?? item.albumId,
         imageUrl: track.image_url ?? item.imageUrl,
         continuationAlbumId: track.continuation_album_id ?? item.continuationAlbumId,
+        recordingMbid: track.recording_mbid ?? item.recordingMbid,
       };
       this.rememberContinuationAlbum(track.continuation_album_id);
       this.pendingTrackId = null;
@@ -503,7 +506,7 @@ class PlayerEngine {
       artUrl: artUrlFor(albumId),
       artFallbackUrl: track.image_url ?? '',
       initial: (track.name || 'MT').slice(0, 1).toUpperCase(),
-      radioSeedId: /^libtrack-/.test(track.id) ? track.id : null,
+      radioSeedId: track.id || null,
       canPlay: true,
       canScrub: true,
       canReconnect: false,
@@ -604,6 +607,7 @@ class PlayerEngine {
           albumId: track.album_id ?? item.albumId,
           imageUrl: track.image_url ?? item.imageUrl,
           continuationAlbumId: track.continuation_album_id ?? item.continuationAlbumId,
+        recordingMbid: track.recording_mbid ?? item.recordingMbid,
         };
         this.rememberContinuationAlbum(track.continuation_album_id);
         this.pendingTrackId = null;

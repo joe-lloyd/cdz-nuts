@@ -1,3 +1,4 @@
+import { RadioControl } from '../components/primitives.tsx';
 import { formatTime, initial as letterFor } from '../lib/format.ts';
 import { player, usePlayer } from './usePlayer.ts';
 
@@ -11,22 +12,24 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose: () => vo
       </div>
       <div className="queue-list">
         {p.queue.length ? p.queue.map((item, index) => (
-          <button
-            key={`${item.id}-${index}`}
-            className={`queue-item${index === p.queueIndex ? ' on' : ''}`}
-            type="button"
-            onClick={() => void player.playAt(index)}
-          >
-            <span className="queue-index">{String(index + 1).padStart(2, '0')}</span>
-            <span className="queue-art">
-              <i>{letterFor(item.name)}</i>
-            </span>
-            <span>
-              <b>{item.name || 'Unknown track'}</b>
-              <small>{item.artists}</small>
-            </span>
-            <span className="queue-duration">{formatTime((item.durationMs ?? 0) / 1000)}</span>
-          </button>
+          <div className="queue-entry" key={`${item.id}-${index}`}>
+            <button
+              className={`queue-item${index === p.queueIndex ? ' on' : ''}`}
+              type="button"
+              onClick={() => void player.playAt(index)}
+            >
+              <span className="queue-index">{String(index + 1).padStart(2, '0')}</span>
+              <span className="queue-art">
+                <i>{letterFor(item.name)}</i>
+              </span>
+              <span>
+                <b>{item.name || 'Unknown track'}</b>
+                <small>{item.artists}</small>
+              </span>
+              <span className="queue-duration">{formatTime((item.durationMs ?? 0) / 1000)}</span>
+            </button>
+            <RadioControl track={{ id: item.id, name: item.name, artists: item.artists, recording_mbid: item.recordingMbid ?? null }} />
+          </div>
         )) : <div className="empty">Your queue is empty</div>}
       </div>
     </aside>

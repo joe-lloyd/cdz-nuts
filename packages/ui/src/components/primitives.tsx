@@ -202,14 +202,17 @@ export function PlayControl({ track }: { track: Track }) {
   );
 }
 
-/** "More like this one." Only library tracks have a recording id to seed with. */
+/** Every song can seed radio; catalog metadata lets the server find its recording. */
 export function RadioControl({ track }: { track: Track }) {
-  if (!/^libtrack-/.test(String(track.id))) return null;
+  if (!track.id) return null;
+  const seed = new URLSearchParams({ artist: track.artists ?? track.artist_name ?? '', title: track.name });
+  if (track.recording_mbid) seed.set('mbid', track.recording_mbid);
   return (
-    <Link className="track-radio" to={`/radio/track/${encodeURIComponent(track.id)}`} aria-label={`Radio from ${track.name}`}>
+    <Link className="track-radio" to={`/radio/track/${encodeURIComponent(track.id)}?${seed}`} title={`Radio from ${track.name}`} aria-label={`Radio from ${track.name}`}>
       <svg viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="14" r="2.6" /><path d="M6.1 8.6a8.4 8.4 0 0 1 11.8 0M8.9 11.4a4.5 4.5 0 0 1 6.2 0" />
       </svg>
+      <span>Radio</span>
     </Link>
   );
 }

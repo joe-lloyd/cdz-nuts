@@ -626,6 +626,22 @@ number reaches zero that half can be deleted outright.
   with an owned one so audio starts instantly. A station made only of music we
   lack cannot play until a download finishes, which reads as "radio is broken".
 
+### A radio link on every song
+
+Song cards, track lists, the play queue, the now-playing bar and recommendation
+rows all link to song radio. Navigation happens immediately; the station page
+shows loading feedback while ListenBrainz builds its playlist (up to 40 songs).
+The playlist mixes local tracks with related songs from the API; the existing
+fetch-ahead flow makes new tracks playable as they arrive.
+
+`GET /api/radio?kind=track&from=<track-id>` accepts library, imported, Spotify
+catalog and setlist track IDs. Library identity is used directly when known;
+other songs use ListenBrainz's cached artist/title lookup before asking for
+similar recordings. Links also carry `title`, `artist` and, when present,
+`mbid`, so a recommendation can seed another station before it is cataloged.
+Catalog metadata takes precedence over the link's display metadata. If lookup
+fails, artist radio remains available and the page explains that fallback.
+
 ### Song radio vs artist radio
 
 They answer different questions and take different routes:
