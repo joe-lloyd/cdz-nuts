@@ -23,3 +23,10 @@ test('same-name recordings use duration and album hints, retaining every indexed
   assert.equal(matchInstalledTrack(index, 'Artist', 'Song', { durationMs: 500000 })?.id, 'live');
   assert.equal(matchInstalledTrack(index, 'Artist', 'Song', { durationMs: 900000 }), undefined);
 });
+
+
+test('conflicting known recording IDs cannot share an installed file', () => {
+  const index = indexInstalledTracks([track({ recording_mbid: 'studio-recording' })]);
+  assert.equal(matchInstalledTrack(index, 'Artist', 'Song', { recordingMbid: 'live-recording' }), undefined);
+  assert.equal(matchInstalledTrack(index, 'Artist', 'Song', { recordingMbid: 'STUDIO-RECORDING' })?.id, 'localtrack-1');
+});

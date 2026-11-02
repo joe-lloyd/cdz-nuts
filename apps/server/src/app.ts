@@ -1193,7 +1193,7 @@ function grabTrack(track: LikedTrackShape): keyof GrabCounts {
   const artist = String(track.artists ?? '').replace(/[\r\n]/g, ' ').trim();
   const title = String(track.name ?? '').replace(/[\r\n]/g, ' ').trim();
   if (!artist || !title) return 'skipped';
-  const last = upgrades.latest(artist, title);
+  const last = upgrades.latest(artist, title, { album: track.album ?? null, durationMs: track.duration_ms ?? null });
   if (last && (last.status === 'exhausted' || (last.status === 'cancelled' && !last.current_path))) return 'skipped';
   // Already on the full path: promoting it again would only touch a timestamp.
   if (last && last.auto_upgrade && last.status !== 'cancelled') return 'skipped';
@@ -1246,7 +1246,7 @@ type WantResult = {
  *   - on disk, lossy, no job -> queue the lossless hunt from the file
  */
 function wantTrack({ artist, title, album = null, durationMs = null, recordingMbid = null, releaseMbid = null }: WantInput): WantResult {
-  const existing = upgrades.findQueued(artist, title);
+  const existing = upgrades.findQueued(artist, title, { recordingMbid, album, durationMs });
   if (existing) {
     const { job, changed } = upgrades.promote(existing.id);
     return {
@@ -1258,14 +1258,14 @@ function wantTrack({ artist, title, album = null, durationMs = null, recordingMb
 
   // On disk already but never queued - the lossless hunt can start from
   // the file itself, no download needed.
-  const row = provenance.byMatchKey(provenanceKey(artist, title), { album, durationMs });
+  const row = provenance.byMatchKey(provenanceKey(artist, title), { album, durationMs, recordingMbid });
   if (row) {
     if (isLosslessCodec(row.codec)) return { outcome: 'already-lossless', detail: 'Already lossless in the library' };
     const job = upgrades.create({
       artist, title, album: row.album ?? album,
       durationMs: row.duration_ms ?? durationMs,
       currentPath: row.path, currentCodec: row.codec,
-      autoUpgrade: true,
+      autoUpgrade: true, recordingMbid, releaseMbid,
     });
     return { outcome: 'upgrading', job, detail: 'Hunting for a lossless copy' };
   }
@@ -3164,12 +3164,13 @@ async function route(req: Request, res: Reply): Promise<void> {
           const artist = String(raw.artist ?? '').replace(/[\r\n]/g, ' ').trim();
           const title = String(raw.title ?? '').replace(/[\r\n]/g, ' ').trim();
           if (!artist || !title) continue;
-          // Already on disk under this name — nothing to fetch.
-          if (provenance.byMatchKey(provenanceKey(artist, title))) {
+          const hint = { album: raw.album ? String(raw.album) : null, durationMs: Number(raw.durationMs) || null, recordingMbid: raw.recordingMbid ? String(raw.recordingMbid) : null };
+          // Already on disk for this recording — nothing to fetch.
+          if (provenance.byMatchKey(provenanceKey(artist, title), hint)) {
             skipped.push({ artist, title, reason: 'already in the library' });
             continue;
           }
-          const existing = upgrades.findQueued(artist, title);
+          const existing = upgrades.findQueued(artist, title, hint);
           if (existing) {
             skipped.push({ artist, title, reason: `already queued (#${existing.id})` });
             continue;
@@ -3237,8 +3238,9 @@ async function route(req: Request, res: Reply): Promise<void> {
           const row = provenance.byMatchKey(matchKey, {
             album, durationMs, recordingMbid,
           });
-          const local = matchInstalledTrack(imported, artist, title, { album, durationMs });
-          const job = upgrades.latest(artist, title) ?? upgrades.latest(artist.split(',')[0].trim(), title);
+          const local = matchInstalledTrack(imported, artist, title, { recordingMbid, album, durationMs });
+          const hint = { recordingMbid, album, durationMs };
+          const job = upgrades.latest(artist, title, hint) ?? upgrades.latest(artist.split(',')[0].trim(), title, hint);
           const progress = {
             key, status: job?.status ?? 'not-queued', phase: job?.phase ?? null,
             sourceAttempts: job?.source_attempts ?? 0,

@@ -123,3 +123,13 @@ test('same-title recordings keep independent keys and send their MBID and matchi
   expect(specs.find(t => t.recordingMbid)?.recordingMbid).toBe('studio-recording');
   expect(specs.find(t => t.album === 'Live')?.durationMs).toBe(500000);
 });
+
+
+test('manual download requests retain recording identity', async () => {
+  render(<QueryClientProvider client={client}><MemoryRouter><DownloadProgressProvider>
+    <PlayControl track={{ ...track, recording_mbid: 'recording-id', release_mbid: 'release-id' }} />
+  </DownloadProgressProvider></MemoryRouter></QueryClientProvider>);
+  fireEvent.click(screen.getByRole('button', { name: 'Get a copy of Droplet' }));
+  await waitFor(() => expect(requests.some(r => r.path === '/api/tracks/want')).toBe(true));
+  expect(requests.find(r => r.path === '/api/tracks/want')?.body).toMatchObject({ recordingMbid: 'recording-id', releaseMbid: 'release-id' });
+});

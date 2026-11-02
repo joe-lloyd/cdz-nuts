@@ -199,6 +199,18 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     const unscanned = new ProvenanceStore(path.join(dir, 'provenance.db'));
     assert.equal(unscanned.row('/data/library/music/_Singles/Dark Matter.opus'), null);
     unscanned.close();
+    const liveSpec = { ...spec, album: 'Live album', durationMs: 500000, recordingMbid: 'live-recording' };
+    const distinct = await post('/api/radio/resolve', { tracks: [liveSpec] });
+    const other = (distinct.results as { ready: boolean; status: string }[])[0];
+    assert.equal(other.ready, false);
+    assert.equal(other.status, 'not-queued', 'the studio recording job must not disable a distinct live recording');
+    const wantedLive = await post('/api/tracks/want', liveSpec);
+    const liveJob = wantedLive.job as { id: number; recording_mbid: string };
+    assert.notEqual(liveJob.id, claimed.id, 'requesting the live version creates its own job');
+    assert.equal(liveJob.recording_mbid, 'live-recording');
+    const repeatLive = await post('/api/tracks/want', liveSpec);
+    assert.equal((repeatLive.job as { id: number }).id, liveJob.id, 'matching repeat requests remain idempotent');
+
 
   } finally {
     const exited = once(child, 'exit'); child.kill(); await exited;

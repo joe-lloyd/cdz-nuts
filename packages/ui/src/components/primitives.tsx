@@ -182,6 +182,8 @@ export function PlayControl({ track }: { track: Track }) {
             title: track.name,
             album: track.album ?? null,
             durationMs: track.duration_ms ?? null,
+            recordingMbid: track.recording_mbid ?? null,
+            releaseMbid: track.release_mbid ?? null,
           })
             .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
             .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });

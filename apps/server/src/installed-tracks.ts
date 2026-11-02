@@ -1,4 +1,4 @@
-import { lengthsDisagree } from './jellyfin.ts';
+import { sameRecording, type RecordingHint } from './recording-identity.ts';
 import { albumNameKey, provenanceKey } from './provenance.ts';
 import type { LocalTrack } from './upgrades.ts';
 
@@ -17,11 +17,11 @@ export function indexInstalledTracks(tracks: LocalTrack[]): Map<string, LocalTra
 
 export function matchInstalledTrack(
   index: Map<string, LocalTrack[]>, artist: string, title: string,
-  hint: { album?: string | null; durationMs?: number | null } = {},
+  hint: RecordingHint = {},
 ): LocalTrack | undefined {
   const key = provenanceKey(artist, title);
   if (!key) return undefined;
-  const candidates = (index.get(key) ?? []).filter(track => !lengthsDisagree(track.duration_ms, hint.durationMs));
+  const candidates = (index.get(key) ?? []).filter(track => sameRecording({ recordingMbid: track.recording_mbid, album: track.album, durationMs: track.duration_ms }, hint));
   const album = albumNameKey(hint.album);
   return (album ? candidates.find(track => albumNameKey(track.album) === album) : undefined) ?? candidates[0];
 }
