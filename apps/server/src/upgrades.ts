@@ -315,6 +315,8 @@ export class UpgradeStore {
         ON album_wants(status, requested_at);
       CREATE INDEX IF NOT EXISTS idx_upgrade_due
         ON upgrade_queue(status, next_attempt_at);
+      CREATE INDEX IF NOT EXISTS idx_upgrade_artist_title
+        ON upgrade_queue(artist COLLATE NOCASE, title COLLATE NOCASE, id DESC);
       CREATE INDEX IF NOT EXISTS idx_upgrade_attempts_job
         ON upgrade_attempts(queue_id, id);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_upgrade_active_track

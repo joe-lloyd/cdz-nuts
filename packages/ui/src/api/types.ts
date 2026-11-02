@@ -9,6 +9,8 @@ export type SourceKey = 'youtube' | 'cd' | 'external' | 'unknown';
 
 /** Anything the badge helpers can decorate. */
 export interface Badged {
+  /** The installed file resolves for playback, even before provenance is scanned. */
+  playable?: boolean | null;
   quality?: QualityTier | null;
   quality_label?: string | null;
   source?: string | null;

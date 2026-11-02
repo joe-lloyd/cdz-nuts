@@ -32,9 +32,9 @@ export async function getFresh<T>(path: string): Promise<T> {
   return get<T>(path, { cache: 'no-store' });
 }
 
-export async function post<T>(path: string, body: unknown): Promise<T> {
+export async function post<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   return parse<T>(await fetch(path, {
-    method: 'POST',
+    ...init, method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
   }));

@@ -453,6 +453,10 @@ async function resolveMatch(track: TasteTrack) {
   // title - the same reasoning as intake files, applied to the whole library.
   const scanned = provenance.trackById(track.id);
   if (scanned) return jellyfin.matchPath(scanned.path);
+  // A freshly installed single may not be in the provenance scan yet. Its
+  // worker-owned exact path is already sufficient to resolve the Spotify row.
+  const imported = upgrades.localTracks().find(item => provenanceKey(item.artists, item.name) === provenanceKey(track.artists, track.name));
+  if (imported) return jellyfin.matchPath(imported.path);
   return jellyfin.match(track);
 }
 
@@ -3218,31 +3222,40 @@ async function route(req: Request, res: Reply): Promise<void> {
       try {
         const body = await readJson(req);
         const wanted = Array.isArray(body.tracks) ? body.tracks.slice(0, 40) : [];
-        const results = (wanted as Record<string, unknown>[]).map((raw) => {
+        const imported = upgrades.localTracks();
+        const results = await Promise.all((wanted as Record<string, unknown>[]).map(async (raw) => {
           const artist = String(raw.artist ?? '').trim();
           const title = String(raw.title ?? '').trim();
           const key = String(raw.recordingMbid ?? `${artist}|${title}`);
-          const row = provenance.byMatchKey(provenanceKey(artist, title));
-          if (row) {
-            return {
-              key,
-              ready: true,
-              track: radioTrack({
-                recordingMbid: String(raw.recordingMbid ?? ''),
-                title, artist, artistMbids: [], album: row.album,
-                releaseMbid: null, durationMs: row.duration_ms,
-                owned: true, trackId: libTrackId(row.path), path: row.path, row,
-              }),
-            };
-          }
-          const job = upgrades.findQueued(artist, title);
-          return {
-            key,
-            ready: false,
-            status: job ? job.status : 'not-queued',
+          const matchKey = provenanceKey(artist, title);
+          const row = provenance.byMatchKey(matchKey, {
+            album: raw.album ? String(raw.album) : null,
+            durationMs: Number(raw.durationMs) || null,
+          });
+          const local = imported.find(track => provenanceKey(track.artists, track.name) === matchKey);
+          const job = upgrades.latest(artist, title) ?? upgrades.latest(artist.split(',')[0].trim(), title);
+          const progress = {
+            key, status: job?.status ?? 'not-queued', phase: job?.phase ?? null,
+            sourceAttempts: job?.source_attempts ?? 0,
+            nextAttemptAt: job?.next_attempt_at ?? null,
             error: job?.last_error ?? null,
           };
-        });
+          const candidate = row ? radioTrack({
+            recordingMbid: String(raw.recordingMbid ?? ''),
+            title, artist, artistMbids: [], album: row.album,
+            releaseMbid: null, durationMs: row.duration_ms,
+            owned: true, trackId: libTrackId(row.path), path: row.path, row,
+          }) : local ? localAsTasteTrack(local) : null;
+          const file = row?.path ?? local?.path;
+          if (candidate && file) {
+            try {
+              const match = await jellyfin.matchPath(file);
+              if (match) return { ...progress, ready: true, stage: 'ready', track: { ...candidate, playable: true } };
+            } catch { /* File exists; keep showing indexing/offline progress until playback can resolve. */ }
+            return { ...progress, ready: false, stage: 'indexing' };
+          }
+          return { ...progress, ready: false, stage: job ? 'downloading' : 'not-requested' };
+        }));
         res.writeHead(200, { 'content-type': 'application/json' })
           .end(JSON.stringify({ results }));
       } catch (err) {

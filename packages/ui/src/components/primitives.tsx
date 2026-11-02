@@ -5,6 +5,7 @@ import { artUrl, day, genres as parseGenres, initial } from '../lib/format.ts';
 import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
 import { post } from '../api/client.ts';
 import { player, usePlayer } from '../player/usePlayer.ts';
+import { useDownloadProgress, downloadLabel } from './DownloadProgress.tsx';
 import { usePlayFromScope } from './PlayScope.tsx';
 
 /**
@@ -22,15 +23,8 @@ export function useNowPlaying(id: string): '' | ' playing' | ' paused' {
   return p.state === 'playing' ? ' playing' : ' paused';
 }
 
-/**
- * Do we actually hold this file?
- *
- * `quality` is attached by decorateBadges to any track-shaped row the
- * provenance scanner has seen, so its absence means there is no local file.
- * That is the same signal the fidelity badge uses, which is why a track
- * without one shows neither a badge nor a play button.
- */
-export const isHeld = (track: Badged): boolean => Boolean(track.quality);
+/** A scanner badge or a confirmed playable installation is sufficient. */
+export const isHeld = (track: Badged): boolean => Boolean(track.quality || track.playable);
 
 export const PLAY_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
@@ -167,15 +161,21 @@ export function PlayControl({ track }: { track: Track }) {
   const play = usePlayFromScope();
   const state = useNowPlaying(track.id);
   const [requested, setRequested] = useState(false);
+  const progress = useDownloadProgress(track, isHeld(track));
+  const label = downloadLabel(progress.status) ?? (requested ? 'Waiting for download…' : null);
+  const stopped = progress.status && ['exhausted', 'cancelled'].includes(progress.status.status);
+  const busy = !stopped && (requested || Boolean(label));
   if (!track.id) return null;
 
-  if (!isHeld(track)) {
+  if (!isHeld(track) && !progress.status?.ready) {
     return (
+      <span className="download-control">
       <button
-        className={`radio-get${requested ? ' queued' : ''}`} type="button" disabled={requested}
+        className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={requested ? 'Queued — it will appear once it lands' : 'Not in the library yet — get it'}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Not in the library yet — get it'}
         onClick={() => {
+          if (progress.failed) { progress.refresh?.(); return; }
           setRequested(true);
           post('/api/tracks/want', {
             artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
@@ -183,19 +183,21 @@ export function PlayControl({ track }: { track: Track }) {
             album: track.album ?? null,
             durationMs: track.duration_ms ?? null,
           })
-            .then((d) => player.notify((d as { detail?: string }).detail ?? 'Queued'))
+            .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
             .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
         }}
       >
         {DOWNLOAD_ICON}
       </button>
+      {progress.failed || label ? <span className="download-status" role="status">{progress.failed ? 'Progress unavailable · retry' : label}</span> : null}
+      </span>
     );
   }
 
   return (
     <button
       className={`track-play${state}`} type="button" data-track-id={track.id}
-      aria-label={`Play ${track.name}`} onClick={() => play(track)}
+      aria-label={`Play ${track.name}`} title={progress.status?.ready ? 'Ready to play' : undefined} onClick={() => play(track)}
     >
       {PLAY_ICON}
     </button>

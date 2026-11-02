@@ -11,6 +11,7 @@ import { Top } from '../views/Top.tsx';
 import { Cds } from '../views/Cds.tsx';
 import { Upgrades } from '../views/Upgrades.tsx';
 import { Settings } from '../views/Settings.tsx';
+import { DownloadProgressProvider } from '../components/DownloadProgress.tsx';
 import { Empty } from '../components/primitives.tsx';
 
 // Real paths, not hashes. That needs a catch-all on both consumers --
@@ -40,6 +41,7 @@ if (legacy) window.history.replaceState(null, '', legacy);
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
+      <DownloadProgressProvider>
       <BrowserRouter>
         <Routes>
           <Route element={<Shell />}>
@@ -65,6 +67,7 @@ export function App() {
           </Route>
         </Routes>
       </BrowserRouter>
+      </DownloadProgressProvider>
     </QueryClientProvider>
   );
 }

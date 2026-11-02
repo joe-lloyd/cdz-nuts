@@ -2787,3 +2787,6 @@ input[type="range"] {
 .track-radio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .song-actions { display: flex; align-items: center; gap: 2px; }
+.download-control { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100px; }
+.download-status { color: var(--ink-3); font-size: 10px; line-height: 1.3; text-align: center; }
+@media (max-width: 600px) { .download-control { max-width: 70px; } }
