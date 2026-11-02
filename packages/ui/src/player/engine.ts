@@ -231,6 +231,9 @@ class PlayerEngine {
       window.addEventListener('homearpa-audio-output', event => {
         this.outputVolume!.select((event as CustomEvent<unknown>).detail);
       });
+      window.addEventListener('homearpa-audio-output-change', event => {
+        this.outputVolume!.select((event as CustomEvent<unknown>).detail, true);
+      });
       void this.outputVolume.load();
     }
     this.installMediaSession();

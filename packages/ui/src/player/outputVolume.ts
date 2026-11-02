@@ -28,7 +28,7 @@ export class OutputVolume {
   }
 
   /** Called for both the initial native snapshot and subsequent Core Audio route events. */
-  select(value: unknown) {
+  select(value: unknown, routeNotification = false) {
     ++this.revision;
     if (value === null) {
       if (this.output) this.changed('an unavailable output');
@@ -45,7 +45,7 @@ export class OutputVolume {
     const saved = this.profiles[next.id];
     // Only migrate the old global level to positively identified built-in speakers.
     const gain = saved ?? (next.builtInSpeakers === true ? this.legacyGain : Math.min(this.legacyGain, QUIET_GAIN));
-    if (previous) this.changed(next.name);
+    if (previous || routeNotification) this.changed(next.name);
     this.apply(gain);
     this.remember(gain);
   }

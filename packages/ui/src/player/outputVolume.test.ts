@@ -81,3 +81,17 @@ test('speaker migration also works when headphones were connected at startup', (
   profiles.select(speakers);
   expect(apply).toHaveBeenLastCalledWith(0.52);
 });
+
+
+test('a route notification pauses before restoring the first identified output', () => {
+  localStorage.setItem('music-output-volumes-v1', JSON.stringify({ [headphones.id]: 0.4 }));
+  const calls: string[] = [];
+  const profiles = new OutputVolume(gain => calls.push(`gain:${gain}`), name => calls.push(`pause:${name}`), 1);
+  profiles.select(null);
+  calls.length = 0;
+  profiles.select(headphones, true);
+  expect(calls).toEqual(['pause:Headphones', 'gain:0.4']);
+  calls.length = 0;
+  profiles.select(headphones, true);
+  expect(calls).toEqual([]);
+});

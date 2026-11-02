@@ -4,6 +4,7 @@
 mod mac {
     use std::ffi::{c_char, c_void, CStr};
     use std::sync::{mpsc, OnceLock};
+    use std::time::Duration;
     use tauri::Manager;
 
     #[repr(C)]
@@ -182,25 +183,45 @@ mod mac {
             return;
         }
         std::thread::spawn(move || {
-            let Some(_default) = Watch::new(1, DEFAULT) else {
-                log::warn!("Could not watch the default audio output");
-                return;
-            };
+            let mut default_watch = Watch::new(1, DEFAULT);
+            if default_watch.is_none() {
+                log::warn!(
+                    "Could not watch the default audio output; polling until registration succeeds"
+                );
+            }
             let mut watched = None;
-            let mut _source = None;
+            let mut source_watch = None;
+            let mut previous = None;
             loop {
+                if default_watch.is_none() {
+                    default_watch = Watch::new(1, DEFAULT);
+                }
                 let next = device();
-                if next != watched {
-                    _source = next.and_then(|id| Watch::new(id, SOURCE));
+                if next != watched || source_watch.is_none() {
+                    source_watch = next.and_then(|id| Watch::new(id, SOURCE));
                     watched = next;
                 }
                 let output = current();
-                if let Some(window) = app.get_webview_window("main") {
-                    let detail = serde_json::to_string(&output).unwrap_or_else(|_| "null".into());
-                    let _ = window.eval(format!("window.dispatchEvent(new CustomEvent('homearpa-audio-output',{{detail:{detail}}}))"));
+                // Polling covers failed registrations. Emit only changed snapshots,
+                // retaining null as an initial snapshot distinct from no snapshot.
+                if previous.as_ref() != Some(&output) {
+                    if let Some(window) = app.get_webview_window("main") {
+                        let detail =
+                            serde_json::to_string(&output).unwrap_or_else(|_| "null".into());
+                        let event = if previous.is_none() {
+                            "homearpa-audio-output"
+                        } else {
+                            "homearpa-audio-output-change"
+                        };
+                        let _ = window.eval(format!(
+                            "window.dispatchEvent(new CustomEvent('{event}',{{detail:{detail}}}))"
+                        ));
+                        previous = Some(output);
+                    }
                 }
-                if rx.recv().is_err() {
-                    break;
+                match rx.recv_timeout(Duration::from_secs(1)) {
+                    Ok(()) | Err(mpsc::RecvTimeoutError::Timeout) => {}
+                    Err(mpsc::RecvTimeoutError::Disconnected) => break,
                 }
             }
         });
