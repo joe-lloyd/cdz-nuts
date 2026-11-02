@@ -217,9 +217,11 @@ class PlayerEngine {
         gain => { this.audioA.volume = gain; this.audioB.volume = gain; this.emit(); },
         name => {
           const playing = !this.audio.paused;
+          const loading = this.snapshot.state === 'loading';
           this.pause();
           this.audioA.pause();
           this.audioB.pause();
+          if (loading) this.patch({ state: 'paused', overline: 'Output changed', byline: 'Press play to continue', canPlay: true });
           if (playing) this.notify(`Audio output changed to ${name}. Press play to continue.`);
         },
         this.audio.volume,
@@ -294,7 +296,8 @@ class PlayerEngine {
         ? { id: this.current.id, pos: Math.floor(this.audio.currentTime) }
         : this.pendingResume;
       localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        queue: this.queue, queueIndex: this.queueIndex, volume: this.audio.volume,
+        queue: this.queue, queueIndex: this.queueIndex,
+        volume: this.outputVolume?.legacyGain ?? this.audio.volume,
         resume, continuationAlbums: this.continuationAlbums,
         continuationEnabled: this.continuationEnabled,
       }));

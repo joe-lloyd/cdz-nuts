@@ -113,10 +113,8 @@ mod mac {
         // A built-in analogue jack can share a device UID with the speakers.
         // Include its data source so plugging headphones in gets a distinct profile.
         let built_in = transport == Some(u32::from_be_bytes(*b"bltn"));
-        let speakers = built_in
-            && (source
-                .map(|s| s == u32::from_be_bytes(*b"ispk"))
-                .unwrap_or_else(|| name.to_lowercase().contains("speakers")));
+        // An unreadable data source must never promote headphones to speaker volume.
+        let speakers = built_in && source == Some(u32::from_be_bytes(*b"ispk"));
         Some(serde_json::json!({
             "id": format!("{uid}:{}", source.map(|s| s.to_string()).unwrap_or_default()),
             "name": name,

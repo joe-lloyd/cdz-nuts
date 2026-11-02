@@ -4,6 +4,9 @@ class FakeAudio {
   static instances: FakeAudio[] = [];
   preload = ''; volume = 1; paused = true; duration = 0; currentTime = 0; src = '';
   pause = vi.fn(() => { this.paused = true; });
+  play = vi.fn(async () => { this.paused = false; });
+  load() {}
+  removeAttribute(name: string) { if (name === 'src') this.src = ''; }
   constructor() { FakeAudio.instances.push(this); }
   addEventListener() {}
   removeEventListener() {}
@@ -36,6 +39,26 @@ test('Mac output changes pause playback and update both sides of a gapless swap'
     expect(active.volume).toBeCloseTo(0.49);
     expect(standby.volume).toBe(active.volume);
     expect(player.getSnapshot().volumePosition).toBe(0.7);
+
+    // An output change while resolving a track must leave a usable Play button.
+    let finishResolve!: (response: Response) => void;
+    const fetchMock = vi.fn(() => new Promise<Response>(resolve => { finishResolve = resolve; }));
+    vi.stubGlobal('fetch', fetchMock);
+    player.setQueue([{ id: 'test-track', name: 'Test track', artists: 'Test artist', durationMs: 1000 }], 'test-track', false);
+    const pending = player.playAt(0);
+    expect(player.getSnapshot().state).toBe('loading');
+    window.dispatchEvent(new CustomEvent('homearpa-audio-output', {
+      detail: { id: 'headphones', name: 'Headphones', builtInSpeakers: false },
+    }));
+    expect(player.getSnapshot().state).toBe('paused');
+    expect(player.getSnapshot().canPlay).toBe(true);
+    finishResolve(new Response(JSON.stringify({ available: false })));
+    await pending;
+    expect(player.getSnapshot().state).toBe('paused');
+    player.toggle();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    finishResolve(new Response(JSON.stringify({ available: false })));
+    await Promise.resolve();
   } finally {
     delete host.__homearpaOutputVolumeEnabled;
     vi.unstubAllGlobals();

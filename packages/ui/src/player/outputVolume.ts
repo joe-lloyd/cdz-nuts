@@ -14,7 +14,7 @@ export class OutputVolume {
   constructor(
     private readonly apply: (gain: number) => void,
     private readonly changed: (name: string) => void,
-    private readonly legacyGain: number,
+    readonly legacyGain: number,
   ) {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}');
