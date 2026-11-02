@@ -106,3 +106,48 @@ test.each(['player', 'media control'])('late errors stay paused until an explici
   expect(active.error).toBeNull();
   expect(active.currentTime).toBe(60);
 });
+
+test.each(['reconnect', 'status'])('an output-change pause survives pending %s requests', async phase => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ available: false, detail: 'Library offline' })));
+  player.setQueue([{ id: 'offline', name: 'Offline', artists: 'Artist', durationMs: 210000 }], 'offline', false);
+  await player.playAt(0);
+  expect(player.getSnapshot().state).toBe('error');
+  let finish!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn((url: string) => {
+    if (url === (phase === 'reconnect' ? '/api/desktop/reconnect' : '/api/player/status?refresh=1')) {
+      return new Promise<Response>(resolve => { finish = resolve; });
+    }
+    return Promise.resolve(Response.json(url.includes('/status') ? { state: 'ready' } : {}));
+  }));
+  const reconnecting = player.reconnect();
+  await vi.advanceTimersByTimeAsync(0);
+  window.dispatchEvent(new CustomEvent('homearpa-audio-output', {
+    detail: { id: `reconnect-${phase}`, name: 'Headphones', builtInSpeakers: false },
+  }));
+  const playAt = vi.spyOn(player, 'playAt');
+  try {
+    finish(Response.json(phase === 'status' ? { state: 'ready' } : {}));
+    await reconnecting;
+    expect(playAt).not.toHaveBeenCalled();
+    expect(FakeAudio.instances.every(audio => audio.paused)).toBe(true);
+  } finally { playAt.mockRestore(); }
+});
+
+test('a pending reconnect does not restart a different playback session', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ available: false, detail: 'Offline' })));
+  player.setQueue([{ id: 'old', name: 'Old', artists: 'Artist', durationMs: 210000 }], 'old', false);
+  await player.playAt(0);
+  let finish!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn((url: string) => url === '/api/desktop/reconnect'
+    ? new Promise<Response>(resolve => { finish = resolve; })
+    : Promise.resolve(Response.json(url.includes('/status') ? { state: 'ready' } : { available: false, detail: 'Offline' }))));
+  const reconnecting = player.reconnect();
+  player.setQueue([{ id: 'new', name: 'New', artists: 'Artist', durationMs: 210000 }], 'new', false);
+  await player.playAt(0);
+  expect(player.getSnapshot().state).toBe('error');
+  const playAt = vi.spyOn(player, 'playAt');
+  try {
+    finish(Response.json({})); await reconnecting;
+    expect(playAt).not.toHaveBeenCalled();
+  } finally { playAt.mockRestore(); }
+});

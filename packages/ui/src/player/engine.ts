@@ -866,6 +866,7 @@ class PlayerEngine {
   }
 
   async reconnect(): Promise<void> {
+    const playbackId = this.playbackId;
     this.notify('Reconnecting to the library…');
     try {
       await post('/api/desktop/reconnect', {});
@@ -875,7 +876,8 @@ class PlayerEngine {
         return;
       }
       this.notify('Connected to the library');
-      if (this.queueIndex >= 0 && this.snapshot.state === 'error') {
+      if (this.queueIndex >= 0 && this.snapshot.state === 'error'
+        && !this.intentionallyPaused && this.playbackId === playbackId) {
         const item = this.queue[this.queueIndex]!;
         const pos = this.audio.currentTime || this.resumeFrom;
         if (pos > 0) this.pendingResume = { id: item.id, pos };
