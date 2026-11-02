@@ -178,6 +178,8 @@ export class JellyfinBridge {
   private itemCount = 0;
   private indexedAt = 0;
   private lastDownloadScanAt = -Infinity;
+  private downloadScanWindowAt = -Infinity;
+  private downloadScanPaths = new Set<string>();
   private downloadScanPromise: Promise<void> | null = null;
   private lastDownloadIndexAt = -Infinity;
   // Set when a Jellyfin scan is asked for, so the next lookup rebuilds in the
@@ -380,11 +382,22 @@ export class JellyfinBridge {
     return this.settled(this.matchPathLoaded(workerPath), () => this.matchPathLoaded(workerPath));
   }
 
-  private async requestDownloadScan(): Promise<void> {
-    if (this.downloadScanPromise) return this.downloadScanPromise;
+  private async requestDownloadScan(workerPath: string): Promise<void> {
+    if (this.downloadScanPromise) {
+      this.downloadScanPaths.add(workerPath);
+      return this.downloadScanPromise;
+    }
     const now = Date.now();
-    if (now - this.lastDownloadScanAt < 5 * 60_000) return;
-    // Share both the throttle and the request across concurrent cold lookups.
+    if (now - this.downloadScanWindowAt >= 5 * 60_000) {
+      this.downloadScanWindowAt = now;
+      this.downloadScanPaths.clear();
+    }
+    // A later arrival must not inherit the previous file's five-minute wait.
+    // Coalesce new paths with a short cooldown; repeat misses keep the long
+    // retry interval, and remembered paths expire even during steady intake.
+    const cooldown = this.downloadScanPaths.has(workerPath) ? 5 * 60_000 : 30_000;
+    if (now - this.lastDownloadScanAt < cooldown) return;
+    this.downloadScanPaths.add(workerPath);
     this.lastDownloadScanAt = now;
     this.downloadScanPromise = this.refreshLibrary(true)
       .catch((err) => { console.error('Jellyfin download discovery:', (err as Error).message); })
@@ -396,12 +409,12 @@ export class JellyfinBridge {
   async preparePath(workerPath: string): Promise<PlayerMatch | null> {
     // Request discovery first on a cold start. Its initial rebuild is already
     // an index attempt, so a miss must not immediately fetch the index again.
-    if (!this.indexedAt) await this.requestDownloadScan();
+    if (!this.indexedAt) await this.requestDownloadScan(workerPath);
     const before = this.indexedAt;
     const found = await this.matchPath(workerPath);
     if (this.indexedAt !== before) this.lastDownloadIndexAt = Date.now();
     if (found) return found;
-    await this.requestDownloadScan();
+    await this.requestDownloadScan(workerPath);
     const now = Date.now();
     if (now - this.lastDownloadIndexAt >= 30_000) {
       // The scan is asynchronous. Retry its results without holding a fresh

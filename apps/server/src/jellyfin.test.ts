@@ -366,3 +366,42 @@ test('download discovery never falls back to a whole-server scan without a match
     await new Promise<void>(resolve => mock.close(() => resolve()));
   }
 });
+
+test('a new download after an earlier scan requests shared discovery without waiting five minutes', async () => {
+  let now = 1000000;
+  const realNow = Date.now;
+  let scans = 0, indexRequests = 0;
+  const mock = http.createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+      { ItemId: 'music-id', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+    ]));
+    if (req.url?.startsWith('/Items/music-id/Refresh')) { scans++; return res.writeHead(204).end(); }
+    indexRequests++;
+    const items = [indexed('first', track.name)];
+    if (scans >= 2) items.push(indexed('second', 'Second Download'));
+    res.end(JSON.stringify({ Items: items, TotalRecordCount: items.length }));
+  });
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const address = mock.address(); assert(address && typeof address === 'object');
+  process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`; process.env.JELLYFIN_API_KEY = 'fixture-key';
+  Date.now = () => now;
+  try {
+    const bridge = new JellyfinBridge();
+    assert.equal((await bridge.preparePath('/data/library/music/Local Signals/first.flac'))?.itemId, 'first');
+    assert.equal(scans, 1); assert.equal(indexRequests, 1);
+    const second = '/data/library/music/Local Signals/second.flac';
+    now += 10000;
+    assert.equal(await bridge.preparePath(second), null);
+    assert.equal(scans, 1, 'new arrivals inside the cooldown do not cause a scan burst');
+    now += 20001;
+    const results = await Promise.all(Array.from({ length: 40 }, () => bridge.preparePath(second)));
+    assert.ok(results.every(result => result?.itemId === 'second'));
+    assert.equal(scans, 2, 'a post-scan download can request discovery before five minutes');
+    assert.equal(indexRequests, 2, 'the later batch shares one index rebuild');
+  } finally {
+    Date.now = realNow;
+    delete process.env.JELLYFIN_URL; delete process.env.JELLYFIN_API_KEY;
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+  }
+});
