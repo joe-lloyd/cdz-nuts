@@ -225,7 +225,7 @@ export interface RadioStation {
   owned?: number;
   fresh?: number;
   error?: string;
-  source?: 'similar' | 'similar+artist' | 'artist';
+  source?: 'similar' | 'similar+artist' | 'lb-radio' | 'none';
   seedTrack?: { title: string; artist: string } | null;
 }
 

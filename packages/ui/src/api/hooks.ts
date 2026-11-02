@@ -107,13 +107,14 @@ export const useTopTracks = (range: string) =>
 export const useWrapped = (from: string, to: string) =>
   query<Wrapped>(['wrapped', from, to], `/api/wrapped${qs({ from, to })}`);
 
-export const useStation = (kind: string | undefined, value: string | undefined) =>
+export const useStation = (kind: string | undefined, value: string | undefined,
+  seed?: { artist: string; title: string; mbid: string }) =>
   useQuery({
-    queryKey: ['radio', kind, value],
+    queryKey: ['radio', kind, value, seed?.artist, seed?.title, seed?.mbid],
     queryFn: () => {
       // A song station is seeded from the track itself; everything else is a name.
       const params = kind === 'track'
-        ? qs({ kind: 'track', from: value, limit: 40 })
+        ? qs({ kind: 'track', from: value, artist: seed?.artist, title: seed?.title, mbid: seed?.mbid, limit: 40 })
         : qs({ kind, value, limit: 40 });
       return get<RadioStation>(`/api/radio${params}`);
     },

@@ -503,7 +503,7 @@ class PlayerEngine {
       artUrl: artUrlFor(albumId),
       artFallbackUrl: track.image_url ?? '',
       initial: (track.name || 'MT').slice(0, 1).toUpperCase(),
-      radioSeedId: /^libtrack-/.test(track.id) ? track.id : null,
+      radioSeedId: track.id || null,
       canPlay: true,
       canScrub: true,
       canReconnect: false,

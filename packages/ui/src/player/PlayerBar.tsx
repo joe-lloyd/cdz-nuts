@@ -5,6 +5,7 @@ import { formatTime } from '../lib/format.ts';
 import { LyricsPanel } from './LyricsPanel.tsx';
 import { QueuePanel } from './QueuePanel.tsx';
 import { player, usePlayer } from './usePlayer.ts';
+import { RadioControl } from '../components/primitives.tsx';
 import { Slider } from './Slider.tsx';
 
 /**
@@ -51,20 +52,7 @@ export function PlayerBar() {
               ) : null}
             </span>
           </div>
-          {/* The most natural moment to want more like this is while it plays.
-              Only a library track has a recording id to seed a station with. */}
-          {p.radioSeedId ? (
-            <Link
-              className="player-radio"
-              to={`/radio/track/${encodeURIComponent(p.radioSeedId)}`}
-              aria-label="Radio from this song"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <circle cx="12" cy="14" r="2.6" />
-                <path d="M6.1 8.6a8.4 8.4 0 0 1 11.8 0M8.9 11.4a4.5 4.5 0 0 1 6.2 0" />
-              </svg>
-            </Link>
-          ) : null}
+          {p.radioSeedId ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: p.byline }} /> : null}
         </div>
 
         <div className="player-transport">
