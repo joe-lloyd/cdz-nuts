@@ -17,15 +17,19 @@ export async function resolveSongRadioSeed(
   const known = find(request.from);
   const title = known?.title || request.title?.trim() || '';
   const artist = known?.artist || request.artist?.trim() || '';
-  let recordingMbid = request.recordingMbid || known?.recordingMbid || null;
+  let recordingMbid = known?.recordingMbid || request.recordingMbid || null;
   let artistMbid = known?.artistMbid || null;
   if (!title || (!artist && !recordingMbid)) return null;
   if (!recordingMbid && artist) {
-    try {
-      const found = await lookup(primaryArtist(artist), title);
-      recordingMbid = found?.recordingMbid ?? null;
-      artistMbid ||= found?.artistMbids[0] ?? null;
-    } catch { /* Artist radio still works if recording lookup is unavailable. */ }
+    for (const credit of new Set([artist, primaryArtist(artist)])) {
+      try {
+        const found = await lookup(credit, title);
+        if (!found) continue;
+        recordingMbid = found.recordingMbid;
+        artistMbid ||= found.artistMbids[0] ?? null;
+        break;
+      } catch { /* Try the lead credit, then keep artist radio as the fallback. */ }
+    }
   }
   return { title, artist, recordingMbid, artistMbid };
 }

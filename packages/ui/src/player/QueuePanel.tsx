@@ -28,7 +28,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose: () => vo
               </span>
               <span className="queue-duration">{formatTime((item.durationMs ?? 0) / 1000)}</span>
             </button>
-            <RadioControl track={{ id: item.id, name: item.name, artists: item.artists }} />
+            <RadioControl track={{ id: item.id, name: item.name, artists: item.artists, recording_mbid: item.recordingMbid ?? null }} />
           </div>
         )) : <div className="empty">Your queue is empty</div>}
       </div>

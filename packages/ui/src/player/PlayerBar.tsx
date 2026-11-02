@@ -19,6 +19,7 @@ export function PlayerBar() {
   const p = usePlayer();
   const [panel, setPanel] = useState<'queue' | 'lyrics' | null>(null);
 
+  const current = p.queue[p.queueIndex];
   const artHref = p.albumId ? `/album/${encodeURIComponent(p.albumId)}` : null;
   // Null whenever the credit resolves to nobody we hold a page for -- a
   // library-only artist is still named, just not linked.
@@ -52,7 +53,8 @@ export function PlayerBar() {
               ) : null}
             </span>
           </div>
-          {p.radioSeedId ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: p.byline }} /> : null}
+          {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
+            ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
         </div>
 
         <div className="player-transport">

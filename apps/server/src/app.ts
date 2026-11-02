@@ -2242,7 +2242,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       if (seed) {
         seedTrack = { title: seed.title, artist: seed.artist };
         recordingMbid = seed.recordingMbid || undefined;
-        value = value || seed.artistMbid || primaryArtist(seed.artist);
+        value = value || seed.artistMbid || seed.artist;
       }
     }
     if (kind === 'stats' || kind === 'recs') value = value || listenbrainz.user;

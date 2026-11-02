@@ -46,3 +46,14 @@ test.each(['spotify-song', 'setlist:100%/song'])('song radio navigates immediate
   expect(screen.getByText('Related from the API')).toBeInTheDocument();
   expect(screen.getByRole('link', { name: 'Radio from Related from the API' })).toHaveAttribute('href', expect.stringContaining('mbid=recording-id'));
 });
+
+test.each([{ error: 'Temporary service failure', tracks: [] }, { tracks: [] }])('empty station responses offer retry: %j', async response => {
+  const fetchMock = vi.fn(async () => Response.json(response));
+  vi.stubGlobal('fetch', fetchMock);
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/radio/artist/Artist']}><Routes>
+    <Route path="/radio/:kind/*" element={<Station />} />
+  </Routes></MemoryRouter></QueryClientProvider>);
+  await userEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+});

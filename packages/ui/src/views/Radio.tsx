@@ -156,6 +156,7 @@ export function Station() {
         // carries on into tracks it just went and got.
         if (arrived.length) player.append(arrived.map(toQueueItem));
       } catch { /* the next tick tries again */ }
+      if (!live) return;
       topUp();
     };
 
@@ -172,7 +173,8 @@ export function Station() {
     const why = data?.error === 'ListenBrainz is not configured'
       ? 'Radio is off — no ListenBrainz token is configured.'
       : `Nothing came back for this station${data?.error ? ` (${data.error})` : ''}.`;
-    return <Empty>{why} <Link to="/radio">Pick another</Link></Empty>;
+    return <Empty>{why} {data?.error !== 'ListenBrainz is not configured'
+      ? <button type="button" onClick={() => void refetch()}>Try again</button> : null} <Link to="/radio">Pick another</Link></Empty>;
   }
 
   const seed = data!.seedTrack;

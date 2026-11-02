@@ -66,3 +66,18 @@ test('both links can be present at once without merging into one', () => {
   expect(screen.getByRole('link', { name: 'Steven Wilson' })).toHaveAttribute('href', '/artist/A1');
   expect(screen.getByRole('link', { name: 'Insurgentes' })).toHaveAttribute('href', '/album/libalbum-1');
 });
+
+test('radio uses the current queue credit while the player displays reconnection status', () => {
+  draw({ currentId: 'song', radioSeedId: 'song', title: 'A Song', byline: 'Reconnecting…',
+    queue: [{ id: 'song', name: 'A Song', artists: 'Actual Artist', durationMs: 1000, recordingMbid: 'recording' }] });
+  const href = screen.getByRole('link', { name: 'Radio from A Song' }).getAttribute('href')!;
+  const params = new URL(href, 'https://music.home.arpa').searchParams;
+  expect(params.get('artist')).toBe('Actual Artist');
+  expect(params.get('mbid')).toBe('recording');
+});
+
+test('radio is hidden while the displayed song and resolved recording differ', () => {
+  draw({ currentId: 'next', radioSeedId: 'previous', title: 'Next Song',
+    queue: [{ id: 'next', name: 'Next Song', artists: 'Artist', durationMs: 1000 }] });
+  expect(screen.queryByRole('link', { name: /Radio from/ })).toBeNull();
+});

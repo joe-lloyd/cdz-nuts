@@ -46,3 +46,34 @@ test('lookup misses and outages preserve an artist fallback', async () => {
 test('unknown songs without usable metadata do not invent a seed', async () => {
   assert.equal(await resolveSongRadioSeed({ from: 'unknown' }, () => null, async () => null), null);
 });
+
+test('known recording identity wins over conflicting URL metadata', async () => {
+  const seed = await resolveSongRadioSeed({ from: 'held', recordingMbid: 'wrong' }, () => ({
+    title: 'Song', artist: 'Artist', recordingMbid: mbid,
+  }), async () => { throw new Error('must not look up a known recording'); });
+  assert.equal(seed?.recordingMbid, mbid);
+});
+
+test('full artist credit is tried first, including band names containing an ampersand', async () => {
+  const asked: string[] = [];
+  const seed = await resolveSongRadioSeed({ from: 'song' }, () => ({
+    title: 'The Sound of Silence', artist: 'Simon & Garfunkel',
+  }), async artist => { asked.push(artist); return { recordingMbid: mbid, artistMbids: [] }; });
+  assert.deepEqual(asked, ['Simon & Garfunkel']);
+  assert.equal(seed?.recordingMbid, mbid);
+});
+
+test('a missing full credit or lookup failure can still use the lead artist', async () => {
+  for (const fail of [false, true]) {
+    const asked: string[] = [];
+    const seed = await resolveSongRadioSeed({ from: 'song' }, () => ({
+      title: 'Song', artist: 'Artist & Guest',
+    }), async artist => {
+      asked.push(artist);
+      if (artist !== 'Artist') { if (fail) throw new Error('offline'); return null; }
+      return { recordingMbid: mbid, artistMbids: [] };
+    });
+    assert.deepEqual(asked, ['Artist & Guest', 'Artist']);
+    assert.equal(seed?.recordingMbid, mbid);
+  }
+});

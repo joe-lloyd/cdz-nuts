@@ -37,6 +37,7 @@ export const toQueueItem = (t: Track): QueueItem => ({
   durationMs: Number(t.duration_ms ?? 0),
   albumId: t.album_id ?? '',
   imageUrl: t.image_url ?? '',
+  recordingMbid: t.recording_mbid ?? null,
 });
 
 /** Start playback from a track, queueing the whole scope it sits in. */
