@@ -3256,7 +3256,9 @@ async function route(req: Request, res: Reply): Promise<void> {
           const file = row?.path ?? local?.path;
           if (candidate && file) {
             try {
-              const match = await jellyfin.matchPath(file);
+              const match = local?.path === file
+                ? await jellyfin.preparePath(file)
+                : await jellyfin.matchPath(file);
               if (match) return { ...progress, ready: true, stage: 'ready', track: { ...candidate, playable: true } };
             } catch { /* File exists; keep showing indexing/offline progress until playback can resolve. */ }
             return { ...progress, ready: false, stage: 'indexing' };
