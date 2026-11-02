@@ -177,15 +177,14 @@ export class JellyfinBridge {
   private relPathsAt = 0;
   private itemCount = 0;
   private indexedAt = 0;
-  private lastDownloadScanAt = -Infinity;
   private lastDownloadScanAttemptAt = -Infinity;
-  private downloadScanWindowAt = -Infinity;
-  private downloadScanPaths = new Set<string>();
+  private downloadScanPaths = new Map<string, number>();
   private downloadScanPromise: Promise<void> | null = null;
   private lastDownloadIndexAt = -Infinity;
   // Set when a Jellyfin scan is asked for, so the next lookup rebuilds in the
   // background instead of throwing away an index it can still answer from.
   private stale = false;
+  private indexInvalidationVersion = 0;
   // undefined = not looked up yet, null = this server has no music library.
   private musicLibrary: string | null | undefined = undefined;
   private refreshPromise: Promise<void> | null = null;
@@ -252,6 +251,7 @@ export class JellyfinBridge {
   }
 
   private async rebuild(): Promise<void> {
+    const invalidationVersion = this.indexInvalidationVersion;
     const params = new URLSearchParams({
       recursive: 'true',
       includeItemTypes: 'Audio',
@@ -280,7 +280,7 @@ export class JellyfinBridge {
     this.byPath = nextPaths;
     this.itemCount = data.TotalRecordCount ?? data.Items?.length ?? 0;
     this.indexedAt = Date.now();
-    this.stale = false;
+    this.stale = invalidationVersion !== this.indexInvalidationVersion;
   }
 
   /**
@@ -386,21 +386,19 @@ export class JellyfinBridge {
   private async requestDownloadScan(workerPath: string): Promise<void> {
     if (this.downloadScanPromise) return this.downloadScanPromise;
     const now = Date.now();
-    if (now - this.downloadScanWindowAt >= 5 * 60_000) {
-      this.downloadScanWindowAt = now;
-      this.downloadScanPaths.clear();
+    for (const [file, checkedAt] of this.downloadScanPaths) {
+      if (now - checkedAt >= 5 * 60_000) this.downloadScanPaths.delete(file);
     }
     // A later arrival must not inherit the previous file's five-minute wait.
     // Coalesce new paths with a short cooldown; repeat misses keep the long
     // retry interval, and remembered paths expire even during steady intake.
     if (now - this.lastDownloadScanAttemptAt < 30_000) return;
-    if (this.downloadScanPaths.has(workerPath) && now - this.lastDownloadScanAt < 5 * 60_000) return;
+    if (this.downloadScanPaths.has(workerPath)) return;
     this.lastDownloadScanAttemptAt = now;
-    this.downloadScanPromise = this.refreshLibrary(true)
+    this.downloadScanPromise = this.refreshLibrary(true, workerPath)
       .then((issued) => {
         if (!issued) return;
-        this.downloadScanPaths.add(workerPath);
-        this.lastDownloadScanAt = Date.now();
+        this.downloadScanPaths.set(workerPath, Date.now());
       })
       .catch((err) => { console.error('Jellyfin download discovery:', (err as Error).message); })
       .finally(() => { this.downloadScanPromise = null; });
@@ -543,19 +541,27 @@ export class JellyfinBridge {
    * Discovered rather than configured, and remembered: it is the music
    * collection whose folder is the mount we play from.
    */
-  private async musicLibraryId(): Promise<string | null> {
-    if (this.musicLibrary !== undefined) return this.musicLibrary;
+  private async musicLibraryId(requiredPath?: string): Promise<string | null> {
+    if (!requiredPath && this.musicLibrary !== undefined) return this.musicLibrary;
     try {
       const response = await this.request('/Library/VirtualFolders');
       const folders = await response.json() as VirtualFolder[];
+      if (requiredPath) {
+        const target = this.asJellyfinPath(requiredPath).replace(/\/+$/, '');
+        if (!target) return null;
+        const candidates = folders.filter(folder => folder.CollectionType === 'music').flatMap(folder =>
+          (folder.Locations ?? []).map(location => ({ id: folder.ItemId, location: location.replace(/\/+$/, '') })));
+        return candidates.filter(({ location }) => location && (target === location || target.startsWith(location + '/')))
+          .sort((a, b) => b.location.length - a.location.length)[0]?.id ?? null;
+      }
       const music = folders.find((folder) => folder.CollectionType === 'music'
         && (folder.Locations ?? []).some((at) => at.startsWith(JELLYFIN_LIBRARY_PREFIX)));
       this.musicLibrary = music?.ItemId ?? null;
+      return this.musicLibrary;
     } catch {
-      this.musicLibrary = undefined;   // transient: worth asking again
+      if (!requiredPath) this.musicLibrary = undefined;
       return null;
     }
-    return this.musicLibrary;
   }
 
   /**
@@ -576,6 +582,7 @@ export class JellyfinBridge {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ Updates: updates }),
     });
+    this.indexInvalidationVersion++;
     this.stale = true;
   }
 
@@ -602,8 +609,8 @@ export class JellyfinBridge {
    * Prefer mediaChanged() when the caller knows which paths moved; this is
    * for when it does not.
    */
-  async refreshLibrary(musicOnly = false): Promise<boolean> {
-    const id = await this.musicLibraryId();
+  async refreshLibrary(musicOnly = false, workerPath?: string): Promise<boolean> {
+    const id = await this.musicLibraryId(musicOnly ? workerPath : undefined);
     if (!id && musicOnly) {
       this.musicLibrary = undefined; // retry discovery if configuration changes
       return false;
@@ -617,6 +624,7 @@ export class JellyfinBridge {
     // play rebuilt from cold - seventeen seconds - and it did that while the
     // scan we just asked for had Jellyfin at its busiest. Everything the old
     // index knew about is still exactly where it was.
+    this.indexInvalidationVersion++;
     this.stale = true;
     return true;
   }

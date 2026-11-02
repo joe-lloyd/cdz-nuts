@@ -484,3 +484,93 @@ test('failed or unavailable discovery keeps a short retry throttle without marki
     }
   }
 });
+
+async function withDiscoveryFixture(
+  handler: http.RequestListener,
+  body: (bridge: JellyfinBridge) => Promise<void>,
+) {
+  const mock = http.createServer(handler);
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const address = mock.address(); assert(address && typeof address === 'object');
+  const oldUrl = process.env.JELLYFIN_URL, oldKey = process.env.JELLYFIN_API_KEY;
+  process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`; process.env.JELLYFIN_API_KEY = 'fixture-key';
+  try { await body(new JellyfinBridge()); }
+  finally {
+    if (oldUrl === undefined) delete process.env.JELLYFIN_URL; else process.env.JELLYFIN_URL = oldUrl;
+    if (oldKey === undefined) delete process.env.JELLYFIN_API_KEY; else process.env.JELLYFIN_API_KEY = oldKey;
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+  }
+}
+
+test('download discovery selects the containing library with directory boundaries', async () => {
+  const scans: string[] = [];
+  await withDiscoveryFixture((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+      { ItemId: 'archive', CollectionType: 'music', Locations: ['/eliot-media/music-archive'] },
+      { ItemId: 'other', CollectionType: 'music', Locations: ['/eliot-media/music/Other'] },
+      { ItemId: 'root', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+      { ItemId: 'singles', CollectionType: 'music', Locations: ['/eliot-media/music/_Singles/'] },
+    ]));
+    if (req.method === 'POST') { scans.push(req.url!); return res.writeHead(204).end(); }
+    res.end(JSON.stringify({ Items: [], TotalRecordCount: 0 }));
+  }, async bridge => {
+    await bridge.preparePath('/data/library/music/_Singles/Artist/Track.opus');
+    assert.equal(scans.length, 1);
+    assert.ok(scans[0].startsWith('/Items/singles/Refresh?'));
+  });
+});
+
+test('each checked download keeps its own five-minute retry interval', async () => {
+  const realNow = Date.now; let now = 1000000, scans = 0;
+  Date.now = () => now;
+  try {
+    await withDiscoveryFixture((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+        { ItemId: 'music', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+      ]));
+      if (req.method === 'POST') { scans++; return res.writeHead(204).end(); }
+      res.end(JSON.stringify({ Items: [], TotalRecordCount: 0 }));
+    }, async bridge => {
+      const a = '/data/library/music/a.opus', b = '/data/library/music/b.opus';
+      await bridge.preparePath(a); assert.equal(scans, 1);
+      now += 240000; await bridge.preparePath(b); assert.equal(scans, 2);
+      now += 60000; await bridge.preparePath(a); assert.equal(scans, 3);
+      now += 30000; await bridge.preparePath(b); assert.equal(scans, 3, 'retrying A does not expire B early');
+      now += 210000; await bridge.preparePath(b); assert.equal(scans, 4, 'B retries five minutes after its own successful request');
+    });
+  } finally { Date.now = realNow; }
+});
+
+test('media changes and discovery during a rebuild remain invalidated for ordinary path lookups', async () => {
+  for (const mode of ['mediaChanged', 'discovery']) {
+    let fetches = 0, discovered = false;
+    let started!: () => void, finish!: () => void;
+    const rebuilding = new Promise<void>(resolve => { started = resolve; });
+    await withDiscoveryFixture((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+        { ItemId: 'music', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+      ]));
+      if (req.method === 'POST') return res.writeHead(204).end();
+      fetches++;
+      const items = discovered ? [indexed('arrived', track.name)] : [];
+      const reply = () => { if (!res.writableEnded) res.end(JSON.stringify({ Items: items, TotalRecordCount: items.length })); };
+      if (fetches === 2) { finish = reply; started(); return; }
+      reply();
+    }, async bridge => {
+      await bridge.refresh(true);
+      const pending = bridge.refresh(true);
+      await rebuilding;
+      try {
+        if (mode === 'mediaChanged') await bridge.mediaChanged(['/data/library/music/Local Signals']);
+        else await bridge.refreshLibrary(true, '/data/library/music/Local Signals/arrived.flac');
+        discovered = true;
+        finish(); await pending;
+        assert.equal((await bridge.matchPath('/data/library/music/Local Signals/arrived.flac'))?.itemId, 'arrived', mode);
+        assert.equal(fetches, 3, 'ordinary lookup must rebuild after the newer invalidation');
+      } finally { finish(); await pending; }
+    });
+  }
+});
