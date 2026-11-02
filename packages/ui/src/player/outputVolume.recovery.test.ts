@@ -4,10 +4,11 @@ type Listener = (event: { target: FakeAudio }) => void;
 class FakeAudio {
   static instances: FakeAudio[] = [];
   preload = ''; src = ''; currentTime = 0; duration = 210; paused = true; volume = 1;
+  error: { code: number } | null = null;
   play = vi.fn(async () => { this.paused = false; });
   private listeners = new Map<string, Set<Listener>>();
   constructor() { FakeAudio.instances.push(this); }
-  load() { this.currentTime = 0; }
+  load() { this.currentTime = 0; this.error = null; }
   pause() { this.paused = true; }
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
   addEventListener(type: string, fn: Listener) {
@@ -78,4 +79,30 @@ test('an output change also cancels auto-advance waiting for a continuation albu
   expect(active.play).toHaveBeenCalledTimes(plays);
   expect(active.paused).toBe(true);
   expect(player.getSnapshot().state).toBe('paused');
+});
+
+test.each(['player', 'media control'])('late errors stay paused until an explicit %s Play request', async control => {
+  player.setQueue([{ id: 'test', name: 'Track', artists: 'Artist', durationMs: 210_000 }], 'test', false);
+  await player.playAt(0);
+  const active = FakeAudio.instances[0]!;
+  active.currentTime = 60;
+  window.dispatchEvent(new CustomEvent('homearpa-audio-output', {
+    detail: { id: `late-error-${control}`, name: 'Headphones', builtInSpeakers: false },
+  }));
+  const plays = active.play.mock.calls.length;
+  active.error = { code: 2 };
+  active.fire('error');
+  active.fire('ended');
+  await vi.advanceTimersByTimeAsync(5000);
+  active.fire('loadedmetadata');
+  expect(active.play).toHaveBeenCalledTimes(plays);
+  expect(active.paused).toBe(true);
+  expect(player.getSnapshot().state).toBe('paused');
+  if (control === 'player') player.toggle();
+  else (window as Window & { __homearpaMusic?: { command(action: string): void } }).__homearpaMusic!.command('play');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(active.play).toHaveBeenCalledTimes(plays + 1);
+  expect(active.paused).toBe(false);
+  expect(active.error).toBeNull();
+  expect(active.currentTime).toBe(60);
 });

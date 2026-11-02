@@ -177,6 +177,7 @@ class PlayerEngine {
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private blessed = false;
   private outputVolume?: OutputVolume;
+  private intentionallyPaused = false;
   private swapWatchdog: ReturnType<typeof setTimeout> | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
@@ -201,11 +202,11 @@ class PlayerEngine {
       el.addEventListener('pause', (e) => { if (e.target === this.audio) this.onPlayState('paused'); });
       el.addEventListener('timeupdate', (e) => { if (e.target === this.audio) this.onTimeUpdate(); });
       el.addEventListener('durationchange', (e) => { if (e.target === this.audio) this.emit(); });
-      el.addEventListener('ended', (e) => { if (e.target === this.audio) void this.next(); });
+      el.addEventListener('ended', (e) => { if (e.target === this.audio) void this.next(true); });
       el.addEventListener('error', (e) => {
         // A failed pre-buffer just falls back to the normal resolve path.
         if (e.target !== this.audio) { this.prefetch = null; return; }
-        if (!this.audio.src) return;
+        if (!this.audio.src || this.intentionallyPaused) return;
         if (this.resume()) return;
         this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed', canReconnect: true });
         this.notify('Playback stopped. The archive may have gone offline.', true);
@@ -450,6 +451,7 @@ class PlayerEngine {
 
   async playAt(index: number): Promise<void> {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
+    this.intentionallyPaused = false;
     this.cancelResume();
     const playbackId = ++this.playbackId;
     this.bless();
@@ -583,7 +585,8 @@ class PlayerEngine {
     void Promise.resolve(el.play()).then(done, done);
   }
 
-  async next(): Promise<void> {
+  async next(automatic = false): Promise<void> {
+    if (automatic && this.intentionallyPaused) return;
     // A re-entrancy guard, deliberately not a lock: it must never be able to
     // outlive the advance it is guarding.
     //
@@ -596,6 +599,7 @@ class PlayerEngine {
     // media keys for the rest of the document's life. A browser tab gets
     // reloaded often enough to hide that; the tray app runs for days.
     if (Date.now() < this.advancingUntil) return;
+    if (!automatic) this.intentionallyPaused = false;
     this.advancingUntil = Date.now() + ADVANCE_GUARD_MS;
     const advancePlaybackId = this.playbackId;
     try {
@@ -682,13 +686,26 @@ class PlayerEngine {
   }
 
   toggle() {
-    this.bless();
-    if (!this.audio.src && this.queueIndex >= 0) { void this.playAt(this.queueIndex); return; }
-    if (this.audio.paused) this.audio.play().catch((e: Error) => this.notify(e.message, true));
+    if (this.audio.paused || this.intentionallyPaused) this.requestPlay();
     else this.pause();
   }
 
+  /** Only an explicit Play request releases a deliberate pause, including media keys. */
+  private requestPlay() {
+    this.intentionallyPaused = false;
+    this.bless();
+    if ((!this.audio.src || this.audio.error) && this.queueIndex >= 0) {
+      if (this.audio.error && this.current && this.audio.currentTime > 0) {
+        this.pendingResume = { id: this.current.id, pos: this.audio.currentTime };
+      }
+      void this.playAt(this.queueIndex);
+      return;
+    }
+    this.audio.play().catch((e: Error) => this.notify(e.message, true));
+  }
+
   private pause() {
+    this.intentionallyPaused = true;
     ++this.playbackId;
     this.cancelResume();
     clearTimeout(this.swapWatchdog);
@@ -739,7 +756,7 @@ class PlayerEngine {
    */
   private resume(): boolean {
     const src = this.audio.src;
-    if (!src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
+    if (this.intentionallyPaused || !src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
 
     const at = this.audio.currentTime;
     const element = this.audio;
@@ -783,6 +800,7 @@ class PlayerEngine {
   }
 
   private onPlayState(state: 'playing' | 'paused') {
+    if (state === 'playing' && this.intentionallyPaused) { this.audio.pause(); return; }
     if (state === 'paused' && this.snapshot.state === 'error') return;
     this.patch({ state });
     this.pushNowPlaying();
@@ -993,7 +1011,7 @@ class PlayerEngine {
     // `previous`, in particular, restarts the track within its first four
     // seconds, and that rule should not exist twice.
     const handlers: Record<string, MediaSessionActionHandler> = {
-      play: () => { void this.audio.play(); },
+      play: () => this.requestPlay(),
       pause: () => this.pause(),
       previoustrack: () => this.previous(),
       nexttrack: () => { void this.next(); },
