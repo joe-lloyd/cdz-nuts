@@ -227,6 +227,7 @@ class PlayerEngine {
           if (playing) this.notify(`Audio output changed to ${name}. Press play to continue.`);
         },
         this.audio.volume,
+        () => !this.audio.paused || this.snapshot.state === 'loading' ? this.audio.volume : null,
       );
       window.addEventListener('homearpa-audio-output', event => {
         this.outputVolume!.select((event as CustomEvent<unknown>).detail);

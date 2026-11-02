@@ -16,14 +16,24 @@ test('Mac output changes pause playback and update both sides of a gapless swap'
   localStorage.clear();
   vi.stubGlobal('Audio', FakeAudio);
   const speakers = { id: 'speakers', name: 'Speakers', builtInSpeakers: true };
-  vi.stubGlobal('fetch', vi.fn(async () => new Response(JSON.stringify(speakers))));
+  let finishInitial!: (response: Response) => void;
+  vi.stubGlobal('fetch', vi.fn(() => new Promise<Response>(resolve => { finishInitial = resolve; })));
   const host = window as Window & { __homearpaOutputVolumeEnabled?: boolean };
   host.__homearpaOutputVolumeEnabled = true;
   try {
     const { player } = await import('./engine.ts');
-    await vi.waitFor(() => expect(FakeAudio.instances[0]!.volume).toBe(0.52));
     const active = FakeAudio.instances[0]!;
     const standby = FakeAudio.instances[1]!;
+    // Playback can start while native output discovery is still pending.
+    expect(active.volume).toBe(0.0625);
+    active.paused = false;
+    const gainsAtPause: number[] = [];
+    active.pause.mockImplementation(() => { gainsAtPause.push(active.volume); active.paused = true; });
+    finishInitial(new Response(JSON.stringify(speakers)));
+    await vi.waitFor(() => expect(active.volume).toBe(0.52));
+    expect(gainsAtPause[0]).toBe(0.0625);
+    expect(active.paused).toBe(true);
+    expect(standby.pause).toHaveBeenCalled();
     player.setVolumePosition(0.7);
     active.paused = false;
     window.dispatchEvent(new CustomEvent('homearpa-audio-output', {

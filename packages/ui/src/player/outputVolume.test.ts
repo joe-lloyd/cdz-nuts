@@ -95,3 +95,12 @@ test('a route notification pauses before restoring the first identified output',
   profiles.select(headphones, true);
   expect(calls).toEqual([]);
 });
+
+
+test('initial discovery does not pause active playback when its gain stays quiet', () => {
+  const apply = vi.fn(), changed = vi.fn();
+  const profiles = new OutputVolume(apply, changed, 1, () => QUIET_GAIN);
+  profiles.select(headphones);
+  expect(changed).not.toHaveBeenCalled();
+  expect(apply).toHaveBeenLastCalledWith(QUIET_GAIN);
+});

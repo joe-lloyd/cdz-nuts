@@ -15,6 +15,7 @@ export class OutputVolume {
     private readonly apply: (gain: number) => void,
     private readonly changed: (name: string) => void,
     readonly legacyGain: number,
+    private readonly activeGain: () => number | null = () => null,
   ) {
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(KEY) ?? '{}');
@@ -45,7 +46,10 @@ export class OutputVolume {
     const saved = this.profiles[next.id];
     // Only migrate the old global level to positively identified built-in speakers.
     const gain = saved ?? (next.builtInSpeakers === true ? this.legacyGain : Math.min(this.legacyGain, QUIET_GAIN));
-    if (previous || routeNotification) this.changed(next.name);
+    // A delayed initial snapshot must not turn up audio already playing at
+    // the quiet fallback. Loading playback counts too, before play() resolves.
+    const activeGain = this.activeGain();
+    if (previous || routeNotification || (activeGain !== null && gain > activeGain)) this.changed(next.name);
     this.apply(gain);
     this.remember(gain);
   }
