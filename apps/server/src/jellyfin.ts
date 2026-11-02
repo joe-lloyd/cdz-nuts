@@ -178,6 +178,7 @@ export class JellyfinBridge {
   private itemCount = 0;
   private indexedAt = 0;
   private lastDownloadScanAt = -Infinity;
+  private lastDownloadScanAttemptAt = -Infinity;
   private downloadScanWindowAt = -Infinity;
   private downloadScanPaths = new Set<string>();
   private downloadScanPromise: Promise<void> | null = null;
@@ -383,10 +384,7 @@ export class JellyfinBridge {
   }
 
   private async requestDownloadScan(workerPath: string): Promise<void> {
-    if (this.downloadScanPromise) {
-      this.downloadScanPaths.add(workerPath);
-      return this.downloadScanPromise;
-    }
+    if (this.downloadScanPromise) return this.downloadScanPromise;
     const now = Date.now();
     if (now - this.downloadScanWindowAt >= 5 * 60_000) {
       this.downloadScanWindowAt = now;
@@ -395,11 +393,15 @@ export class JellyfinBridge {
     // A later arrival must not inherit the previous file's five-minute wait.
     // Coalesce new paths with a short cooldown; repeat misses keep the long
     // retry interval, and remembered paths expire even during steady intake.
-    const cooldown = this.downloadScanPaths.has(workerPath) ? 5 * 60_000 : 30_000;
-    if (now - this.lastDownloadScanAt < cooldown) return;
-    this.downloadScanPaths.add(workerPath);
-    this.lastDownloadScanAt = now;
+    if (now - this.lastDownloadScanAttemptAt < 30_000) return;
+    if (this.downloadScanPaths.has(workerPath) && now - this.lastDownloadScanAt < 5 * 60_000) return;
+    this.lastDownloadScanAttemptAt = now;
     this.downloadScanPromise = this.refreshLibrary(true)
+      .then((issued) => {
+        if (!issued) return;
+        this.downloadScanPaths.add(workerPath);
+        this.lastDownloadScanAt = Date.now();
+      })
       .catch((err) => { console.error('Jellyfin download discovery:', (err as Error).message); })
       .finally(() => { this.downloadScanPromise = null; });
     return this.downloadScanPromise;
@@ -600,9 +602,12 @@ export class JellyfinBridge {
    * Prefer mediaChanged() when the caller knows which paths moved; this is
    * for when it does not.
    */
-  async refreshLibrary(musicOnly = false): Promise<void> {
+  async refreshLibrary(musicOnly = false): Promise<boolean> {
     const id = await this.musicLibraryId();
-    if (!id && musicOnly) return;
+    if (!id && musicOnly) {
+      this.musicLibrary = undefined; // retry discovery if configuration changes
+      return false;
+    }
     const target = id
       ? `/Items/${encodeURIComponent(id)}/Refresh?Recursive=true&ImageRefreshMode=Default`
         + '&MetadataRefreshMode=Default&ReplaceAllImages=false&ReplaceAllMetadata=false'
@@ -613,6 +618,7 @@ export class JellyfinBridge {
     // scan we just asked for had Jellyfin at its busiest. Everything the old
     // index knew about is still exactly where it was.
     this.stale = true;
+    return true;
   }
 
   async wake(): Promise<void> {

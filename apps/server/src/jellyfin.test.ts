@@ -405,3 +405,82 @@ test('a new download after an earlier scan requests shared discovery without wai
     await new Promise<void>(resolve => mock.close(() => resolve()));
   }
 });
+
+test('a path arriving during a discovery request remains eligible for the short follow-up', async () => {
+  const realNow = Date.now;
+  let now = 1000000, scans = 0;
+  let started!: () => void, finish!: () => void;
+  const scanning = new Promise<void>(resolve => { started = resolve; });
+  const mock = http.createServer((req, res) => {
+    res.setHeader('content-type', 'application/json');
+    if (req.url?.startsWith('/Library/VirtualFolders')) return res.end(JSON.stringify([
+      { ItemId: 'music-id', CollectionType: 'music', Locations: ['/eliot-media/music'] },
+    ]));
+    if (req.url?.startsWith('/Items/music-id/Refresh')) {
+      scans++;
+      if (scans === 1) { finish = () => { if (!res.writableEnded) res.writeHead(204).end(); }; started(); return; }
+      return res.writeHead(204).end();
+    }
+    const items = [indexed('first', track.name)];
+    if (scans >= 2) items.push(indexed('late', 'Late download'));
+    res.end(JSON.stringify({ Items: items, TotalRecordCount: items.length }));
+  });
+  await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+  const address = mock.address(); assert(address && typeof address === 'object');
+  process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`; process.env.JELLYFIN_API_KEY = 'fixture-key'; Date.now = () => now;
+  try {
+    const bridge = new JellyfinBridge();
+    const first = bridge.preparePath('/data/library/music/Local Signals/first.flac');
+    await scanning;
+    const late = bridge.preparePath('/data/library/music/Local Signals/late.flac');
+    finish();
+    assert.equal((await first)?.itemId, 'first');
+    assert.equal(await late, null);
+    now += 30001;
+    assert.equal((await bridge.preparePath('/data/library/music/Local Signals/late.flac'))?.itemId, 'late');
+    assert.equal(scans, 2);
+  } finally {
+    finish?.(); Date.now = realNow;
+    delete process.env.JELLYFIN_URL; delete process.env.JELLYFIN_API_KEY;
+    await new Promise<void>(resolve => mock.close(() => resolve()));
+  }
+});
+
+test('failed or unavailable discovery keeps a short retry throttle without marking the path checked', async () => {
+  for (const initial of ['failed', 'no-library']) {
+    const realNow = Date.now;
+    let now = 1000000, attempts = 0, libraries = 0;
+    let available = initial !== 'no-library', indexedFile = false;
+    const mock = http.createServer((req, res) => {
+      res.setHeader('content-type', 'application/json');
+      if (req.url?.startsWith('/Library/VirtualFolders')) {
+        libraries++;
+        return res.end(JSON.stringify(available ? [{ ItemId: 'music-id', CollectionType: 'music', Locations: ['/eliot-media/music'] }] : []));
+      }
+      if (req.url?.startsWith('/Items/music-id/Refresh')) {
+        attempts++;
+        if (initial === 'failed' && attempts === 1) return res.writeHead(503).end('{}');
+        indexedFile = true; return res.writeHead(204).end();
+      }
+      const items = indexedFile ? [indexed('retry', track.name)] : [];
+      res.end(JSON.stringify({ Items: items, TotalRecordCount: items.length }));
+    });
+    await new Promise<void>(resolve => mock.listen(0, '127.0.0.1', resolve));
+    const address = mock.address(); assert(address && typeof address === 'object');
+    process.env.JELLYFIN_URL = `http://127.0.0.1:${address.port}`; process.env.JELLYFIN_API_KEY = 'fixture-key'; Date.now = () => now;
+    try {
+      const bridge = new JellyfinBridge(), file = '/data/library/music/Local Signals/retry.flac';
+      assert.equal(await bridge.preparePath(file), null);
+      const tried = attempts, lookedUp = libraries;
+      available = true; now += 10000;
+      assert.equal(await bridge.preparePath(file), null);
+      assert.equal(attempts, tried); assert.equal(libraries, lookedUp, 'no discovery request on every poll');
+      now += 20001;
+      assert.equal((await bridge.preparePath(file))?.itemId, 'retry', initial);
+      assert.equal(attempts, initial === 'failed' ? 2 : 1);
+    } finally {
+      Date.now = realNow; delete process.env.JELLYFIN_URL; delete process.env.JELLYFIN_API_KEY;
+      await new Promise<void>(resolve => mock.close(() => resolve()));
+    }
+  }
+});
