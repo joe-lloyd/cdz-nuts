@@ -43,6 +43,18 @@ test('Space pauses and resumes the song and prevents page scrolling', async () =
   expect(screen.getByRole('button', { name: 'Pause' })).toBeEnabled();
 });
 
+test('Space works after playback becomes available while mounted', async () => {
+  const pending = player.playAt(0);
+  render(<MemoryRouter><PlayerBar /></MemoryRouter>);
+  expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
+  expect(fireEvent.keyDown(document.body, { key: ' ' })).toBe(false);
+  expect(screen.getByRole('button', { name: 'Play' })).toBeDisabled();
+  await act(async () => { await pending; });
+  expect(screen.getByRole('button', { name: 'Pause' })).toBeEnabled();
+  fireEvent.keyDown(document.body, { key: ' ' });
+  expect(screen.getByRole('button', { name: 'Play' })).toBeEnabled();
+});
+
 test('Space preserves text entry and focused button activation', async () => {
   render(<MemoryRouter>
     <input aria-label="Search" />
