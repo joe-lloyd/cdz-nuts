@@ -171,7 +171,16 @@ fn position_under(panel: &tauri::WebviewWindow, icon: Rect) -> Option<PhysicalPo
     // scale, which can differ from the monitor the hidden panel last sat on.
     let icon_at = icon.position.to_physical::<f64>(1.0);
     let icon_size = icon.size.to_physical::<f64>(1.0);
-    let monitor = panel.monitor_from_point(icon_at.x, icon_at.y).ok()??;
+    // Matched against each monitor's physical bounds rather than through
+    // `monitor_from_point`, which on macOS takes points: on a Retina screen a
+    // physical tray position on the right half of the menu bar is off-screen
+    // in points, and the panel would fall back to the centre.
+    let monitor = panel.available_monitors().ok()?.into_iter().find(|m| {
+        let (at, size) = (m.position(), m.size());
+        let (left, top) = (at.x as f64, at.y as f64);
+        (left..left + size.width as f64).contains(&icon_at.x)
+            && (top..top + size.height as f64).contains(&icon_at.y)
+    })?;
     let scale = monitor.scale_factor();
     let (screen_at, screen_size) = (monitor.position(), monitor.size());
     let (width, height, gap) = (WIDTH * scale, HEIGHT * scale, GAP * scale);
