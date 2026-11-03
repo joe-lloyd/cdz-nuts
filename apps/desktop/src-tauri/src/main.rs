@@ -367,10 +367,15 @@ fn text(status: u16, message: &str) -> http::Response<Vec<u8>> {
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItemBuilder::with_id("show", "Show player").build(app)?;
+    // Linux trays report no clicks, so the panel needs a menu entry there.
+    let now_playing = MenuItemBuilder::with_id("now-playing", "Now playing").build(app)?;
     let update_item = MenuItemBuilder::with_id("update", "Check for updates…").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
-    let menu = MenuBuilder::new(app)
-        .items(&[&show])
+    let mut menu = MenuBuilder::new(app).items(&[&show]);
+    if cfg!(target_os = "linux") {
+        menu = menu.items(&[&now_playing]);
+    }
+    let menu = menu
         .separator()
         .items(&[&update_item])
         .separator()
@@ -391,7 +396,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 ..
             } = event
             {
-                panel::toggle(tray.app_handle(), rect);
+                panel::toggle(tray.app_handle(), Some(rect));
             }
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
@@ -401,6 +406,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                     let _ = w.set_focus();
                 }
             }
+            "now-playing" => panel::toggle(app, None),
             // One item does both jobs: it checks when there is nothing
             // waiting, and installs when a check has already found something.
             // Two menu entries where one will do is just more to read.

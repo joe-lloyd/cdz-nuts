@@ -133,8 +133,9 @@ pub fn command(app: &tauri::AppHandle, body: &[u8]) -> bool {
     }
 }
 
-/// Left click on the tray icon.
-pub fn toggle(app: &tauri::AppHandle, icon: Rect) {
+/// Left click on the tray icon, or the tray menu's item where the platform
+/// reports no clicks (Linux). With no icon to hang from, the panel is centred.
+pub fn toggle(app: &tauri::AppHandle, icon: Option<Rect>) {
     let Some(panel) = app.get_webview_window(LABEL) else {
         return;
     };
@@ -150,8 +151,13 @@ pub fn toggle(app: &tauri::AppHandle, icon: Rect) {
         let _ = panel.hide();
         return;
     }
-    if let Some(position) = position_under(&panel, icon) {
-        let _ = panel.set_position(position);
+    match icon.and_then(|icon| position_under(&panel, icon)) {
+        Some(position) => {
+            let _ = panel.set_position(position);
+        }
+        None => {
+            let _ = panel.center();
+        }
     }
     let _ = panel.show();
     let _ = panel.set_focus();
@@ -160,10 +166,13 @@ pub fn toggle(app: &tauri::AppHandle, icon: Rect) {
 /// Centre the panel on the icon, below it in a top menu bar and above it in a
 /// bottom taskbar, kept inside the icon's monitor.
 fn position_under(panel: &tauri::WebviewWindow, icon: Rect) -> Option<PhysicalPosition<f64>> {
-    let scale = panel.scale_factor().ok()?;
-    let icon_at = icon.position.to_physical::<f64>(scale);
-    let icon_size = icon.size.to_physical::<f64>(scale);
+    // The tray reports its rect in physical pixels, so the scale passed here
+    // is never applied. The panel's size has to use the icon's monitor's
+    // scale, which can differ from the monitor the hidden panel last sat on.
+    let icon_at = icon.position.to_physical::<f64>(1.0);
+    let icon_size = icon.size.to_physical::<f64>(1.0);
     let monitor = panel.monitor_from_point(icon_at.x, icon_at.y).ok()??;
+    let scale = monitor.scale_factor();
     let (screen_at, screen_size) = (monitor.position(), monitor.size());
     let (width, height, gap) = (WIDTH * scale, HEIGHT * scale, GAP * scale);
 

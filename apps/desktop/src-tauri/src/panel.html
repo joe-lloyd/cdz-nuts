@@ -23,14 +23,17 @@
   html.frosted body { background: rgba(14, 10, 14, .42); }
 
   main { display: flex; gap: 14px; height: 100%; padding: 14px; }
+  .art, .title { padding: 0; border: 0; border-radius: 0; color: inherit; font: inherit; text-align: left; }
   .art {
+    display: block;
     flex: none; width: 116px; height: 116px; border-radius: 8px;
     background: #191519 center / cover no-repeat;
     box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
     cursor: pointer;
   }
   .side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-  .title { font-size: 15px; font-weight: 650; cursor: pointer; }
+  .title { display: block; width: 100%; font-size: 15px; font-weight: 650; background: none; cursor: pointer; }
+  .art:focus-visible, .title:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .sub { color: var(--ink-2); margin-top: 2px; }
   .title, .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
@@ -68,9 +71,9 @@
 </head>
 <body class="idle">
 <main>
-  <div class="art" id="art" title="Open player"></div>
+  <button class="art" id="art" aria-label="Open player"></button>
   <div class="side">
-    <div class="title" id="title" title="Open player"></div>
+    <button class="title" id="title" title="Open player"></button>
     <div class="sub" id="sub"></div>
     <div class="controls">
       <button id="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
@@ -139,7 +142,9 @@
   }
 
   // Called by the shell with each message the player posts.
+  let heardLive = false;
   window.__nowPlaying = (message) => {
+    heardLive = true;
     state = message && message.kind === 'nowplaying' ? message : null;
     heardAt = performance.now();
     draw();
@@ -178,7 +183,8 @@
 
   fetch('/api/desktop/now-playing')
     .then((response) => response.json())
-    .then((message) => { if (!state) window.__nowPlaying(message); })
+    // A live message, even "gone", is newer than this answer.
+    .then((message) => { if (!heardLive) window.__nowPlaying(message); })
     .catch(() => {});
 </script>
 </body>
