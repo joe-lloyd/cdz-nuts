@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { formatTime } from '../lib/format.ts';
@@ -18,6 +18,21 @@ import { Slider } from './Slider.tsx';
 export function PlayerBar() {
   const p = usePlayer();
   const [panel, setPanel] = useState<'queue' | 'lyrics' | null>(null);
+
+  useEffect(() => {
+    function shortcut(event: KeyboardEvent) {
+      if (event.key !== ' ' || event.defaultPrevented || event.isComposing
+        || event.ctrlKey || event.metaKey || event.altKey || event.shiftKey) return;
+      const target = event.target;
+      if (target instanceof Element && target.closest(
+        'input, textarea, select, button, a[href], summary, [contenteditable], [role="button"], [role="textbox"], [role="slider"]',
+      )) return;
+      event.preventDefault();
+      if (!event.repeat && p.canPlay) player.toggle();
+    }
+    window.addEventListener('keydown', shortcut);
+    return () => window.removeEventListener('keydown', shortcut);
+  }, [p.canPlay]);
 
   const current = p.queue[p.queueIndex];
   const artHref = p.albumId ? `/album/${encodeURIComponent(p.albumId)}` : null;
