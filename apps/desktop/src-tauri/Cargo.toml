@@ -1,6 +1,6 @@
 [package]
 name = "homelab-music"
-version = "0.5.5"
+version = "0.6.0"
 description = "Tray player for the home music library, with its own WireGuard tunnel"
 edition = "2021"
 rust-version = "1.77"
@@ -11,7 +11,10 @@ publish = false
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+# macos-private-api: the tray panel is a transparent window with the system's
+# frosted material behind it. It only matters for the Mac App Store, which
+# this app is not in.
 tauri-plugin-notification = "2"
 tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"

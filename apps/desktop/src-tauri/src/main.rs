@@ -9,6 +9,7 @@
 
 mod audio_output;
 mod netpath;
+mod panel;
 mod proxy;
 mod routes;
 mod uicheck;
@@ -17,7 +18,7 @@ mod update;
 use std::sync::Arc;
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
-use tauri::tray::TrayIconBuilder;
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::utils::config::BackgroundThrottlingPolicy;
 use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
 use tokio::sync::RwLock;
@@ -91,6 +92,7 @@ fn main() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
         .manage(update::PendingUpdate::default())
+        .manage(panel::Panel::default())
         .register_asynchronous_uri_scheme_protocol("homelab", move |_ctx, request, responder| {
             let state = protocol_state.clone();
             tauri::async_runtime::spawn(async move {
@@ -115,6 +117,7 @@ fn main() {
                 WebviewUrl::CustomProtocol("homelab://localhost/".parse()?),
             )
             .initialization_script(audio_output::initialization_script())
+            .initialization_script(panel::HOST_SCRIPT)
             .title("Homelab Music")
             .inner_size(1180.0, 820.0)
             .min_inner_size(420.0, 520.0)
@@ -125,6 +128,7 @@ fn main() {
             .build()?;
 
             audio_output::start(app.handle().clone());
+            panel::build(app)?;
             build_tray(app)?;
 
             // After the path is settled, not before: a check that races the
@@ -161,13 +165,17 @@ fn main() {
 
             Ok(())
         })
-        .on_window_event(|window, event| {
+        .on_window_event(|window, event| match event {
             // Close means "get out of my way", not "quit" -- that is the whole
             // point of living in the tray. Quit is on the tray menu.
-            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+            tauri::WindowEvent::CloseRequested { api, .. } => {
                 api.prevent_close();
                 let _ = window.hide();
             }
+            tauri::WindowEvent::Focused(false) if window.label() == panel::LABEL => {
+                panel::on_blur(window);
+            }
+            _ => {}
         })
         .run(tauri::generate_context!())
         .expect("error while running homelab-music");
@@ -216,7 +224,7 @@ async fn handle(state: Arc<AppState>, request: http::Request<Vec<u8>>) -> http::
     // know, so the same UI bundle can ask "am I in the desktop app?" and get a
     // straight answer instead of an HTML page from the SPA fallback.
     if path.starts_with("/api/desktop/") {
-        return desktop_endpoint(&state, &path).await;
+        return desktop_endpoint(&state, &path, request.method(), request.body()).await;
     }
 
     // Everything else is the server's: /api/*, /img/*, and anything added later.
@@ -247,9 +255,14 @@ async fn handle(state: Arc<AppState>, request: http::Request<Vec<u8>>) -> http::
     }
 }
 
-/// The desktop shell's own small API: status, reconnection, and updates.
-/// The web build has to cope without these native-only endpoints.
-async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<Vec<u8>> {
+/// The desktop shell's own small API: status, reconnection, updates, and the
+/// tray panel. The web build has to cope without these native-only endpoints.
+async fn desktop_endpoint(
+    state: &Arc<AppState>,
+    path: &str,
+    method: &http::Method,
+    body: &[u8],
+) -> http::Response<Vec<u8>> {
     let handle = state.app.read().await.clone();
     let Some(handle) = handle else {
         return json(
@@ -260,6 +273,31 @@ async fn desktop_endpoint(state: &Arc<AppState>, path: &str) -> http::Response<V
 
     match path {
         "/api/desktop/audio-output" => json(200, &audio_output::current()),
+        "/api/desktop/panel" => http::Response::builder()
+            .status(200)
+            .header("content-type", "text/html; charset=utf-8")
+            .header("cache-control", "no-store")
+            .body(panel::PAGE.as_bytes().to_vec())
+            .expect("panel response is well-formed"),
+        // GET from the panel when it loads; POST from the player when it changes.
+        "/api/desktop/now-playing" if method == http::Method::GET => {
+            let latest = handle.state::<panel::Panel>().latest();
+            let latest = latest.as_deref().unwrap_or("null").as_bytes().to_vec();
+            http::Response::builder()
+                .status(200)
+                .header("content-type", "application/json")
+                .header("cache-control", "no-store")
+                .body(latest)
+                .expect("json response is well-formed")
+        }
+        "/api/desktop/now-playing" => {
+            panel::publish(&handle, body);
+            json(204, &serde_json::Value::Null)
+        }
+        "/api/desktop/command" if panel::command(&handle, body) => {
+            json(202, &serde_json::Value::Null)
+        }
+        "/api/desktop/command" => json(400, &serde_json::json!({ "error": "unknown command" })),
         "/api/desktop/status" => json(
             200,
             &serde_json::json!({
@@ -329,14 +367,10 @@ fn text(status: u16, message: &str) -> http::Response<Vec<u8>> {
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     let show = MenuItemBuilder::with_id("show", "Show player").build(app)?;
-    let play = MenuItemBuilder::with_id("play", "Play").build(app)?;
-    let pause = MenuItemBuilder::with_id("pause", "Pause").build(app)?;
     let update_item = MenuItemBuilder::with_id("update", "Check for updates…").build(app)?;
     let quit = MenuItemBuilder::with_id("quit", "Quit").build(app)?;
     let menu = MenuBuilder::new(app)
         .items(&[&show])
-        .separator()
-        .items(&[&play, &pause])
         .separator()
         .items(&[&update_item])
         .separator()
@@ -347,20 +381,24 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
         .icon(app.default_window_icon().expect("bundled icon").clone())
         .tooltip("Homelab Music")
         .menu(&menu)
+        // Left click opens the now-playing panel; the menu is on right click.
         .show_menu_on_left_click(false)
+        .on_tray_icon_event(|tray, event| {
+            if let TrayIconEvent::Click {
+                rect,
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = event
+            {
+                panel::toggle(tray.app_handle(), rect);
+            }
+        })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "show" => {
                 if let Some(w) = app.get_webview_window("main") {
                     let _ = w.show();
                     let _ = w.set_focus();
-                }
-            }
-            "play" | "pause" => {
-                if let Some(w) = app.get_webview_window("main") {
-                    let _ = w.eval(format!(
-                        "window.__homearpaMusic?.command('{}')",
-                        event.id().as_ref()
-                    ));
                 }
             }
             // One item does both jobs: it checks when there is nothing

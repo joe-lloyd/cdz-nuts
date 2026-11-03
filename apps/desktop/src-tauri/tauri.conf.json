@@ -1,11 +1,12 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Homelab Music",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "identifier": "cc.jia-lab.homelab-music",
   "build": {},
   "app": {
     "withGlobalTauri": false,
+    "macOSPrivateApi": true,
     "windows": [],
     "security": {
       "csp": null
