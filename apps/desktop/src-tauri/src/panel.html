@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Now playing</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #f5eff4;
+    --ink-2: #aea4ad;
+    --ink-3: #766e75;
+    --line: rgba(244, 232, 242, .14);
+    --accent: #ff57d9;
+    font: 13px/1.3 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-user-select: none;
+    user-select: none;
+    cursor: default;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; color: var(--ink); background: #131013; }
+  /* macOS draws the frosted material behind a transparent page. */
+  html.frosted, html.frosted body { background: transparent; }
+  html.frosted body { background: rgba(14, 10, 14, .42); }
+
+  main { display: flex; gap: 14px; height: 100%; padding: 14px; }
+  .art, .title { padding: 0; border: 0; border-radius: 0; color: inherit; font: inherit; text-align: left; }
+  .art {
+    display: block;
+    flex: none; width: 116px; height: 116px; border-radius: 8px;
+    background: #191519 center / cover no-repeat;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, .4);
+    cursor: pointer;
+  }
+  .side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .title { display: block; width: 100%; font-size: 15px; font-weight: 650; background: none; cursor: pointer; }
+  .art:focus-visible, .title:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sub { color: var(--ink-2); margin-top: 2px; }
+  .title, .sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+  .controls { display: flex; justify-content: center; align-items: center; gap: 22px; margin: auto 0 6px; }
+  button {
+    display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%;
+    color: var(--ink); background: none; cursor: pointer;
+  }
+  button svg { width: 20px; height: 20px; fill: currentColor; }
+  button.play { width: 36px; height: 36px; color: #150611; background: var(--accent); }
+  button.play svg { width: 18px; height: 18px; }
+  button:disabled { color: var(--ink-3); cursor: default; }
+  button:not(:disabled):hover { filter: brightness(1.15); }
+
+  input[type=range] {
+    -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 14px; margin: 0;
+    background: transparent; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: linear-gradient(var(--accent), var(--accent)) 0 / var(--done, 0%) 100% no-repeat, var(--line);
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 10px; height: 10px; margin-top: -3px; border-radius: 50%;
+    background: var(--ink); opacity: 0; transition: opacity .15s;
+  }
+  input[type=range]:hover::-webkit-slider-thumb { opacity: 1; }
+  .times { display: flex; justify-content: space-between; color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+
+  .empty { display: none; flex-direction: column; align-items: center; justify-content: center; gap: 10px; width: 100%; color: var(--ink-2); }
+  .empty button { border-radius: 999px; padding: 6px 14px; color: #150611; background: var(--accent); font: inherit; font-weight: 600; }
+  body.idle .art, body.idle .side { display: none; }
+  body.idle .empty { display: flex; }
+</style>
+</head>
+<body class="idle">
+<main>
+  <button class="art" id="art" aria-label="Open player"></button>
+  <div class="side">
+    <button class="title" id="title" title="Open player"></button>
+    <div class="sub" id="sub"></div>
+    <div class="controls">
+      <button id="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
+      <button id="play" class="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z"/></svg></button>
+      <button id="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
+    </div>
+    <input id="seek" type="range" min="0" max="1" step="any" value="0" aria-label="Position">
+    <div class="times"><span id="elapsed">0:00</span><span id="remaining">-0:00</span></div>
+  </div>
+  <div class="empty">
+    Nothing playing
+    <button id="open">Open player</button>
+  </div>
+</main>
+<script>
+  const PLAY = 'M7 4v16l13-8z';
+  const PAUSE = 'M6 4h4v16H6zM14 4h4v16h-4z';
+  const $ = (id) => document.getElementById(id);
+
+  // What the player last said, and when we heard it. Position is only sent
+  // about once a second, so the bar runs on from there between messages.
+  let state = null;
+  let heardAt = 0;
+  let dragging = false;
+
+  const send = (action, detail) => fetch('/api/desktop/command', {
+    method: 'POST',
+    body: JSON.stringify(detail === undefined ? { action } : { action, detail }),
+  }).catch(() => {});
+
+  const clock = (s) => {
+    s = Math.max(0, Math.floor(s || 0));
+    const h = Math.floor(s / 3600), m = Math.floor(s / 60) % 60, sec = String(s % 60).padStart(2, '0');
+    return h ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`;
+  };
+
+  function position() {
+    if (!state) return 0;
+    const run = state.playing ? (performance.now() - heardAt) / 1000 : 0;
+    return Math.min(state.positionSec + run, state.durationSec || Infinity);
+  }
+
+  function drawTime(at = position()) {
+    if (!state) return;
+    const duration = state.durationSec || 0;
+    const seek = $('seek');
+    seek.max = String(duration || 1);
+    if (!dragging) seek.value = String(at);
+    const shown = dragging ? Number(seek.value) : at;
+    seek.style.setProperty('--done', `${duration ? (shown / duration) * 100 : 0}%`);
+    $('elapsed').textContent = clock(shown);
+    $('remaining').textContent = `-${clock(duration - shown)}`;
+  }
+
+  function draw() {
+    document.body.classList.toggle('idle', !state);
+    if (!state) return;
+    $('art').style.backgroundImage = state.artworkUrl ? `url("${state.artworkUrl}")` : '';
+    $('title').textContent = state.title;
+    $('sub').textContent = [state.artist, state.album].filter(Boolean).join(' — ');
+    $('playIcon').setAttribute('d', state.playing ? PAUSE : PLAY);
+    $('play').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
+    $('prev').disabled = !state.canPrevious;
+    $('next').disabled = !state.canNext;
+    drawTime();
+  }
+
+  // Called by the shell with each message the player posts.
+  let heardLive = false;
+  window.__nowPlaying = (message) => {
+    heardLive = true;
+    state = message && message.kind === 'nowplaying' ? message : null;
+    heardAt = performance.now();
+    draw();
+  };
+
+  $('play').onclick = () => {
+    if (!state) return;
+    send(state.playing ? 'pause' : 'play');
+    // Answer the click now; the player's own message confirms it a moment later.
+    state = { ...state, positionSec: position(), playing: !state.playing };
+    heardAt = performance.now();
+    draw();
+  };
+  $('prev').onclick = () => send('previoustrack');
+  $('next').onclick = () => send('nexttrack');
+  $('art').onclick = $('title').onclick = $('open').onclick = () => send('show');
+
+  const seek = $('seek');
+  seek.oninput = () => { dragging = true; drawTime(); };
+  seek.onchange = () => {
+    dragging = false;
+    if (!state) return;
+    const to = Number(seek.value);
+    send('seekto', { seekTime: to });
+    state = { ...state, positionSec: to };
+    heardAt = performance.now();
+    drawTime();
+  };
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') send('hide');
+    if (event.key === ' ' && event.target === document.body) { event.preventDefault(); $('play').click(); }
+  });
+
+  setInterval(() => { if (state && state.playing) drawTime(); }, 250);
+
+  fetch('/api/desktop/now-playing')
+    .then((response) => response.json())
+    // A live message, even "gone", is newer than this answer.
+    .then((message) => { if (!heardLive) window.__nowPlaying(message); })
+    .catch(() => {});
+</script>
+</body>
+</html>

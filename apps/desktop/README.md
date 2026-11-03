@@ -178,6 +178,32 @@ References: [Core Audio default output](https://developer.apple.com/documentatio
 [persistent device UID](https://developer.apple.com/documentation/coreaudio/kaudiodevicepropertydeviceuid),
 [Spotify's explanation of normalization](https://support.spotify.com/us/article/volume-normalization/).
 
+## The now-playing panel
+
+Left-click the record icon in the menu bar to see what is playing: artwork,
+title, artist and album, previous, play/pause and next, and a scrubber. Click the
+artwork or title to open the player. Right-click the icon for the menu.
+
+The panel starts no player of its own. The main window keeps decoding audio and
+already mirrors what it tells the OS to a native host through
+`packages/ui/src/player/nativeBridge.ts`, the same seam the phone app's lock
+screen uses. The desktop shell injects that host. Each message is posted to
+`/api/desktop/now-playing`, and the panel's buttons return through
+`/api/desktop/command` as `window.__homearpaMusic.command(...)`. Neither page
+needs Tauri's IPC.
+
+macOS also shows the player under its own Now Playing item in the menu bar,
+because the WebView reports to the system media session. Whatever the system
+routes to the player, such as hardware media controls, goes through that report,
+so it stays. No app can hide that item from code. To have the music under the
+record icon only, open System Settings > Control Center > Now Playing and choose
+"Don't Show in Menu Bar". That hides the menu bar item and leaves the media
+session alone. The setting applies to every app, not just this one.
+
+On macOS the panel uses the system's frosted popover material. That needs a
+transparent window, which needs Tauri's `macos-private-api` feature. The
+feature only matters for the Mac App Store, and this app is not there.
+
 ## Releasing
 
 Bump `version` in `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml`, then:
@@ -204,7 +230,8 @@ notice until the second release.
 | Home-vs-away detection | done |
 | Embedded-UI drift check | done — 0.3.0 |
 | Userspace WireGuard tunnel | **next** |
-| Media keys, now-playing, notifications | **next** |
+| Now-playing panel under the tray icon | done — 0.6.0 |
+| Media keys, notifications | **next** |
 
 ### Knowing the embedded UI has gone stale
 

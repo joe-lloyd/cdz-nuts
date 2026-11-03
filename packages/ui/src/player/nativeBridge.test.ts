@@ -38,6 +38,20 @@ test('a plain browser is not a native host, and nothing is sent', async () => {
   expect(posted).toEqual([]);
 });
 
+test('the desktop shell is a host too, and gets the same messages', async () => {
+  delete (window as unknown as Record<string, unknown>).ReactNativeWebView;
+  (window as unknown as Record<string, unknown>).__homearpaDesktop = {
+    postMessage: (data: string) => { posted.push(data); },
+  };
+  vi.resetModules();
+  const desktop = await import('./nativeBridge.ts');
+  expect(desktop.hasNativeHost()).toBe(true);
+  desktop.sendNowPlaying(nowPlaying());
+  desktop.sendGone();
+  expect(posted.map((p) => JSON.parse(p).kind)).toEqual(['nowplaying', 'gone']);
+  delete (window as unknown as Record<string, unknown>).__homearpaDesktop;
+});
+
 test('the host is told what is playing, tagged so it can tell us apart', () => {
   bridge.sendNowPlaying(nowPlaying());
   expect(posted).toHaveLength(1);
