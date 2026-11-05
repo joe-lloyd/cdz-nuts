@@ -185,7 +185,7 @@ for (const file of lib) put(at(file.rel), `audio:${file.rel}`, file.age);
 const provenance = new ProvenanceStore(path.join(data, 'provenance.db'));
 provenance.upsert(lib.map((file) => ({
   path: `/data/library/music/${file.rel}`, artist: file.artist, title: file.title, album: file.album, source: file.source,
-  detail: file.source === 'youtube' ? 'yt-dlp' : 'slskd', codec: file.codec, bitrate: file.codec === 'flac' ? 900_000 : 320_000,
+  detail: file.source === 'youtube' ? 'yt-dlp' : 'slskd', codec: file.codec, bitrate: file.codec === 'flac' ? 900 : 320,
   sample_rate: 44_100, bit_depth: file.codec === 'flac' ? 16 : null, size_bytes: 1_000_000 + file.ms, mtime: Math.round((NOW - file.age * 86_400_000) / 1000),
   duration_ms: file.ms, track_number: file.track || null, disc_number: 1,
 })));

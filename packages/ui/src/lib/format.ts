@@ -2,7 +2,9 @@
 
 /** "3:07" from milliseconds. */
 export const dur = (ms: number | null | undefined): string => {
-  const s = Math.round((ms ?? 0) / 1000);
+  // An unknown length says nothing rather than claiming 0:00.
+  if (!ms) return '';
+  const s = Math.round(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 

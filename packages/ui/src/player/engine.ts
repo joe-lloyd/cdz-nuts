@@ -134,7 +134,7 @@ const EMPTY: PlayerSnapshot = {
   toast: null,
 };
 
-const artUrlFor = (albumId: string | null | undefined): string => {
+export const artUrlFor = (albumId: string | null | undefined): string => {
   if (!albumId) return '';
   return /^(localalbum|libalbum)-/.test(albumId)
     ? `/img/local/${encodeURIComponent(albumId)}.jpg`
@@ -524,7 +524,7 @@ class PlayerEngine {
     const albumId = track.album_id ?? '';
     this.patch({
       state: 'loading',
-      overline: 'Local archive · Jellyfin',
+      overline: 'Local archive',
       title: track.name,
       byline: track.artists ?? '',
       artistId: track.artist_id ?? '',

@@ -194,8 +194,10 @@ export function Latest() {
   const dayAgo = Date.now() - 864e5;
   const today = rows.filter((r) => r.added_at && Date.parse(r.added_at) >= dayAgo).length;
   const scope = today >= rows.length
-    ? `All ${rows.length} arrivals from the last 24 hours.`
-    : `${today} in the last 24 hours, plus enough older ones to make ${rows.length}.`;
+    ? `All ${rows.length} arrived in the last 24 hours.`
+    : today === 0
+      ? `Nothing new today. These are the ${rows.length} most recent downloads.`
+      : `${today} new today, and the ${rows.length - today} before them.`;
 
   return (
     <>

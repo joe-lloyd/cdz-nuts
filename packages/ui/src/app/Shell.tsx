@@ -6,7 +6,7 @@ import { usePlayerStatus, useStats } from '../api/hooks.ts';
 import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
-import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
+import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, NOT_FOUND_COPY, PARENT_OF, SETTINGS_ICON, type TabId } from './routes.tsx';
 import { useDesktop, useUiBuild } from '../api/hooks.ts';
 
 /**
@@ -28,7 +28,7 @@ export function Shell() {
     return () => document.body.classList.remove('nav-open');
   }, [drawerOpen]);
 
-  const { kicker, title, parent } = describe(location.pathname);
+  const { kicker, title, parent, detail } = describe(location.pathname);
 
   return (
     <>
@@ -72,9 +72,13 @@ export function Shell() {
           <div className="sidebar-foot">
             <ArchiveState />
             <SyncLine />
-            <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
-              Settings
-            </NavLink>
+            <div className="foot-row">
+              <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
+                {SETTINGS_ICON}
+                <span>Settings</span>
+              </NavLink>
+              <VersionChip />
+            </div>
           </div>
         </aside>
 
@@ -83,11 +87,10 @@ export function Shell() {
           <header className="page-head">
             <div>
               <BackButton parent={parent} className="page-back" />
-                <span className="page-kicker">{kicker}</span>
-              <h1>{title}</h1>
+              <span className="page-kicker">{kicker}</span>
+              {detail ? null : <h1>{title}</h1>}
             </div>
             <div className="page-head-tools">
-              <VersionChip />
               <ReconnectButton />
             </div>
           </header>
@@ -135,21 +138,23 @@ export function VersionChip() {
 }
 
 /** What the page head says, derived from the path rather than set by each view. */
-function describe(pathname: string): { kicker: string; title: string; parent: string | null } {
+function describe(pathname: string): { kicker: string; title: string; parent: string | null; detail: boolean } {
   const [, head, ...rest] = pathname.split('/');
   if (head === 'radio' && rest.length >= 2) {
-    return { kicker: 'Something you have not heard yet', title: 'Radio', parent: 'radio' };
+    return { kicker: 'Something you have not heard yet', title: 'Radio', parent: 'radio', detail: false };
   }
+  // A detail page names its artist, album or playlist in its own hero, so the
+  // head carries only the kicker and the way back.
   if (head && head in DETAIL_COPY && rest.length) {
     const copy = DETAIL_COPY[head as keyof typeof DETAIL_COPY];
-    return { kicker: copy[0], title: copy[1], parent: PARENT_OF[head] ?? null };
+    return { kicker: copy[0], title: copy[1], parent: PARENT_OF[head] ?? null, detail: true };
   }
   const aside = head ? ASIDE_COPY[head] : undefined;
-  if (aside) return { kicker: aside[0], title: aside[1], parent: null };
-  // Overview is the fallback as well as a real path, because it is what the
-  // logo goes to and what an unknown head should land on.
-  const copy = (head ? PAGE_COPY[head] : undefined) ?? PAGE_COPY.overview!;
-  return { kicker: copy[0], title: copy[1], parent: null };
+  if (aside) return { kicker: aside[0], title: aside[1], parent: null, detail: false };
+  // The logo and the bare root land on the overview.
+  if (!head) return { kicker: PAGE_COPY.overview![0], title: PAGE_COPY.overview![1], parent: null, detail: false };
+  const copy = PAGE_COPY[head] ?? NOT_FOUND_COPY;
+  return { kicker: copy[0], title: copy[1], parent: null, detail: false };
 }
 
 /**

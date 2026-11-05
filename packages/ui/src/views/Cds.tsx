@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCds } from '../api/hooks.ts';
 import { post } from '../api/client.ts';
 import { day, initial } from '../lib/format.ts';
-import { Empty, Skeleton } from '../components/primitives.tsx';
+import { Empty, Notice, Skeleton } from '../components/primitives.tsx';
 import { player } from '../player/usePlayer.ts';
 import type { CdItem } from '../api/types.ts';
 
@@ -52,19 +52,18 @@ export function Cds() {
     // needs a personal token — different credential, same settings page.
     const half = d.scope === 'catalogue';
     return (
-      <div className="empty cd-setup">
-        <p><b>{half ? 'Discogs can search, but not read your collection yet.' : 'Discogs is not connected yet.'}</b></p>
-        {half ? (
-          <p>The consumer key and secret are set, and those authenticate the <i>app</i> against
-            the public catalogue. Reading <i>your</i> collection identifies <i>you</i>, which needs
-            a personal access token instead.</p>
-        ) : null}
-        <p>
-          On <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">discogs.com/settings/developers</a>,
-          scroll past the OAuth app box to <b>Generate new token</b>. Add it to the Pi&apos;s <code>.env</code> as
-          <code>DISCOGS_TOKEN</code> and restart the web container.
-        </p>
-      </div>
+      <Notice
+        title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
+        actions={<a className="spbtn" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Open Discogs settings ↗</a>}
+        details={<>
+          {half ? <p>The consumer key and secret only reach the public catalogue. Reading your own collection needs a personal access token.</p> : null}
+          <p>On the Discogs developer settings page, scroll past the OAuth app box to <b>Generate new token</b>. Add it to the server&apos;s <code>.env</code> as <code>DISCOGS_TOKEN</code> and restart the web container.</p>
+        </>}
+      >
+        {half
+          ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
+          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
+      </Notice>
     );
   }
 

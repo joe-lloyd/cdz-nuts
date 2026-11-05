@@ -238,6 +238,23 @@ export const BandcampButton = ({ query, type = 'a', label = 'Find on Bandcamp â†
 
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
 
+/**
+ * A page with nothing to show yet: what it means in plain words, what to do,
+ * and any technical steps folded away for whoever runs the server.
+ */
+export function Notice({ title, children, actions, details }: {
+  title: string; children?: ReactNode; actions?: ReactNode; details?: ReactNode;
+}) {
+  return (
+    <section className="notice">
+      <h2>{title}</h2>
+      {children ? <p>{children}</p> : null}
+      {actions ? <div className="notice-actions">{actions}</div> : null}
+      {details ? <details className="notice-details"><summary>Setup details</summary>{details}</details> : null}
+    </section>
+  );
+}
+
 /** Shown only when a view takes noticeably long, so cached views never flash. */
 export function Skeleton() {
   return (

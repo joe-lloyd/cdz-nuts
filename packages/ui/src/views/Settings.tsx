@@ -44,7 +44,7 @@ export function Settings() {
               : 'The app installs updates for you when it starts. This button is for when you do not want to wait.'}
           </p>
           <div className="hero-actions">
-            <button type="button" disabled={check.isPending} onClick={() => check.mutate()}>
+            <button className="spbtn" type="button" disabled={check.isPending} onClick={() => check.mutate()}>
               {check.isPending ? 'Checking…' : 'Check for updates'}
             </button>
             {desktop.update_pending ? (

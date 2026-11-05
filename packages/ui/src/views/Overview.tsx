@@ -68,15 +68,10 @@ export function Overview() {
           <h2>{Number(o.plays30).toLocaleString()} plays, <em>{o.hours30} hours.</em></h2>
           <p>{trend}</p>
         </div>
-        <aside className="hero-signal">
-          <span>Downloaded now</span>
-          <b>{Number(c.downloaded ?? 0).toLocaleString()} albums</b>
-          <small>{o.downloadsSyncedAt ? `Library checked ${ago(o.downloadsSyncedAt)}` : 'Waiting for the first library snapshot'}</small>
-        </aside>
       </section>
 
       <div className="tiles">
-        <div className="tile download-tile">
+        <div className="tile">
           <b>{(c.downloaded ?? 0).toLocaleString()}</b>
           <span>albums downloaded{o.downloadsSyncedAt ? ` · ${ago(o.downloadsSyncedAt)}` : ''}</span>
         </div>

@@ -21,7 +21,9 @@ import type { ReactNode } from 'react';
  * Their paths still work; see PAGE_COPY.
  */
 export const TABS = {
+  overview: 'Home',
   artists: 'Artists',
+  albums: 'Albums',
   liked: 'Liked songs',
   playlists: 'Playlists',
   top: 'Top',
@@ -94,6 +96,12 @@ export const ASIDE_COPY: Record<string, [string, string]> = {
   settings: ['This app and this machine', 'Settings'],
 };
 
+export const NOT_FOUND_COPY: [string, string] = ['Nothing at this address', 'Page not found'];
+
+export const SETTINGS_ICON: ReactNode = (
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>
+);
+
 export const DETAIL_COPY = {
   artist: ['Artist in your archive', 'Artist'],
   album: ['Release in your archive', 'Album'],
@@ -108,6 +116,8 @@ export const PARENT_OF: Record<string, string> = {
 const icon = (path: ReactNode): ReactNode => path;
 
 export const TAB_ICONS: Record<TabId, ReactNode> = {
+  overview: icon(<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /></svg>),
+  albums: icon(<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="12" cy="12" r="3.5" /></svg>),
   artists: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>),
   liked: icon(<svg viewBox="0 0 24 24"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>),
   playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7M18 14v6m-3-3h6" /></svg>),

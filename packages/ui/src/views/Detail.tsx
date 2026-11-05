@@ -114,7 +114,7 @@ export function AlbumDetail() {
   );
 }
 
-const RANK_LABEL: Record<string, string> = { short_term: '4w', medium_term: '6mo', long_term: 'yrs' };
+const RANK_LABEL: Record<string, string> = { short_term: 'this month', medium_term: 'this half-year', long_term: 'all time' };
 const GROUPS: Array<[string, string]> = [
   ['album', 'Albums'], ['single', 'Singles & EPs'], ['compilation', 'Compilations'],
 ];
@@ -132,7 +132,7 @@ export function ArtistDetail() {
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
     artist.popularity != null ? `popularity ${artist.popularity}` : '',
     likedLive ? `${likedLive} liked tracks` : '',
-    ...data!.topRanks.map((r) => `#${r.rank} (${RANK_LABEL[r.time_range] ?? r.time_range})`),
+    ...data!.topRanks.map((r) => `top artist #${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`),
   ].filter(Boolean).join(' · ');
 
   return (

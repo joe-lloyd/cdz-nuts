@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useListenBrainz, useStats, useStation, useTopArtists } from '../api/hooks.ts';
 import { post } from '../api/client.ts';
 import { dur } from '../lib/format.ts';
-import { Empty, MediaBadges, PLAY_ICON, PlayControl, RadioControl, Skeleton } from '../components/primitives.tsx';
+import { Empty, MediaBadges, Notice, PLAY_ICON, PlayControl, RadioControl, Skeleton } from '../components/primitives.tsx';
 import { PlayScope, toQueueItem, usePlayAll } from '../components/PlayScope.tsx';
 import { player } from '../player/usePlayer.ts';
 import type { Track } from '../api/types.ts';
@@ -22,7 +22,16 @@ export function Radio() {
   const stats = useStats();
   if (lb.isPending) return <Skeleton />;
   if (!lb.data?.enabled) {
-    return <Empty>Radio is off — no ListenBrainz token is configured.</Empty>;
+    return (
+      <Notice
+        title="Radio needs ListenBrainz"
+        actions={<a className="spbtn" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">Get a ListenBrainz token ↗</a>}
+        details={<p>Copy the user token from your ListenBrainz settings into the server&apos;s <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code>, then restart the web container.</p>}
+      >
+        Radio picks songs you have not heard yet from what you already play. It
+        turns on once this server is linked to a ListenBrainz account.
+      </Notice>
+    );
   }
   const artists = [...new Map((top.data ?? []).filter((a) => a.name).map((a) => [a.name, a])).values()].slice(0, 12);
   const tags = (stats.data?.genres ?? []).slice(0, 12);

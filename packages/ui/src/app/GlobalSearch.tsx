@@ -48,7 +48,7 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
           if (next && !open) window.scrollTo(0, 0);
           if (!next) requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
         }} />
-      {open && <button type="button" onClick={close}>Close search</button>}
+      {open && <button type="button" onClick={close}>Cancel</button>}
     </div>
     <div hidden={open}>{children}</div>
     {open && <section id="search-results" className="search-results" aria-label="Search results">
