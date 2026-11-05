@@ -28,7 +28,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
       <div className="mid">
         <div>{track.name}</div>
         <div className="sub">
-          {track.removed_at ? <span className="chip bad">{`Removed ${shortDay(track.removed_at)}`}</span> : null}
+          {track.removed_at ? <span className="chip bad">{`Off Spotify ${shortDay(track.removed_at)}`}</span> : null}
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}

@@ -3179,3 +3179,8 @@ form button:not([class]):disabled {
   .search-toggle svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
   body:not(.search-open):not(.searching) .global-search-bar { display: none; }
 }
+
+@media (max-width: 760px) {
+  .hero-actions .primary-action,
+  .hero-actions .spbtn { min-height: 44px; }
+}
