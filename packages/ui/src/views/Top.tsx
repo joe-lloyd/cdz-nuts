@@ -188,7 +188,7 @@ function ByPlays({ from, to }: { from: string; to: string }) {
         name: x.artist_name, sub: `${x.plays} plays · ${Math.round(x.ms / 3.6e6)}h`,
         pic: <Pic kind="artists" id={x.artist_id} cdn={x.image_url} name={x.artist_name} />,
       }))} />
-      <div className="tiles">
+      <div className="tiles tiles-five">
         {tiles.map(([k, v]) => <div className="tile" key={k}><b>{v.toLocaleString()}</b><span>{k}</span></div>)}
       </div>
       {insights.length ? (

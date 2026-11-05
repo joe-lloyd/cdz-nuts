@@ -1549,7 +1549,7 @@ input[type="range"] {
   transform: translateY(-2px);
 }
 
-.al-card.gone { opacity: .55; }
+.al-card.gone .al-art { opacity: .45; }
 
 /* On disk but not yet ingested by the player backend: visibly not-ready,
    still identifiable, and it rights itself when the library scan lands. */
@@ -2192,37 +2192,34 @@ input[type="range"] {
 .track-upgrade > span { letter-spacing: -.5px; }
 
 .upgrade-intro {
-  display: grid;
-  grid-template-columns: minmax(0, 1.5fr) auto;
-  gap: 30px;
-  align-items: end;
-  margin-bottom: 18px;
-  padding: clamp(24px, 4vw, 48px);
-  background: linear-gradient(135deg, rgba(217, 59, 180, .15), rgba(255, 255, 255, .025));
-  border: 1px solid var(--line);
-  border-radius: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
 }
 
-.upgrade-intro h2 { max-width: 700px; margin: 8px 0; font-size: clamp(28px, 4vw, 46px); line-height: 1.02; }
-.upgrade-intro p { max-width: 720px; color: var(--ink-2); }
-.upgrade-stats { display: grid; grid-template-columns: auto auto; gap: 0 10px; align-items: baseline; }
-.upgrade-stats b { color: var(--accent); font-size: 28px; font-variant-numeric: tabular-nums; }
-.upgrade-stats span { color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+.upgrade-intro p { max-width: 640px; margin: 0; color: var(--ink-2); font-size: 14px; }
+.upgrade-stats { display: flex; gap: 20px; color: var(--ink-2); font-size: 13px; }
+.upgrade-stats b { margin-right: 4px; color: var(--ink); font-size: 20px; font-variant-numeric: tabular-nums; }
 
 .upgrade-form {
   display: grid;
   grid-template-columns: 2fr 1.15fr 1fr 1fr 1fr 110px;
   gap: 10px;
-  align-items: end;
+  align-items: start;
   padding: 16px;
   background: var(--surface-raised);
   border: 1px solid var(--line);
   border-radius: 14px;
 }
 
-.upgrade-form label { display: grid; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 11px; }
+.upgrade-form label { display: grid; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 12px; }
 .upgrade-form label > span { white-space: nowrap; }
-.upgrade-form label small { color: var(--ink-3); }
+.upgrade-form label small { min-height: 16px; color: var(--ink-3); font-size: 11px; }
+.upgrade-form label:first-child::after,
+.upgrade-form label:nth-child(2)::after { content: ''; min-height: 16px; }
 .upgrade-form input, .upgrade-form select {
   width: 100%;
   min-width: 0;
@@ -2350,6 +2347,8 @@ input[type="range"] {
 .lyrics-body {
   height: calc(100% - 63px);
   max-height: none;
+  /* Lines fade out at the edges instead of being cut by the header. */
+  mask-image: linear-gradient(transparent, #000 12%, #000 82%, transparent);
   padding: 5vh clamp(18px, 6vw, 90px) 34vh;
 }
 
@@ -2400,7 +2399,7 @@ input[type="range"] {
 }
 
 @media (max-width: 760px) {
-  :root { --player: 134px; }
+  :root { --player: 150px; }
   body { padding-bottom: calc(var(--player) + 20px); }
   .app-shell { display: block; }
 
@@ -2532,15 +2531,37 @@ input[type="range"] {
   .player-art { flex-basis: 46px; width: 46px; height: 46px; }
   .player-actions { grid-column: 2; grid-row: 1; }
   .volume-control { display: none; }
-  .player-transport { grid-column: 1 / -1; grid-row: 2; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; }
-  .player-controls { margin: 0; }
-  .scrubber-row { width: 100%; }
+  /* The seek bar takes the full width on its own line, with the times either
+     side of the controls under it. */
+  .player-transport {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 52px;
+    grid-template-areas: "bar bar bar" "t1 ctl t2";
+    align-items: center;
+    gap: 2px 0;
+  }
+  .scrubber-row { display: contents; }
+  .scrubber-row > input { grid-area: bar; width: 100%; }
+  .scrubber-row > span:first-child { grid-area: t1; }
+  .scrubber-row > span:last-child { grid-area: t2; }
+  .player-controls { grid-area: ctl; justify-self: center; margin: 0; }
+  .track-play {
+    flex-basis: 44px;
+    width: 44px;
+    height: 44px;
+    padding: 7px;
+    border: 0;
+    outline: 1px solid var(--line-strong);
+    outline-offset: -7px;
+    background-clip: content-box;
+  }
   .queue-panel { right: 10px; bottom: calc(var(--player) + 8px); width: calc(100vw - 20px); }
   .lyrics-panel { inset: 0 0 var(--player) 0; width: auto; border-radius: 0; }
   .toast { right: 12px; bottom: calc(var(--player) + 14px); max-width: calc(100vw - 24px); }
   .track-upgrade { min-width: 31px; width: 31px; padding-inline: 4px; }
   .track-upgrade > span { display: none; }
-  .upgrade-intro { grid-template-columns: 1fr; gap: 16px; padding: 24px; }
   .upgrade-form { grid-template-columns: 1fr 1fr; }
   .upgrade-form label:first-child { grid-column: 1 / -1; }
   .upgrade-actions { grid-column: 2; }
@@ -2558,7 +2579,6 @@ input[type="range"] {
   .player-track { padding-right: 42px; }
   .player-actions { position: absolute; top: 16px; right: 14px; display: flex; }
   .player-transport { grid-column: 1; }
-  .scrubber-row { grid-template-columns: 40px minmax(0, 1fr) 48px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -2770,7 +2790,7 @@ input[type="range"] {
 .track-upgrade.queued { color: var(--accent); border-color: var(--accent); }
 
 /* Search stays available while the page and player retain their state. */
-.global-search-bar { position: sticky; top: 0; z-index: 25; display: flex; gap: 10px; padding: 12px 0; margin-bottom: 16px; background: var(--bg, #090b0a); }
+.global-search-bar { position: sticky; top: 0; z-index: 25; display: flex; gap: 10px; padding: 12px 0; margin-bottom: 16px; background: linear-gradient(var(--surface) 78%, transparent); }
 .global-search-bar input { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
 .global-search-bar button { flex-shrink: 0; min-height: 44px; }
 .search-results { min-height: 60vh; padding-bottom: 24px; }
@@ -2918,3 +2938,7 @@ details > summary:hover { color: var(--ink); }
 .queue-index.now { display: grid; place-items: center; color: var(--accent); }
 .queue-index.now svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 2.4; }
 .lyrics-tools small { margin-right: 2px; color: var(--ink-3); font-family: inherit; font-size: 11px; }
+
+@media (min-width: 761px) {
+  .tiles-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}

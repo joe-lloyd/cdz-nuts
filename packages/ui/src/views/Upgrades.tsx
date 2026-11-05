@@ -58,12 +58,8 @@ export function Upgrades() {
   return (
     <>
       <div className="upgrade-intro">
-        <div>
-          <span className="eyebrow">Lossy now, lossless later</span>
-          <h2>Feed the archive today. Let FLAC catch up.</h2>
-          <p>On the next worker sweep, a source link becomes an MP3; later sweeps replace it only after codec, duration, artist and title checks pass.</p>
-        </div>
-        <div className="upgrade-stats"><b>{active}</b><span>active</span><b>{finished}</b><span>finished</span></div>
+        <p>Paste a link and the song joins the archive as an MP3 on the next sweep. Later sweeps swap in a lossless copy once its length, artist and title match.</p>
+        <div className="upgrade-stats"><span><b>{active}</b> in progress</span><span><b>{finished}</b> finished</span></div>
       </div>
 
       <form className="upgrade-form" onSubmit={onSubmit}>
@@ -81,10 +77,10 @@ export function Upgrades() {
             <option value="chapters">Chaptered video</option>
           </select>
         </label>
-        <label><span>Artist <small>(needed for YouTube)</small></span><input name="artist" placeholder="Artist" required={batch} /></label>
-        <label><span>Title <small>(single track)</small></span><input name="title" placeholder="Song title" disabled={batch} /></label>
-        <label><span>Album <small>(required for album intake)</small></span><input name="album" placeholder="Album" required={batch} /></label>
-        <label><span>FLAC attempts</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /></label>
+        <label><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>Needed for YouTube links</small></label>
+        <label><span>Title</span><input name="title" placeholder="Song title" disabled={batch} /><small>Single tracks only</small></label>
+        <label><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>Needed to import an album</small></label>
+        <label><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Sweeps before giving up</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
           {batch ? 'Import album + queue every track for FLAC' : 'Add to archive + FLAC queue'}
         </button>
