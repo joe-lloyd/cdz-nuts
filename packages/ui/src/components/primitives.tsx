@@ -26,6 +26,17 @@ export function useNowPlaying(id: string): '' | ' playing' | ' paused' {
 /** A scanner badge or a confirmed playable installation is sufficient. */
 export const isHeld = (track: Badged): boolean => Boolean(track.quality || track.playable);
 
+/**
+ * Known to need fetching: not in the archive by the list's own data, and the
+ * download check has answered without finding it. Unknown counts as fine, so
+ * a row does not grow a line when the answer arrives.
+ */
+export function useMissing(track: Track): boolean {
+  const held = isHeld(track);
+  const progress = useDownloadProgress(track, held);
+  return !held && Boolean(progress.status) && !progress.status!.ready;
+}
+
 export const PLAY_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
 );
@@ -173,7 +184,7 @@ export function PlayControl({ track }: { track: Track }) {
   const busy = !stopped && (requested || Boolean(label));
   if (!track.id) return null;
 
-  if (!isHeld(track) && !progress.status?.ready) {
+  if (!isHeld(track) && !progress.status?.ready && !state) {
     return (
       <span className="download-control">
       <button

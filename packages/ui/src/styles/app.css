@@ -166,7 +166,7 @@ input:focus-visible {
   border: 1px solid rgba(255, 255, 255, .16);
   border-radius: 999px;
   color: var(--ink-3);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   letter-spacing: .02em;
@@ -308,7 +308,7 @@ input:focus-visible {
 
 .archive-state b {
   overflow: hidden;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -317,7 +317,7 @@ input:focus-visible {
   margin-top: 1px;
   overflow: hidden;
   color: var(--ink-3);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -454,7 +454,7 @@ input:focus-visible {
   border: 1px solid var(--accent);
   border-radius: 999px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   text-decoration: none;
 }
@@ -599,7 +599,7 @@ p a,
 
 .tile span {
   color: var(--ink-3);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -728,7 +728,7 @@ p a,
   color: var(--ink-2);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -783,7 +783,7 @@ label.chk input { accent-color: var(--accent); }
   border: 1px solid var(--line-strong);
   border-radius: 999px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .seg button.on {
@@ -853,7 +853,7 @@ label.chk input { accent-color: var(--accent); }
 }
 
 .rank { width: 2.4em; }
-.heart { flex: none; width: 1em; color: var(--accent); font-size: 11px; text-align: center; }
+.heart { flex: none; width: 1em; color: var(--accent); font-size: 12px; text-align: center; }
 
 .track-play {
   display: grid;
@@ -893,13 +893,13 @@ label.chk input { accent-color: var(--accent); }
 .hero {
   display: grid;
   /* Compact, so the tracks start in the first screen. */
-  grid-template-columns: 200px minmax(0, 1fr);
-  gap: 32px;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 28px;
   /* centred, not bottom-glued: with a long title the old end-alignment
      rammed the buttons into the panel's bottom edge */
   align-items: center;
-  margin-bottom: 24px;
-  padding: 24px;
+  margin-bottom: 20px;
+  padding: 20px;
   background:
     linear-gradient(125deg, rgba(161, 138, 252, .13), transparent 55%),
     var(--surface-raised);
@@ -953,7 +953,7 @@ label.chk input { accent-color: var(--accent); }
   max-width: 180px;
   overflow: hidden;
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -965,9 +965,9 @@ label.chk input { accent-color: var(--accent); }
   border-radius: 99px;
 }
 
-.bars .n { color: var(--ink-3); font-size: 11px; font-variant-numeric: tabular-nums; }
+.bars .n { color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; }
 
-svg text { fill: var(--ink-3); font-size: 11px; }
+svg text { fill: var(--ink-3); font-size: 12px; }
 
 .empty {
   padding: 42px 16px;
@@ -1051,7 +1051,7 @@ svg text { fill: var(--ink-3); font-size: 11px; }
 }
 
 .player-copy b { font-size: 14px; }
-.player-copy > span:last-child { margin-top: 2px; color: var(--ink-3); font-size: 11px; }
+.player-copy > span:last-child { margin-top: 2px; color: var(--ink-3); font-size: 12px; }
 
 /* Wide but not silly: the seek bar grows with the window up to a metre-long
    desk monitor, then stops so the thumb is still findable. */
@@ -1148,7 +1148,7 @@ input[type="range"] {
   gap: 7px;
   min-width: 44px;
   height: 44px;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .queue-button svg,
@@ -1278,7 +1278,7 @@ input[type="range"] {
 .queue-head b { display: block; }
 .queue-head span { color: var(--ink-3); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; }
 .queue-head b { margin-top: 2px; font-size: 16px; }
-.queue-head button { width: 32px; height: 32px; color: var(--ink-2); font-size: 24px; }
+.queue-head > button { width: 32px; height: 32px; color: var(--ink-2); font-size: 24px; }
 
 .queue-list {
   max-height: 500px;
@@ -1308,8 +1308,8 @@ input[type="range"] {
 .queue-index { color: var(--ink-3); font: 11px ui-monospace, monospace; }
 .queue-item b,
 .queue-item small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.queue-item b { font-size: 11px; }
-.queue-item small { color: var(--ink-3); font-size: 11px; }
+.queue-item b { font-size: 12px; }
+.queue-item small { color: var(--ink-3); font-size: 12px; }
 .queue-duration { color: var(--ink-3); font: 11px ui-monospace, monospace; }
 
 .queue-button:disabled { opacity: .35; cursor: default; }
@@ -1317,8 +1317,9 @@ input[type="range"] {
 /* Songs page: two columns of dense song cards on desktop. */
 .song-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-  gap: 2px 22px;
+  /* One column: a song list is read down, and two columns cut titles short. */
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
   margin-bottom: 8px;
 }
 
@@ -1434,7 +1435,7 @@ input[type="range"] {
 }
 
 /* .al-body b would otherwise make the figure as large as the album title. */
-.song-badges .q-badge b { font-size: 11px; font-weight: 600; }
+.song-badges .q-badge b { font-size: 12px; font-weight: 600; }
 
 .q-bars {
   display: inline-flex;
@@ -1593,7 +1594,7 @@ input[type="range"] {
   border-radius: 999px;
   background: rgba(10, 8, 10, .8);
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: .03em;
   backdrop-filter: blur(6px);
   white-space: nowrap;
@@ -1625,7 +1626,7 @@ input[type="range"] {
   .al-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 10px; }
   .al-card { padding: 7px; gap: 7px; }
   .al-body b { font-size: 12px; }
-  .al-body .sub { font-size: 11px; }
+  .al-body .sub { font-size: 12px; }
 }
 
 /* Playlist collage: up to four covers behind one card. */
@@ -1704,7 +1705,7 @@ input[type="range"] {
   background: none;
   color: var(--ink-2);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -1742,7 +1743,7 @@ input[type="range"] {
   background: none;
   color: var(--ink-2);
   font: inherit;
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -1760,7 +1761,7 @@ input[type="range"] {
   padding: 1px 5px;
   border-radius: 5px;
   background: var(--surface-soft);
-  font-size: 11px;
+  font-size: 12px;
 }
 .cd-setup a { color: var(--accent); }
 
@@ -1773,7 +1774,7 @@ input[type="range"] {
   gap: 16px;
   margin: 2px 0 12px;
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .viz-legend i {
@@ -1799,7 +1800,7 @@ input[type="range"] {
 }
 
 .rot-row:hover { background: rgba(255, 255, 255, .025); text-decoration: none; }
-.rot-row b { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.rot-row b { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .rot-row i { display: block; height: 8px; min-width: 2px; background: #d93bb4; border-radius: 4px; }
 .rot-row .n { color: var(--ink-3); font: 11px ui-monospace, monospace; text-align: right; }
 
@@ -1808,7 +1809,7 @@ input[type="range"] {
 
 .card.nudge p { color: var(--ink-2); font-size: 12px; line-height: 1.75; }
 .card.nudge a { color: var(--accent); }
-.card.nudge code { font-size: 11px; color: var(--ink); }
+.card.nudge code { font-size: 12px; color: var(--ink); }
 
 /* Top page: podium, staggered rows, share bars, insight cards. */
 .podium {
@@ -1840,7 +1841,7 @@ input[type="range"] {
 .podium .p1 .pic { width: 118px; height: 118px; }
 .podium .step b { font-size: 13px; }
 .podium .p1 b { font-size: 16px; }
-.podium .step small { color: var(--ink-3); font-size: 11px; }
+.podium .step small { color: var(--ink-3); font-size: 12px; }
 
 .medal {
   display: grid;
@@ -1851,7 +1852,7 @@ input[type="range"] {
   background: var(--surface-soft);
   border: 1px solid var(--line-strong);
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -2003,8 +2004,8 @@ input[type="range"] {
 }
 
 .gig-body > b { font-size: 13px; }
-.gig-title { color: var(--ink-2); font-size: 11px; }
-.gig-where { color: var(--ink-3); font-size: 11px; }
+.gig-title { color: var(--ink-2); font-size: 12px; }
+.gig-where { color: var(--ink-3); font-size: 12px; }
 
 .gig-foot {
   display: flex;
@@ -2014,7 +2015,7 @@ input[type="range"] {
   margin-top: auto;
   padding-top: 9px;
   color: var(--ink-3);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .gig-tickets {
@@ -2027,7 +2028,7 @@ input[type="range"] {
   color: var(--accent);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2045,7 +2046,7 @@ input[type="range"] {
   .podium { gap: 8px; }
   .podium .step .pic { width: 60px; height: 60px; }
   .podium .p1 .pic { width: 84px; height: 84px; }
-  .podium .step b { font-size: 11px; }
+  .podium .step b { font-size: 12px; }
   .podium .p1 b { font-size: 13px; }
 }
 
@@ -2127,7 +2128,7 @@ input[type="range"] {
   border: 1px solid var(--line);
   border-radius: 7px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .lyrics-tools button:hover { color: var(--ink); border-color: var(--line-strong); }
@@ -2162,7 +2163,7 @@ input[type="range"] {
 .lyrics-plain {
   padding: 2px 12px 12px;
   color: var(--ink-2);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.8;
   white-space: pre-wrap;
 }
@@ -2215,7 +2216,7 @@ input[type="range"] {
 
 .upgrade-form label { display: grid; gap: 6px; min-width: 0; color: var(--ink-2); font-size: 12px; }
 .upgrade-form label > span { white-space: nowrap; }
-.upgrade-form label small { min-height: 16px; color: var(--ink-3); font-size: 11px; }
+.upgrade-form label small { min-height: 16px; color: var(--ink-3); font-size: 12px; }
 .upgrade-form label:first-child::after,
 .upgrade-form label:nth-child(2)::after { content: ''; min-height: 16px; }
 .upgrade-form input, .upgrade-form select {
@@ -2273,7 +2274,7 @@ input[type="range"] {
   margin-top: 4px;
 }
 
-.upgrade-tries small { color: var(--ink-3); font-size: 11px; }
+.upgrade-tries small { color: var(--ink-3); font-size: 12px; }
 
 .upgrade-dots { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: middle; }
 
@@ -2291,7 +2292,7 @@ input[type="range"] {
 
 .upgrade-error {
   color: #e58a78;
-  font-size: 11px;
+  font-size: 12px;
   font-style: normal;
   line-height: 1.5;
 }
@@ -2316,7 +2317,7 @@ input[type="range"] {
   border: 1px solid var(--line);
   border-radius: 7px;
   cursor: pointer;
-  font-size: 11px;
+  font-size: 12px;
 }
 .upgrade-actions button:hover { color: var(--ink); border-color: var(--line-strong); }
 .upgrade-actions button.danger { color: var(--coral); border-color: rgba(255, 120, 94, .3); }
@@ -2495,7 +2496,7 @@ input[type="range"] {
      which is the whole point on a page as long as a discography. Pushed to
      the right of the burger and the brand. */
   .page-head .page-back { display: none; }
-  .mobile-bar .page-back { min-height: 44px; margin: 0 0 0 auto; padding: 0 13px 0 9px; }
+  .mobile-bar .page-back { min-height: 44px; margin: 0; padding: 0 13px 0 9px; }
   .page-head { align-items: center; min-height: 0; margin-bottom: 12px; padding-bottom: 10px; }
   .page-head h1 { font-size: 20px; }
   .overview-hero { grid-template-columns: 1fr; min-height: 0; padding: 28px; }
@@ -2512,7 +2513,7 @@ input[type="range"] {
   .hero .meta { margin-top: 2px; font-size: 12px; line-height: 1.5; }
   .hero-actions .spbtn { min-height: 36px; padding: 0 12px; }
   .hero h1 { font-size: clamp(28px, 8vw, 42px); }
-  .hero .meta { font-size: 11px; }
+  .hero .meta { font-size: 12px; }
   .row { gap: 8px; padding-inline: 3px; }
   .slim-row { margin-left: 0; }
   .row .end { display: none; }
@@ -2669,7 +2670,7 @@ input[type="range"] {
 .station-head .meta { color: var(--ink-2); font-size: 14px; }
 
 /* A track already in the library: quiet confirmation, not decoration. */
-.radio-have { color: var(--accent); font-size: 11px; opacity: .65; }
+.radio-have { color: var(--accent); font-size: 12px; opacity: .65; }
 
 /* Not here yet. Dimmed because it cannot be played, but fully readable — it
    is the half of the station that is the point. */
@@ -2785,7 +2786,7 @@ input[type="range"] {
 .track-upgrade.queued { color: var(--accent); border-color: var(--accent); }
 
 /* Search stays available while the page and player retain their state. */
-.global-search-bar { position: sticky; top: 0; z-index: 25; display: flex; gap: 10px; padding: 12px 0; margin-bottom: 16px; background: linear-gradient(var(--surface) 78%, transparent); }
+.global-search-bar { position: relative; z-index: 25; display: flex; gap: 10px; padding: 12px 0; margin-bottom: 16px; background: none; }
 .global-search-bar input { width: 100%; min-width: 0; min-height: 44px; font-size: 16px; }
 .global-search-bar button { flex-shrink: 0; min-height: 44px; }
 .search-results { min-height: 60vh; padding-bottom: 24px; }
@@ -2798,7 +2799,7 @@ input[type="range"] {
 .like-control [role="status"] { display: block; font-size: 12px; color: var(--ink-2); }
 .hero-actions .like-control { display: flex; align-items: center; gap: 8px; }
 .hero-actions .like-control [role="status"], .hero-actions .like-control [role="alert"] { display: inline; max-width: none; }
-@media (max-width: 760px) { .global-search-bar { top: 59px; } .global-search-bar button { font-size: 12px; max-width: 80px; } }
+@media (max-width: 760px) { .global-search-bar button { font-size: 12px; max-width: 80px; } }
 
 .like-button, .global-search-bar button { background: transparent; color: var(--ink); border: 1px solid var(--line); border-radius: 8px; cursor: pointer; }
 .like-button { border-color: transparent; padding: 0; }
@@ -2808,11 +2809,11 @@ input[type="range"] {
 /* Keep radio beside each queue item, outside its playback button. */
 .queue-entry { display: flex; align-items: center; }
 .queue-entry .queue-item { flex: 1; min-width: 0; }
-.track-radio { width: auto; padding: 0 6px; gap: 4px; font-size: 11px; }
+.track-radio { width: auto; padding: 0 6px; gap: 4px; font-size: 12px; }
 .track-radio:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .download-control { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100px; }
-.download-status { color: var(--ink-3); font-size: 11px; line-height: 1.3; text-align: center; }
+.download-status { color: var(--ink-3); font-size: 12px; line-height: 1.3; text-align: center; }
 @media (max-width: 600px) { .download-control { max-width: 70px; } }
 
 
@@ -2933,7 +2934,7 @@ details > summary:hover { color: var(--ink); }
 
 .queue-index.now { display: grid; place-items: center; color: var(--accent); }
 .queue-index.now svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-width: 2.4; }
-.lyrics-tools small { margin-right: 2px; color: var(--ink-3); font-family: inherit; font-size: 11px; }
+.lyrics-tools small { margin-right: 2px; color: var(--ink-3); font-family: inherit; font-size: 12px; }
 
 @media (min-width: 761px) {
   .tiles-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -2968,7 +2969,7 @@ form button:not([class]):disabled {
 }
 
 .lyrics-tools span { color: var(--ink-2); letter-spacing: 0; text-transform: none; }
-.lyrics-tools button { min-width: 44px; min-height: 32px; padding: 0 10px; }
+.lyrics-tools button { width: auto; min-width: 44px; min-height: 32px; padding: 0 10px; font-family: inherit; font-size: 12px; }
 .lyrics-tools small { align-self: center; }
 
 .queue-duration { color: var(--ink-2); font-size: 12px; }
@@ -3112,6 +3113,69 @@ form button:not([class]):disabled {
     cursor: pointer;
   }
   .drawer-close svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
-  .queue-head button,
+  .queue-head > button,
   .lyrics-tools #lyrics-close { width: 44px; height: 44px; }
+}
+
+/* A detail page's head is one quiet line: back, then what kind of page. */
+.page-head.is-detail { min-height: 0; margin-bottom: 16px; padding-bottom: 12px; }
+.page-head.is-detail > div { display: flex; align-items: center; gap: 14px; }
+.page-head.is-detail .page-back { margin: 0; }
+
+.podium .step .pic { background: none; border-radius: 50%; }
+
+.player-bar[data-state="idle"] .scrubber-row { visibility: hidden; }
+
+/* Playlists get the same hero as albums and artists, with their mosaic. */
+.hero.pl-hero .pl-collage { position: relative; inset: auto; display: grid; width: 100%; aspect-ratio: 1; overflow: hidden; border-radius: 14px; }
+
+@media (max-width: 760px) {
+  /* Overlays stop above the seek bar along the player's top edge. */
+  .lyrics-panel { inset: 0 0 calc(var(--player) + 12px) 0; }
+  .queue-panel:not(.lyrics-panel) { bottom: calc(var(--player) + 20px); }
+  .sidebar { inset: 0 auto calc(var(--player) + 12px) 0; }
+  .upgrade-form label:nth-child(2) { grid-column: 1 / -1; }
+  .upgrade-form { gap: 12px 10px; }
+  .upgrade-form label:first-child::after,
+  .upgrade-form label:nth-child(2)::after { content: none; }
+  /* Three names do not fit side by side; the podium becomes a short list. */
+  .podium { display: flex; flex-direction: column; gap: 8px; }
+  .podium .step { flex-direction: row; gap: 14px; padding: 12px 16px; text-align: left; }
+  .podium .p1 { order: -1; padding-block: 12px; }
+  .podium .step .pic,
+  .podium .p1 .pic { width: 56px; height: 56px; }
+}
+
+.pic .dl { display: inline-flex; align-items: center; width: auto; height: 24px; gap: 4px; padding: 0 8px 0 6px; font-size: 11px; font-weight: 600; }
+.pic .dl svg { width: 12px; height: 12px; }
+.row > .song-badges .s-badge,
+.row > .ext { display: none; }
+.hero.pl-hero > .pl-collage { grid-column: 1; }
+.hero.pl-hero .pl-head h1 { margin-bottom: 6px; }
+
+@media (max-width: 760px) {
+  .hero.pl-hero > .pl-collage { grid-row: 1 / span 4; }
+}
+
+.not-held { color: var(--ink-3); font-size: 12px; }
+
+.search-toggle { display: none; }
+
+@media (max-width: 760px) {
+  /* Search lives behind a button in the top bar, so pages start higher. */
+  .search-toggle {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-left: auto;
+    padding: 0;
+    color: var(--ink-2);
+    background: transparent;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  .search-toggle svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+  body:not(.search-open):not(.searching) .global-search-bar { display: none; }
 }

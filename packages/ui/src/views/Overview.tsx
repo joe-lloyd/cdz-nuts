@@ -42,8 +42,8 @@ export function Overview() {
     : `Down ${-delta}% on the month before — quieter days.`;
 
   const tiles: Array<[string, string | number]> = [
-    ['artists in your taste', c.tasteArtists], ['liked songs', c.liked],
-    ['saved albums', c.albums], ['playlists', c.playlists],
+    ['artists in your taste', c.tasteArtists], ['songs liked on Spotify', c.liked],
+    ['albums saved on Spotify', c.albums], ['playlists', c.playlists],
     ['plays on record', Number(c.totalPlays).toLocaleString()],
     ['played right here', Number(c.appPlays).toLocaleString()],
     ...(o.history.rows ? [['lifetime hours', Number(o.history.hours).toLocaleString()] as [string, string]] : []),

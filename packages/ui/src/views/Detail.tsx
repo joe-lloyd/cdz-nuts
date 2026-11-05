@@ -4,7 +4,7 @@ import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAlbum, useArtist, useEvents } from '../api/hooks.ts';
-import { day, dur } from '../lib/format.ts';
+import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
@@ -26,7 +26,8 @@ export function AlbumDetail() {
     (album.release_date ?? '').slice(0, 10), album.album_type,
     album.total_tracks ? `${album.total_tracks} tracks` : '',
     album.label ?? '', album.popularity != null ? `popularity ${album.popularity}` : '',
-    album.is_saved ? `saved ${day(album.saved_at)} ✓` : '',
+    album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
+    album.downloaded ? 'in your archive' : '',
   ].filter(Boolean).join(' · ');
 
   const discs = [...new Set(tracks.map((t) => t.disc_number ?? 1))].sort((a, b) => a - b);
@@ -58,7 +59,7 @@ export function AlbumDetail() {
                 const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : ''].filter(Boolean).join(', ');
                 return (
                   <span key={e.id}>
-                    {i ? ', ' : ''}<Link to={`/album/${e.id}`}>{e.name}</Link>{detail ? ` (${detail})` : ''}{e.is_saved ? ' ✓' : ''}
+                    {i ? ', ' : ''}<Link to={`/album/${e.id}`}>{e.name}</Link>{detail ? ` (${detail}${e.is_saved ? ', saved' : ''})` : e.is_saved ? ' (saved)' : ''}
                   </span>
                 );
               })}

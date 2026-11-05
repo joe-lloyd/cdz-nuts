@@ -3,18 +3,20 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useMissing, useNowPlaying } from './primitives.tsx';
 
 const DownloadBadge = () => (
-  <span className="dl" title="In your archive" aria-label="In your archive">
+  <span className="dl" title="This album is in your archive">
     <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
       <path fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" />
     </svg>
+    <span>In archive</span>
   </span>
 );
 
 export function TrackRow({ track, endText, rank }: { track: Track; endText?: string | undefined; rank?: number | null | undefined }) {
   const state = useNowPlaying(track.id);
+  const missing = useMissing(track);
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
     <div className={`row${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
@@ -30,6 +32,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+          {missing && !state ? <span className="not-held"> · not in your archive</span> : null}
         </div>
       </div>
       <MediaBadges row={track} />
@@ -44,6 +47,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
 /** Denser than a full row, so two fit side by side at desktop width. */
 export function SongCard({ track, meta, current = true }: { track: Track; meta?: string | undefined; current?: boolean | undefined }) {
   const playing = useNowPlaying(track.id);
+  const missing = useMissing(track);
   const state = current ? playing : '';
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
@@ -60,6 +64,7 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
             {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
             {track.album && meta ? ' · ' : ''}
             {meta ? <span className="song-meta">{meta}</span> : null}
+            {missing && !playing ? <span className="not-held"> · not in your archive</span> : null}
           </span>
         ) : null}
       </div>

@@ -21,9 +21,9 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
         <div><span>{p.lyricsSource}</span><b>{p.lyricsTitle}</b></div>
         <div className="lyrics-tools" role="group" aria-label="Lyrics timing">
           <small>Timing</small>
-          <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>−.5s</button>
+          <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>Earlier</button>
           <span aria-live="polite">{`${p.lyricOffset > 0 ? '+' : ''}${p.lyricOffset.toFixed(1)}s`}</span>
-          <button type="button" aria-label="Shift lyrics half a second later" onClick={() => player.nudgeLyrics(0.5)}>+.5s</button>
+          <button type="button" aria-label="Shift lyrics half a second later" onClick={() => player.nudgeLyrics(0.5)}>Later</button>
           <button id="lyrics-close" type="button" aria-label="Close lyrics" onClick={onClose}>×</button>
         </div>
       </div>

@@ -7,7 +7,7 @@ import {
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
-import { ago, day, dur, initial } from '../lib/format.ts';
+import { ago, day, dur, initial, shortDay } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, SongCard, TrackRow } from '../components/rows.tsx';
 import { Badges, Empty, GenreChips, PLAY_ICON, Pic, Skeleton } from '../components/primitives.tsx';
@@ -113,6 +113,8 @@ export function Playlists() {
   // Spotify refuses to enumerate some playlists, so they sync with zero tracks.
   // A card that opens to an empty page is worse than no card.
   const pls = all.filter((p) => p.source === 'local' || Number(p.synced_tracks ?? 0) > 0);
+  // Playlists gone from Spotify go last; they still play from the archive.
+  pls.sort((x, y) => Number(Boolean(x.removed_at)) - Number(Boolean(y.removed_at)));
   const hidden = all.length - pls.length;
 
   return (
@@ -140,7 +142,7 @@ export function Playlists() {
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
                 <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs{p.owner_name ? ` · ${p.owner_name}` : ''}</span>
-                {p.removed_at ? <span className="sub dim">removed {day(p.removed_at)}</span>
+                {p.removed_at ? <span className="chip bad">Off Spotify {shortDay(p.removed_at)}</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>
@@ -162,7 +164,15 @@ export function PlaylistDetail() {
   return (
     <>
       {meta ? (
-        <div className="pl-head">
+        <div className="hero pl-hero">
+          {(meta.images ?? []).length ? (
+            <span className={`pl-collage n${Math.min(4, (meta.images ?? []).length)}`}>
+              {(meta.images ?? []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" />)}
+            </span>
+          ) : (
+            <span className="pl-collage empty-collage"><span className="ph">{initial(meta.name)}</span></span>
+          )}
+          <div className="pl-head">
           <h1>{meta.name}</h1>
           <div className="meta">
             {rows.length} songs{meta.owner_name ? ` · by ${meta.owner_name}` : ''}
@@ -176,6 +186,7 @@ export function PlaylistDetail() {
               </button>
             </div>
           ) : null}
+          </div>
         </div>
       ) : null}
       {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
