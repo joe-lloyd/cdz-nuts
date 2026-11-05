@@ -6,9 +6,9 @@ import type { Album, GigEvent, Track } from '../api/types.ts';
 import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useNowPlaying } from './primitives.tsx';
 
 const DownloadBadge = () => (
-  <span className="dl" title="already in the local library">
+  <span className="dl" title="In your archive" aria-label="In your archive">
     <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
-      <path fill="currentColor" d="M11 3h2v8h3l-4 4-4-4h3z" /><path fill="currentColor" d="M5 19h14v2H5z" />
+      <path fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" />
     </svg>
   </span>
 );
@@ -40,8 +40,9 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
 }
 
 /** Denser than a full row, so two fit side by side at desktop width. */
-export function SongCard({ track, meta }: { track: Track; meta?: string | undefined }) {
-  const state = useNowPlaying(track.id);
+export function SongCard({ track, meta, current = true }: { track: Track; meta?: string | undefined; current?: boolean | undefined }) {
+  const playing = useNowPlaying(track.id);
+  const state = current ? playing : '';
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
     <div className={`song-card${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
@@ -111,7 +112,10 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   const soon = days != null && days >= 0 && days <= 14;
   const countdown = days == null ? '' : days <= 0 ? 'tonight' : days === 1 ? 'tomorrow' : `in ${days} days`;
   const dateLine = when
-    ? when.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    ? when.toLocaleDateString(undefined, {
+      weekday: 'short', day: 'numeric', month: 'short',
+      ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
+    })
     : 'date TBA';
   const showTitle = event.name && (event.name ?? '').toLowerCase() !== (event.artist_name ?? '').toLowerCase()
     ? event.name : '';

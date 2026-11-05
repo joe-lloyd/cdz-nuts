@@ -81,9 +81,9 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
 /** Tombstones: history is kept, these say what changed and when. */
 export function Badges({ row }: { row: Tombstoned }) {
   const items = [
-    row.removed_at ? <Chip key="r" text={`removed from spotify ${day(row.removed_at)}`} bad /> : null,
-    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`unfollowed ${day(row.unfollowed_at)}`} /> : null,
-    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`unsaved ${day(row.unsaved_at)}`} /> : null,
+    row.removed_at ? <Chip key="r" text={`Removed from Spotify ${day(row.removed_at)}`} bad /> : null,
+    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`Unfollowed ${day(row.unfollowed_at)}`} /> : null,
+    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`Unsaved ${day(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
   return items.length ? <div className="chips">{items}</div> : null;
 }
@@ -226,11 +226,11 @@ export const SpotifyLink = ({ type, id }: { type: string; id: string }) => (
 );
 
 export const SpotifyButton = ({ type, id }: { type: string; id: string }) => (
-  <a className="spbtn" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener">Open in Spotify ↗</a>
+  <a className="spbtn" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener">Spotify ↗</a>
 );
 
 /** Legal lossless: a Bandcamp search deep-link. */
-export const BandcampButton = ({ query, type = 'a', label = 'Find on Bandcamp ↗' }: {
+export const BandcampButton = ({ query, type = 'a', label = 'Bandcamp ↗' }: {
   query: string; type?: string; label?: string;
 }) => (
   <a className="spbtn" href={`https://bandcamp.com/search?q=${encodeURIComponent(query)}&item_type=${type}`} target="_blank" rel="noopener">{label}</a>

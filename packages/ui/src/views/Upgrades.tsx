@@ -19,6 +19,7 @@ export function Upgrades() {
   const { data, isPending, isFetching } = useUpgrades();
   const client = useQueryClient();
   const [mode, setMode] = useState('single');
+  const [more, setMore] = useState(false);
 
   const refresh = () => void client.invalidateQueries({ queryKey: ['upgrades'] });
 
@@ -58,7 +59,7 @@ export function Upgrades() {
   return (
     <>
       <div className="upgrade-intro">
-        <p>Paste a link and the song joins the archive as an MP3 on the next sweep. Later sweeps swap in a lossless copy once its length, artist and title match.</p>
+        <p>Paste a link and the song joins the archive as an MP3 within a few minutes. The server then keeps looking for a lossless copy, and swaps it in once its length, artist and title match.</p>
         <div className="upgrade-stats"><span><b>{active}</b> in progress</span><span><b>{finished}</b> finished</span></div>
       </div>
 
@@ -77,10 +78,16 @@ export function Upgrades() {
             <option value="chapters">Chaptered video</option>
           </select>
         </label>
-        <label><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>Needed for YouTube links</small></label>
-        <label><span>Title</span><input name="title" placeholder="Song title" disabled={batch} /><small>Single tracks only</small></label>
-        <label><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>Needed to import an album</small></label>
-        <label><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Sweeps before giving up</small></label>
+        {/* On a phone the optional fields fold away until asked for, so the
+            link and its button stay together. Album imports need them, so
+            those open them. */}
+        <button className="upgrade-more" type="button" aria-expanded={more || batch} onClick={() => setMore(!more)} hidden={batch}>
+          {more ? 'Fewer details' : 'Add artist, title or album'}
+        </button>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>Needed for YouTube links</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Title</span><input name="title" placeholder="Song title" disabled={batch} /><small>Single tracks only</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>Needed to import an album</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Searches before giving up</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
           {batch ? 'Import album + queue every track for FLAC' : 'Add to archive + FLAC queue'}
         </button>
@@ -134,7 +141,7 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
             <i key={i} className={`${i < attempts.used ? 'used' : ''}${job.status === 'working' && i === attempts.used ? ' live' : ''}`.trim() || undefined} />
           ))}
         </span>
-        <small>{attempts.used}/{attempts.max} {attempts.what}{detail ? ` · ${detail}` : ''}</small>
+        <small>{attempts.used} of {attempts.max} {attempts.what === 'FLAC' ? 'lossless' : 'download'} tries used{detail ? ` · ${detail}` : ''}</small>
       </div>
       {job.last_error ? <em className="upgrade-error">{job.last_error}</em> : null}
       {canRetry || canCancel || canRemove ? (

@@ -103,19 +103,20 @@ export function PlayerBar() {
 
         <div className="player-actions">
           <button
-            className="queue-button lyrics-button" type="button" aria-label="Lyrics"
+            className="queue-button lyrics-button" type="button" aria-label="Lyrics" title="Lyrics"
             aria-expanded={panel === 'lyrics'} disabled={!p.lyrics}
             onClick={() => setPanel(panel === 'lyrics' ? null : 'lyrics')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 18V6l10-2v11" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="15" r="2.5" />
+              <path d="M5 5h14a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H10l-4 3v-3H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1Z" /><path d="M8 9h8M8 12.5h5" />
             </svg>
           </button>
           <button
             className="queue-button" type="button" aria-expanded={panel === 'queue'}
+            aria-label={`Queue, ${p.queue.length} ${p.queue.length === 1 ? 'song' : 'songs'}`} title="Queue"
             onClick={() => setPanel(panel === 'queue' ? null : 'queue')}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 11h12M4 16h8M18 14v6m-3-3h6" /></svg>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>
             <span>{p.queue.length}</span>
           </button>
           <label className="volume-control">

@@ -21,7 +21,7 @@ export function QueuePanel({ open, onClose }: { open: boolean; onClose: () => vo
             >
               {index === p.queueIndex
                 ? <span className="queue-index now" aria-label="Now playing"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 20V10M12 20V4M18 20v-7" /></svg></span>
-                : <span className="queue-index">{String(index + 1).padStart(2, '0')}</span>}
+                : <span className="queue-index">{index + 1}</span>}
               <span className="queue-art">
                 <i>{letterFor(item.name)}</i>
                 {item.albumId || item.imageUrl ? (

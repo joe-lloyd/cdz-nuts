@@ -39,7 +39,7 @@ function LikeToggle({ kind, id, name, liked, list }: {
       aria-label={`${liked ? 'Remove' : 'Add'} ${name} ${liked ? 'from' : 'to'} ${LIST[kind].name}`}
       title={list.error ? `${LIST[kind].name} could not be loaded` : undefined}
       disabled={list.isPending || !!list.error || change.isPending} onClick={() => change.mutate()}>
-      {liked ? '♥' : '♡'}
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg>
     </button>
     {change.error && <span role="alert">Could not save like. Try again.</span>}
     {grabbed && <span role="status">{grabbedText(grabbed)}</span>}

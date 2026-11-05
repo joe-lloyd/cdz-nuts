@@ -48,8 +48,9 @@ test('a waiting update is visible without opening anything', async () => {
   expect(chip.title).toMatch(/waiting/i);
 });
 
-test('the web build shows the front end it was served, not a fake version', async () => {
+test('the web build shows no chip, since a browser is always on the served front end', async () => {
   getFresh.mockRejectedValueOnce(new ApiError('no such desktop endpoint', 404));
-  render(<VersionChip />, { wrapper: wrap });
-  expect(await screen.findByText('f592c3d')).toBeInTheDocument();
+  const { container } = render(<VersionChip />, { wrapper: wrap });
+  await waitFor(() => expect(getFresh).toHaveBeenCalled());
+  expect(container).toBeEmptyDOMElement();
 });

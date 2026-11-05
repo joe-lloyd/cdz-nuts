@@ -7,7 +7,7 @@ import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
 import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, NOT_FOUND_COPY, PARENT_OF, SETTINGS_ICON, type TabId } from './routes.tsx';
-import { useDesktop, useUiBuild } from '../api/hooks.ts';
+import { useDesktop } from '../api/hooks.ts';
 
 /**
  * The frame everything renders inside.
@@ -109,13 +109,11 @@ export function Shell() {
  * Which build you are looking at, in the one place you always see.
  *
  * The desktop app has a version number that can fall behind, so it gets one.
- * A browser is always on whatever the server just served, so a version number
- * there would be theatre; it shows the front-end build id instead, which is
- * the thing worth comparing against a desktop app that embeds its own copy.
+ * A browser is always on whatever the server just served, so it shows
+ * nothing here; its front-end build id is on the Settings page.
  */
 export function VersionChip() {
   const { data: desktop } = useDesktop();
-  const { data: build } = useUiBuild();
 
   if (desktop) {
     return (
@@ -129,12 +127,7 @@ export function VersionChip() {
       </span>
     );
   }
-  if (!build) return null;
-  return (
-    <span className="version-chip" title="The front end this server is serving">
-      {build.digest.slice(0, 7)}
-    </span>
-  );
+  return null;
 }
 
 /** What the page head says, derived from the path rather than set by each view. */

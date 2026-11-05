@@ -127,7 +127,7 @@ const EMPTY: PlayerSnapshot = {
   artistId: '', albumId: '', albumName: '', artUrl: '', artFallbackUrl: '', initial: 'MT',
   radioSeedId: null,
   queue: [], queueIndex: -1, currentId: null,
-  positionText: '0:00', remainingText: '−0:00', progress: 0,
+  positionText: '0:00', remainingText: '0:00', progress: 0,
   canScrub: false, canPlay: false, canReconnect: false, volumePosition: 0.72,
   lyrics: null, lyricsTitle: 'Nothing playing', lyricsSource: 'Lyrics',
   activeLine: -1, activeWord: -1, lyricOffset: 0,

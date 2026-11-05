@@ -25,6 +25,11 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
   });
   function close() { setOpen(false); setQuery(''); input.current?.focus({ preventScroll: true }); requestAnimationFrame(() => window.scrollTo(0, pageScroll.current)); }
   useEffect(() => { setOpen(false); setQuery(''); }, [location.key]);
+  // The menu stops marking a page as current while results cover it.
+  useEffect(() => {
+    document.body.classList.toggle('searching', open);
+    return () => document.body.classList.remove('searching');
+  }, [open]);
   useEffect(() => {
     function shortcut(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); input.current?.focus(); }

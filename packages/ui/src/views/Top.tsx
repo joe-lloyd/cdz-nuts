@@ -28,23 +28,29 @@ export function Top() {
   return (
     <>
       <div className="tools">
-        <div className="seg">
-          <button type="button" className={mode === 'plays' ? 'on' : undefined} onClick={() => setMode('plays')}>By plays</button>
-          <button type="button" className={mode === 'rank' ? 'on' : undefined} onClick={() => setMode('rank')}>Spotify ranking</button>
+        <div className="seg-group">
+          <span className="seg-label" id="top-rank-by">Rank by</span>
+          <div className="seg" role="group" aria-labelledby="top-rank-by">
+            <button type="button" className={mode === 'plays' ? 'on' : undefined} onClick={() => setMode('plays')}>Plays</button>
+            <button type="button" className={mode === 'rank' ? 'on' : undefined} onClick={() => setMode('rank')}>Spotify ranking</button>
+          </div>
         </div>
-        {mode === 'rank' ? (
-          <div className="seg">
-            {RANGES.map(([key, label]) => (
-              <button key={key} type="button" className={range === key ? 'on' : undefined} onClick={() => setRange(key)}>{label}</button>
-            ))}
-          </div>
-        ) : (
-          <div className="seg">
-            {PRESETS.map(([label], i) => (
-              <button key={label} type="button" className={preset === i ? 'on' : undefined} onClick={() => setPreset(i)}>{label}</button>
-            ))}
-          </div>
-        )}
+        <div className="seg-group">
+          <span className="seg-label" id="top-period">Period</span>
+          {mode === 'rank' ? (
+            <div className="seg" role="group" aria-labelledby="top-period">
+              {RANGES.map(([key, label]) => (
+                <button key={key} type="button" className={range === key ? 'on' : undefined} onClick={() => setRange(key)}>{label}</button>
+              ))}
+            </div>
+          ) : (
+            <div className="seg" role="group" aria-labelledby="top-period">
+              {PRESETS.map(([label], i) => (
+                <button key={label} type="button" className={preset === i ? 'on' : undefined} onClick={() => setPreset(i)}>{label}</button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
       {mode === 'rank' ? <ByRank range={range} /> : <ByPlays from={PRESETS[preset]![1]} to={PRESETS[preset]![2]} />}
     </>

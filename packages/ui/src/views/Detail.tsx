@@ -94,7 +94,7 @@ export function AlbumDetail() {
                   <div className="row" key={t.id}>
                     <span className="rank">{t.track_number ?? ''}</span>
                     <PlayControl track={t} />
-                    <span className="heart">{t.liked ? '♥' : ''}</span>
+                    <span className="heart" role={t.liked ? 'img' : undefined} aria-label={t.liked ? 'Liked' : undefined}>{t.liked ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg> : null}</span>
                     <div className="mid">
                       <div>{t.name}</div>
                       <div className="sub">{t.artists ?? ''}</div>
@@ -121,6 +121,7 @@ const GROUPS: Array<[string, string]> = [
 
 export function ArtistDetail() {
   const { id } = useParams();
+  const playAll = usePlayAll();
   const { data, isPending, error } = useArtist(id);
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
@@ -146,20 +147,26 @@ export function ArtistDetail() {
           <div className="meta">{meta}</div>
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
+            {data!.liked.length ? (
+              <button className="primary-action play-album" type="button" onClick={() => playAll(data!.liked)}>
+                {PLAY_ICON} Play liked songs
+              </button>
+            ) : null}
             {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}
             <BandcampButton query={artist.name} type="b" />
           </div>
         </div>
       </div>
 
-      {data!.events?.length ? (
+
+      {data!.liked.length ? (
         <>
-          <h2>Upcoming shows</h2>
-          <div className="gig-carousel">
-            {data!.events!.map((e, i) => (
-              <GigCard key={i} index={i} event={{ ...e, artist_name: artist.name, image_url: artist.image_url ?? null }} />
-            ))}
-          </div>
+          <h2>Liked songs</h2>
+          <PlayScope tracks={data!.liked}>
+            <div className="rows">
+              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
+            </div>
+          </PlayScope>
         </>
       ) : null}
 
@@ -178,14 +185,15 @@ export function ArtistDetail() {
       })}
       {data!.albums.length ? null : <Empty>no albums known yet</Empty>}
 
-      {data!.liked.length ? (
+
+      {data!.events?.length ? (
         <>
-          <h2>Liked tracks</h2>
-          <PlayScope tracks={data!.liked}>
-            <div className="rows">
-              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
-            </div>
-          </PlayScope>
+          <h2>Upcoming shows</h2>
+          <div className="gig-carousel">
+            {data!.events!.map((e, i) => (
+              <GigCard key={i} index={i} event={{ ...e, artist_name: artist.name, image_url: artist.image_url ?? null }} />
+            ))}
+          </div>
         </>
       ) : null}
     </>

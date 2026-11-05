@@ -884,13 +884,14 @@ label.chk input { accent-color: var(--accent); }
 
 .hero {
   display: grid;
-  grid-template-columns: clamp(180px, 24vw, 280px) minmax(0, 1fr);
-  gap: clamp(26px, 4.5vw, 56px);
+  /* Compact, so the tracks start in the first screen. */
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: 32px;
   /* centred, not bottom-glued: with a long title the old end-alignment
      rammed the buttons into the panel's bottom edge */
   align-items: center;
-  margin-bottom: 34px;
-  padding: clamp(20px, 3vw, 34px);
+  margin-bottom: 24px;
+  padding: 24px;
   background:
     linear-gradient(125deg, rgba(161, 138, 252, .13), transparent 55%),
     var(--surface-raised);
@@ -901,8 +902,8 @@ label.chk input { accent-color: var(--accent); }
 .hero .pic { width: 100%; }
 
 .hero h1 {
-  margin: 0 0 14px;
-  font-size: clamp(28px, 4.2vw, 54px);
+  margin: 0 0 10px;
+  font-size: clamp(28px, 3.4vw, 48px);
   font-weight: 740;
   line-height: 1.02;
   letter-spacing: -.05em;
@@ -920,7 +921,7 @@ label.chk input { accent-color: var(--accent); }
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-top: 18px;
+  margin-top: 14px;
   flex-wrap: wrap;
 }
 
@@ -970,10 +971,10 @@ svg text { fill: var(--ink-3); font-size: 11px; }
   margin: 8px 0 18px;
   padding: 12px 14px;
   color: var(--ink-2);
-  background: rgba(255, 87, 217, .045);
-  border: 1px solid rgba(255, 87, 217, .1);
+  background: rgba(255, 255, 255, .03);
+  border: 1px solid var(--line);
   border-radius: 10px;
-  font-size: 11px;
+  font-size: 13px;
 }
 
 /* The cursor-following tooltip is gone: hover text is native `title` now,
@@ -1034,7 +1035,7 @@ svg text { fill: var(--ink-3); font-size: 11px; }
 
 .player-overline {
   margin-bottom: 3px;
-  color: var(--accent);
+  color: var(--ink-3);
   font-size: 11px;
   font-weight: 800;
   letter-spacing: .1em;
@@ -1366,7 +1367,7 @@ input[type="range"] {
   font-variant-numeric: tabular-nums;
 }
 
-.song-end small { font-size: 11px; opacity: .75; }
+.song-end small { color: var(--ink-3); font-size: 12px; }
 
 .sub-head {
   margin: 18px 0 8px;
@@ -1441,7 +1442,8 @@ input[type="range"] {
   cursor: default;
 }
 
-.q-badge b { font-weight: 600; }
+/* .al-body b would otherwise make the figure as large as the album title. */
+.song-badges .q-badge b { font-size: 11px; font-weight: 600; }
 
 .q-bars {
   display: inline-flex;
@@ -1468,9 +1470,9 @@ input[type="range"] {
 .q-high { color: var(--ink); }
 
 .q-lossless {
-  color: var(--accent);
-  border-color: rgba(255, 87, 217, .3);
-  background: var(--accent-soft);
+  color: var(--ink);
+  border-color: var(--line-strong);
+  background: rgba(255, 255, 255, .05);
 }
 
 .q-hires {
@@ -1514,9 +1516,7 @@ input[type="range"] {
 .cell .song-badges:empty { margin-top: 0; }
 
 @media (max-width: 900px) {
-  /* Keep the icon, drop the figure: the bars still carry the ordering. */
   .q-badge { padding: 2px 5px; }
-  .q-badge b { display: none; }
 }
 
 /* --- the standard album card ---------------------------------------------
@@ -1658,6 +1658,7 @@ input[type="range"] {
 }
 
 .pl-head { margin-bottom: 18px; }
+.pl-desc { max-width: 640px; margin: 10px 0 0; color: var(--ink-2); font-size: 14px; }
 .pl-head h1 { margin: 0 0 6px; font-size: clamp(28px, 4vw, 44px); letter-spacing: -.04em; }
 .pl-head .meta { color: var(--ink-2); font-size: 12px; }
 
@@ -1904,14 +1905,14 @@ input[type="range"] {
 
 .insight {
   padding: 16px 18px;
-  background: var(--accent-soft);
+  background: var(--card);
   border: 1px solid var(--line);
   border-radius: 14px;
   animation: row-in .5s ease backwards;
   animation-delay: calc(var(--i) * 110ms + .2s);
 }
 
-.insight p { margin: 0; color: var(--ink-2); font-size: 12px; line-height: 1.6; }
+.insight p { margin: 0; color: var(--ink-2); font-size: 13px; line-height: 1.6; }
 .insight b { color: var(--ink); }
 
 .move {
@@ -2027,7 +2028,11 @@ input[type="range"] {
 
 .gig-tickets {
   flex: none;
-  padding: 5px 11px;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  text-decoration: none;
   color: var(--accent);
   border: 1px solid var(--line-strong);
   border-radius: 999px;
@@ -2039,6 +2044,8 @@ input[type="range"] {
 
 @media (max-width: 760px) {
   .gig-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; }
+  .gig-grid > :only-child { grid-column: 1 / -1; }
+  .gig-tickets { min-height: 44px; }
   .gig-art .pic { aspect-ratio: 16 / 11; }
   .gig-body { padding: 10px 11px 11px; }
 }
@@ -2277,7 +2284,7 @@ input[type="range"] {
 
 .upgrade-tries small { color: var(--ink-3); font-size: 11px; }
 
-.upgrade-dots { display: inline-flex; gap: 4px; }
+.upgrade-dots { display: inline-flex; gap: 4px; margin-right: 8px; vertical-align: middle; }
 
 .upgrade-dots i {
   width: 7px;
@@ -2348,7 +2355,7 @@ input[type="range"] {
   height: calc(100% - 63px);
   max-height: none;
   /* Lines fade out at the edges instead of being cut by the header. */
-  mask-image: linear-gradient(transparent, #000 12%, #000 82%, transparent);
+  mask-image: linear-gradient(transparent, #000 80px, #000 calc(100% - 120px), transparent);
   padding: 5vh clamp(18px, 6vw, 90px) 34vh;
 }
 
@@ -2503,10 +2510,15 @@ input[type="range"] {
   .overview-hero { grid-template-columns: 1fr; min-height: 0; padding: 28px; }
   .tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
-  /* On a phone the art sits above the name at a size you can see, and the
-     actions run in one row under it. */
-  .hero { grid-template-columns: minmax(0, 1fr); gap: 18px; padding: 18px; }
-  .hero .pic { width: min(220px, 64vw); }
+  /* On a phone the art sits beside the name, and the actions take the full
+     width under both, so the tracks start in the first screen. */
+  .hero { grid-template-columns: 104px minmax(0, 1fr); gap: 4px 16px; align-items: start; padding: 16px; }
+  .hero > div:not(.pic) { display: contents; }
+  .hero > div:not(.pic) > * { grid-column: 2; }
+  .hero > .pic { grid-column: 1; grid-row: 1 / span 4; }
+  .hero > div:not(.pic) > .hero-actions { grid-column: 1 / -1; }
+  .hero h1 { margin-bottom: 2px; font-size: 28px; }
+  .hero .meta { margin-top: 2px; font-size: 12px; line-height: 1.5; }
   .hero-actions .spbtn { min-height: 36px; padding: 0 12px; }
   .hero h1 { font-size: clamp(28px, 8vw, 42px); }
   .hero .meta { font-size: 11px; }
@@ -2923,7 +2935,9 @@ details > summary:hover { color: var(--ink); }
 }
 
 .sidebar-foot .foot-row > a:hover { color: var(--ink); background: rgba(255, 255, 255, .04); }
-.sidebar-foot .foot-row > a.on { color: var(--ink); background: rgba(255, 255, 255, .06); }
+.sidebar-foot .foot-row > a { flex: 1; border: 1px solid transparent; }
+.sidebar-foot .foot-row > a.on { color: var(--ink); background: var(--accent-soft); border-color: rgba(255, 87, 217, .1); }
+.sidebar-foot .foot-row > a.on svg { color: var(--accent); }
 
 .sidebar-foot .foot-row svg {
   width: 17px;
@@ -2942,3 +2956,72 @@ details > summary:hover { color: var(--ink); }
 @media (min-width: 761px) {
   .tiles-five { grid-template-columns: repeat(5, minmax(0, 1fr)); }
 }
+
+/* Where a file came from is detail for the album page, not every card. */
+.al-body .s-badge,
+.song-card .s-badge { display: none; }
+
+.like-button svg,
+.heart svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
+.like-button[aria-pressed="true"] svg,
+.heart svg { fill: currentColor; }
+.heart svg { width: 14px; height: 14px; }
+
+.seg-group { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 10px; }
+.seg-label { color: var(--ink-3); font-size: 12px; font-weight: 600; }
+.tools:has(.seg-group) { gap: 12px 32px; }
+.seg button { min-height: 36px; }
+
+.song-grid.history { grid-template-columns: minmax(0, 1fr); max-width: 900px; }
+
+/* While search results cover the page, no page in the menu is current. */
+body.searching #nav a.on { color: var(--ink-2); background: transparent; border-color: transparent; }
+body.searching #nav a.on svg { color: inherit; }
+
+form button:not([class]):disabled {
+  color: var(--ink-3);
+  background: transparent;
+  border-color: var(--line-strong);
+  opacity: 1;
+}
+
+.lyrics-tools span { color: var(--ink-2); letter-spacing: 0; text-transform: none; }
+.lyrics-tools button { min-width: 44px; min-height: 32px; padding: 0 10px; }
+.lyrics-tools small { align-self: center; }
+
+.song-end,
+.queue-duration { color: var(--ink-2); font-size: 12px; }
+
+@media (max-width: 760px) {
+  .page-head h1 { font-size: 28px; }
+  .seg button { min-height: 44px; }
+  /* Plays and other dated lists keep the date on a phone; it replaces the length. */
+  .history .song-end small { display: block; max-width: 84px; font-family: inherit; text-align: right; white-space: normal; }
+  .history .song-dur { display: none; }
+}
+
+.upgrade-more { display: none; }
+
+@media (max-width: 760px) {
+  .upgrade-extra:not(.open) { display: none; }
+  .upgrade-more:not([hidden]) {
+    display: inline-flex;
+    grid-column: 1 / -1;
+    align-items: center;
+    min-height: 44px;
+    padding: 0;
+    color: var(--ink-2);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+  }
+  .upgrade-form .primary-action { grid-column: 1 / -1; }
+}
+
+/* A status chip wraps inside its card rather than running into the next one. */
+.chips { min-width: 0; }
+.chip { max-width: 100%; overflow-wrap: anywhere; white-space: normal; }

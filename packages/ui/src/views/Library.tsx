@@ -10,8 +10,8 @@ import { get, post, qs } from '../api/client.ts';
 import { ago, day, dur, initial } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, SongCard, TrackRow } from '../components/rows.tsx';
-import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
-import { PlayScope } from '../components/PlayScope.tsx';
+import { Badges, Empty, GenreChips, PLAY_ICON, Pic, Skeleton } from '../components/primitives.tsx';
+import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
 export function Artists() {
@@ -27,7 +27,7 @@ export function Artists() {
     <>
       <div className="tools">
         <label className="chk">
-          <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} /> followed only
+          <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} /> Followed only
         </label>
       </div>
       <div className="grid">
@@ -35,11 +35,14 @@ export function Artists() {
           <div className="cell" key={a.id}>
             <Link to={`/artist/${a.id}`}>
               <Pic kind="artists" id={a.id} cdn={a.image_url} name={a.name} />
-              <div className="nm">{(a.liked ?? a.is_followed) ? '★ ' : ''}{a.name}</div>
+              <div className="nm">{a.name}</div>
             </Link>
             <div className="sub">
-              {a.liked_count ? `${a.liked_count} liked` : ''}
-              {a.top_rank ? `${a.liked_count ? ' · ' : ''}#${a.top_rank}` : ''}
+              {[
+                (a.liked ?? a.is_followed) ? 'Followed' : '',
+                a.liked_count ? `${a.liked_count} liked` : '',
+                a.top_rank ? `top #${a.top_rank}` : '',
+              ].filter(Boolean).join(' · ')}
             </div>
             <Badges row={a} />
             <GenreChips json={a.genres} />
@@ -152,6 +155,7 @@ export function PlaylistDetail() {
   const { id } = useParams();
   const playlists = usePlaylists();
   const tracks = usePlaylistTracks(id);
+  const playAll = usePlayAll();
   if (tracks.isPending) return <Skeleton />;
   const rows = tracks.data ?? [];
   const meta = playlists.data?.find((p) => p.id === id);
@@ -164,7 +168,14 @@ export function PlaylistDetail() {
             {rows.length} songs{meta.owner_name ? ` · by ${meta.owner_name}` : ''}
             {meta.removed_at ? ` · removed ${day(meta.removed_at)}` : ''}
           </div>
-          {meta.description ? <p className="note">{meta.description}</p> : null}
+          {meta.description ? <p className="pl-desc">{meta.description}</p> : null}
+          {rows.length ? (
+            <div className="hero-actions">
+              <button className="primary-action play-album" type="button" onClick={() => playAll(rows)}>
+                {PLAY_ICON} Play playlist
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
@@ -226,12 +237,14 @@ export function Plays() {
   const here = all.filter((p) => p.source === 'app').length;
   return (
     <>
-      <p className="note">{all.length.toLocaleString()} recent plays · {here.toLocaleString()} played right here</p>
+      <p className="note">{all.length.toLocaleString()} recent plays, {here.toLocaleString()} of them in this player</p>
       <PlayScope tracks={all}>
-        <div className="song-grid">
+        {/* History reads top to bottom, so one column; only the newest play of
+            the current song is marked as playing. */}
+        <div className="song-grid history">
           {all.map((p, i) => (
-            <SongCard key={`${p.id}-${i}`} track={p}
-              meta={p.played_at ? (p.source === 'app' ? `here · ${ago(p.played_at)}` : ago(p.played_at)) : undefined} />
+            <SongCard key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
+              meta={p.played_at ? (p.source === 'app' ? `${ago(p.played_at)} · this player` : ago(p.played_at)) : undefined} />
           ))}
         </div>
       </PlayScope>
