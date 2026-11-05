@@ -120,11 +120,11 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   const days = when ? Math.ceil((when.getTime() - Date.now()) / 864e5) : null;
   const soon = days != null && days >= 0 && days <= 14;
   const countdown = days == null ? '' : days <= 0 ? 'tonight' : days === 1 ? 'tomorrow' : `in ${days} days`;
+  // The leaf already gives the date and the badge the countdown; the foot
+  // adds the weekday and, when one is announced, the time.
+  const timed = when && (when.getHours() || when.getMinutes());
   const dateLine = when
-    ? when.toLocaleDateString(undefined, {
-      weekday: 'short', day: 'numeric', month: 'short',
-      ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
-    })
+    ? when.toLocaleString(undefined, { weekday: 'long', ...(timed ? { hour: '2-digit', minute: '2-digit' } : {}) })
     : 'date TBA';
   const showTitle = event.name && (event.name ?? '').toLowerCase() !== (event.artist_name ?? '').toLowerCase()
     ? event.name : '';

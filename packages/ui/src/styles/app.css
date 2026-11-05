@@ -3251,3 +3251,12 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
   .meta-detail,
   .hero .meta.editions { display: none; }
 }
+
+@media (max-width: 760px) {
+  input:not([type="range"]):not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea,
+  form button:not([class]),
+  .spbtn,
+  .upgrade-actions button { min-height: 44px; }
+}

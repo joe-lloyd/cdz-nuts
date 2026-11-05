@@ -29,7 +29,8 @@ export function Radio() {
         details={<p>Copy the user token from your ListenBrainz settings into the server&apos;s <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code>, then restart the web container.</p>}
       >
         Radio picks songs you have not heard yet from what you already play. It
-        turns on once this server is linked to a ListenBrainz account.
+        turns on once this server is linked to a ListenBrainz account: get a
+        token, then Setup details says where it goes.
       </Notice>
     );
   }

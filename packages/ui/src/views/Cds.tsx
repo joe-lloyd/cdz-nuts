@@ -62,7 +62,7 @@ export function Cds() {
       >
         {half
           ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
-          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
+          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped. Make a token on Discogs, then Setup details says where it goes.'}
       </Notice>
     );
   }
