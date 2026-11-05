@@ -51,6 +51,7 @@ export function Shell() {
           <span className="brand-mark" aria-hidden="true"><span /></span>
           <b>Music Taste</b>
         </Link>
+        <BackButton parent={parent} className="page-back top-back" />
         <button
           className="search-toggle" type="button" aria-label="Search"
           onClick={() => {
@@ -60,7 +61,6 @@ export function Shell() {
         >
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
         </button>
-        <BackButton parent={parent} className="page-back top-back" />
       </header>
 
       <div className="nav-backdrop" hidden={!drawerOpen} onClick={() => setDrawerOpen(false)} />

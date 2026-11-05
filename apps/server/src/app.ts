@@ -2340,7 +2340,13 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     const localArtists = [...new Set(libraryAlbums.map(a => a.artists))]
       .filter(name => name.toLocaleLowerCase().includes(needle) && !names.has(name.toLocaleLowerCase()))
       .map(name => ({ id: 'local-artist:' + name, name }));
-    return { songs: unique([...songs, ...localSongs], 100), artists: [...artists, ...localArtists].slice(0, 40), albums: unique([...albums, ...localAlbums], 40),
+    // The archive's copy of an album Spotify also lists is the same album: one
+    // result, marked as in the archive, rather than two cards to choose from.
+    const albumKey = (a: { name?: unknown; artists?: unknown }) => `${String(a.name ?? '').toLocaleLowerCase()}\u0000${String(a.artists ?? '').toLocaleLowerCase()}`;
+    const archived = new Set(localAlbums.map(albumKey));
+    const listed = new Set(albums.map(albumKey));
+    const mergedAlbums = [...albums.map(a => (archived.has(albumKey(a)) ? { ...a, downloaded: 1 } : a)), ...localAlbums.filter(a => !listed.has(albumKey(a)))];
+    return { songs: unique([...songs, ...localSongs], 100), artists: [...artists, ...localArtists].slice(0, 40), albums: unique(mergedAlbums, 40),
       playlists: unique([...localPlaylists.list().filter(matches), ...playlists], 40) };
   },
 

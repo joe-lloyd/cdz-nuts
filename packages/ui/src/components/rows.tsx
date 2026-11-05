@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useMissing, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useArchiveState, useNowPlaying } from './primitives.tsx';
 
 const DownloadBadge = () => (
   <span className="dl" title="This album is in your archive">
@@ -14,9 +14,24 @@ const DownloadBadge = () => (
   </span>
 );
 
-export function TrackRow({ track, endText, rank }: { track: Track; endText?: string | undefined; rank?: number | null | undefined }) {
+/**
+ * A song's state, in words, on a line of its own so it is never the part that
+ * gets cut off. `removed` names what removed_at means where the row is shown:
+ * un-liked on a liked list, taken out on a playlist.
+ */
+function RowStatus({ track, archive, removed }: { track: Track; archive: 'held' | 'missing' | 'ready' | 'playing'; removed: string }) {
+  const parts = [
+    track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '',
+    archive === 'missing' ? 'Not in your archive' : archive === 'ready' ? 'Ready to play' : '',
+  ].filter(Boolean);
+  return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
+}
+
+export function TrackRow({ track, endText, rank, removed = 'Removed on Spotify' }: {
+  track: Track; endText?: string | undefined; rank?: number | null | undefined; removed?: string | undefined;
+}) {
   const state = useNowPlaying(track.id);
-  const missing = useMissing(track);
+  const archive = useArchiveState(track);
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
     <div className={`row${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
@@ -28,12 +43,11 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
       <div className="mid">
         <div>{track.name}</div>
         <div className="sub">
-          {track.removed_at ? <span className="chip bad">{`Off Spotify ${shortDay(track.removed_at)}`}</span> : null}
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
-          {missing && !state ? <span className="not-held"> · not in your archive</span> : null}
         </div>
+        <RowStatus track={track} archive={state ? 'playing' : archive} removed={removed} />
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />
@@ -47,7 +61,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
 /** Denser than a full row, so two fit side by side at desktop width. */
 export function SongCard({ track, meta, current = true }: { track: Track; meta?: string | undefined; current?: boolean | undefined }) {
   const playing = useNowPlaying(track.id);
-  const missing = useMissing(track);
+  const archive = useArchiveState(track);
   const state = current ? playing : '';
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
@@ -58,13 +72,17 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className="song-main">
         <b>{track.name}</b>
-        <span className="song-sub">{track.artists ?? track.artist_name ?? ''}</span>
-        {track.album || meta ? (
+        <span className="song-sub">
+          {track.artists ?? track.artist_name ?? ''}
+          {(track.artists ?? track.artist_name) && track.album ? ' · ' : ''}
+          {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+        </span>
+        {/* The state leads the last line, so a date is what gives way, not it. */}
+        {meta || archive !== 'held' ? (
           <span className="song-album">
-            {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
-            {track.album && meta ? ' · ' : ''}
+            {archive !== 'held' ? <span className="not-held">{playing ? 'Playing' : archive === 'ready' ? 'Ready to play' : 'Not in your archive'}</span> : null}
+            {archive !== 'held' && meta ? ' · ' : ''}
             {meta ? <span className="song-meta">{meta}</span> : null}
-            {missing && !playing ? <span className="not-held"> · not in your archive</span> : null}
           </span>
         ) : null}
       </div>

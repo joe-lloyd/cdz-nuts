@@ -27,14 +27,15 @@ export function useNowPlaying(id: string): '' | ' playing' | ' paused' {
 export const isHeld = (track: Badged): boolean => Boolean(track.quality || track.playable);
 
 /**
- * Known to need fetching: not in the archive by the list's own data, and the
- * download check has answered without finding it. Unknown counts as fine, so
- * a row does not grow a line when the answer arrives.
+ * Where a song stands against the archive. Known from the list's own data,
+ * so a row that needs a status line has it from the first paint; the
+ * download check can only turn "missing" into "ready", never add a line.
  */
-export function useMissing(track: Track): boolean {
+export function useArchiveState(track: Track): 'held' | 'missing' | 'ready' {
   const held = isHeld(track);
   const progress = useDownloadProgress(track, held);
-  return !held && Boolean(progress.status) && !progress.status!.ready;
+  if (held) return 'held';
+  return progress.status?.ready ? 'ready' : 'missing';
 }
 
 export const PLAY_ICON = (
@@ -75,9 +76,10 @@ export function Pic({ kind, id, cdn, name, overlay }: {
   );
 }
 
-export const Chip = ({ text, bad }: { text: string; bad?: boolean | undefined }) => (
-  <span className={`chip${bad ? ' bad' : ''}`}>{text}</span>
-);
+export const Chip = ({ text }: { text: string }) => <span className="chip">{text}</span>;
+
+/** A state, not a tag: a dot and words, so it never reads as a genre. */
+export const Status = ({ text }: { text: string }) => <span className="status">{text}</span>;
 
 export const Chips = ({ children }: { children: ReactNode[] }) => {
   const kept = children.filter(Boolean);
@@ -92,11 +94,11 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
 /** Tombstones: history is kept, these say what changed and when. */
 export function Badges({ row }: { row: Tombstoned }) {
   const items = [
-    row.removed_at ? <Chip key="r" text={`Off Spotify ${shortDay(row.removed_at)}`} bad /> : null,
-    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
-    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
+    row.removed_at ? <Status key="r" text={`Pulled from Spotify ${shortDay(row.removed_at)}`} /> : null,
+    row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
+    row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
-  return items.length ? <div className="chips">{items}</div> : null;
+  return items.length ? <div className="statuses">{items}</div> : null;
 }
 
 const QUALITY_META: Record<QualityTier, { bars: number; cls: string; tip: string }> = {

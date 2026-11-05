@@ -8,9 +8,10 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, useNowPlaying,
 } from '../components/primitives.tsx';
 import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
+import type { Track } from '../api/types.ts';
 
 export function AlbumDetail() {
   const { id } = useParams();
@@ -93,21 +94,7 @@ export function AlbumDetail() {
               {discs.length > 1 ? <h2>Disc {disc}</h2> : null}
               <div className="rows">
                 {tracks.filter((t) => (t.disc_number ?? 1) === disc).map((t) => (
-                  // Badges per TRACK, not per album: one folder can mix a
-                  // 24-bit rip with a transcode, and this is where that shows.
-                  <div className="row" key={t.id}>
-                    <span className="rank">{t.track_number ?? ''}</span>
-                    <PlayControl track={t} />
-                    <div className="mid">
-                      <div>{t.name}</div>
-                      <div className="sub">{t.artists ?? ''}</div>
-                    </div>
-                    <MediaBadges row={t} />
-                    <RadioControl track={t} />
-                    <LikeButton track={t} />
-                    <div className="end">{dur(t.duration_ms)}</div>
-                    {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
-                  </div>
+                  <AlbumTrackRow key={t.id} track={t} />
                 ))}
               </div>
             </div>
@@ -115,6 +102,29 @@ export function AlbumDetail() {
         </PlayScope>
       ) : <Empty>track listing not hydrated yet — next sync runs will fill it in</Empty>}
     </>
+  );
+}
+
+/**
+ * A track on its album's page. Badges per TRACK, not per album: one folder
+ * can mix a 24-bit rip with a transcode, and this is where that shows.
+ */
+function AlbumTrackRow({ track: t }: { track: Track }) {
+  const state = useNowPlaying(t.id);
+  return (
+    <div className={`row${state}`}>
+      <span className="rank">{t.track_number ?? ''}</span>
+      <PlayControl track={t} />
+      <div className="mid">
+        <div>{t.name}</div>
+        <div className="sub">{t.artists ?? ''}</div>
+      </div>
+      <MediaBadges row={t} />
+      <RadioControl track={t} />
+      <LikeButton track={t} />
+      <div className="end">{dur(t.duration_ms)}</div>
+      {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
+    </div>
   );
 }
 
@@ -169,7 +179,7 @@ export function ArtistDetail() {
           <h2>Liked songs</h2>
           <PlayScope tracks={data!.liked}>
             <div className="rows">
-              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
+              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} removed="Unliked on Spotify" />)}
             </div>
           </PlayScope>
         </>

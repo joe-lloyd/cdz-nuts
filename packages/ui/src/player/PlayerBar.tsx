@@ -108,8 +108,9 @@ export function PlayerBar() {
             onClick={() => setPanel(panel === 'lyrics' ? null : 'lyrics')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6" />
+              <path d="M4 6h10M4 10h10M4 14h6" /><path d="M18 5v10" /><circle cx="16" cy="16.5" r="2.2" />
             </svg>
+            <span className="button-label">Lyrics</span>
           </button>
           <button
             className="queue-button" type="button" aria-expanded={panel === 'queue'}

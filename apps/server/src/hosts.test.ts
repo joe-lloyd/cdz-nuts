@@ -107,6 +107,13 @@ test('the routes answer the same from node:sqlite files and from a Durable Objec
       assert.equal(onDurableObject[i], line, `${line.slice(0, 60)} differs between the hosts`);
     }
     assert.ok(onNode.filter((l) => l.includes(' 200 ')).length > 30, 'most routes answered 200');
+
+    // The archive's copy of Night Drive and Spotify's listing are one search result.
+    const search = onNode.find((l) => l.startsWith('GET /api/search?q=night '))!;
+    const found = JSON.parse(search.slice(search.indexOf('{'))) as { albums: Array<{ name: string; artists: string; downloaded?: number }> };
+    const nightDrive = found.albums.filter((a) => a.name === 'Night Drive' && a.artists === 'Local Signals');
+    assert.equal(nightDrive.length, 1);
+    assert.equal(nightDrive[0]!.downloaded, 1);
   } finally {
     globalThis.fetch = realFetch;
     rmSync(dir, { recursive: true, force: true });

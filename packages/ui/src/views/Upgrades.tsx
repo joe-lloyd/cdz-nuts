@@ -20,6 +20,7 @@ export function Upgrades() {
   const client = useQueryClient();
   const [mode, setMode] = useState('single');
   const [more, setMore] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const refresh = () => void client.invalidateQueries({ queryKey: ['upgrades'] });
 
@@ -63,7 +64,11 @@ export function Upgrades() {
         <div className="upgrade-stats"><span><b>{active}</b> in progress</span><span><b>{finished}</b> finished</span></div>
       </div>
 
-      <form className="upgrade-form" onSubmit={onSubmit}>
+      {/* On a phone the queue comes first; the form opens when asked for. */}
+      <button className="primary-action upgrade-add" type="button" aria-expanded={adding} onClick={() => setAdding(!adding)}>
+        {adding ? 'Close the form' : 'Add a request'}
+      </button>
+      <form className={`upgrade-form${adding ? ' open' : ''}`} onSubmit={onSubmit}>
         <label>
           <span>Spotify or YouTube URL</span>
           <input name="sourceUrl" type="url" required placeholder={batch

@@ -26,9 +26,10 @@ export function Artists() {
   return (
     <>
       <div className="tools">
-        <label className="chk">
-          <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} /> Followed only
-        </label>
+        <div className="seg">
+          <button type="button" className={followedOnly ? undefined : 'on'} aria-pressed={!followedOnly} onClick={() => setFollowedOnly(false)}>All artists</button>
+          <button type="button" className={followedOnly ? 'on' : undefined} aria-pressed={followedOnly} onClick={() => setFollowedOnly(true)}>Followed</button>
+        </div>
       </div>
       <div className="grid">
         {rows.length ? rows.map((a) => (
@@ -142,7 +143,7 @@ export function Playlists() {
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
                 <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs · {p.source === 'local' ? 'made here' : 'from Spotify'}</span>
-                {p.removed_at ? <span className="chip bad">Off Spotify {shortDay(p.removed_at)}</span>
+                {p.removed_at ? <span className="status">Gone from your Spotify {shortDay(p.removed_at)}</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>
@@ -193,7 +194,7 @@ export function PlaylistDetail() {
       <PlayScope tracks={rows}>
         <div className="rows">
           {rows.length ? rows.map((t) => (
-            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position}
+            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist"
               endText={`${day(t.added_at)} · ${dur(t.duration_ms)}`} />
           )) : <Empty>empty (or blocked by the API)</Empty>}
         </div>
