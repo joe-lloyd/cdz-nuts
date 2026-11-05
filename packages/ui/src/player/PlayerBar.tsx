@@ -45,7 +45,7 @@ export function PlayerBar() {
       <section className="player-bar" id="player-bar" data-state={p.state} aria-label="Music player">
         <div className="player-track">
           {artHref ? (
-            <Link className="player-art linked" to={artHref}>
+            <Link className="player-art linked" to={artHref} tabIndex={-1} aria-hidden="true">
               <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.initial} />
             </Link>
           ) : (

@@ -9,7 +9,7 @@
   --line-strong: rgba(244, 232, 242, .18);
   --ink: #f5eff4;
   --ink-2: #aea4ad;
-  --ink-3: #766e75;
+  --ink-3: #908790;
   --accent: #ff57d9;
   --accent-ink: #150611;
   --accent-soft: rgba(255, 87, 217, .12);
@@ -768,10 +768,15 @@ input[type="search"]::placeholder { color: var(--ink-3); }
 label.chk {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
+  min-height: 44px;
   color: var(--ink-2);
-  font-size: 10px;
+  font-size: 12px;
+  cursor: pointer;
 }
+
+.tools select,
+.tools input:not([type="checkbox"]) { min-height: 36px; }
 
 label.chk input { accent-color: var(--accent); }
 
@@ -1088,8 +1093,8 @@ svg text { fill: var(--ink-3); font-size: 9px; }
 }
 
 .player-icon {
-  width: 38px;
-  height: 38px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   transition: background .14s;
 }
@@ -1131,7 +1136,8 @@ svg text { fill: var(--ink-3); font-size: 9px; }
 .scrubber-row span:last-child { text-align: right; }
 
 input[type="range"] {
-  height: 4px;
+  /* The track still draws thin; the height is what a pointer can hit. */
+  height: 24px;
   margin: 0;
   accent-color: var(--accent);
   cursor: pointer;
@@ -1141,13 +1147,16 @@ input[type="range"] {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 24px;
+  gap: 4px;
 }
 
 .queue-button {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 7px;
+  min-width: 44px;
+  height: 44px;
   font-size: 11px;
 }
 
@@ -2413,7 +2422,7 @@ input[type="range"] {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 10px 14px;
+    padding: 7px 14px;
     background: rgba(10, 8, 10, .92);
     border-bottom: 1px solid var(--line);
     backdrop-filter: blur(20px);
@@ -2423,8 +2432,8 @@ input[type="range"] {
     display: grid;
     place-content: center;
     gap: 4px;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
     padding: 0;
     background: transparent;
     border: 1px solid var(--line);
@@ -2448,6 +2457,7 @@ input[type="range"] {
   .brand-mini {
     display: flex;
     align-items: center;
+    min-height: 44px;
     gap: 10px;
     color: var(--ink);
     font-size: 13px;
@@ -2496,7 +2506,7 @@ input[type="range"] {
      which is the whole point on a page as long as a discography. Pushed to
      the right of the burger and the brand. */
   .page-head .page-back { display: none; }
-  .mobile-bar .page-back { min-height: 34px; margin: 0 0 0 auto; padding: 0 13px 0 9px; }
+  .mobile-bar .page-back { min-height: 44px; margin: 0 0 0 auto; padding: 0 13px 0 9px; }
   .page-head { align-items: center; min-height: 0; margin-bottom: 12px; padding-bottom: 10px; }
   .page-head h1 { font-size: 20px; }
   .overview-hero { grid-template-columns: 1fr; min-height: 0; padding: 28px; }
@@ -2790,3 +2800,5 @@ input[type="range"] {
 .download-control { display: flex; flex-direction: column; align-items: center; gap: 4px; max-width: 100px; }
 .download-status { color: var(--ink-3); font-size: 10px; line-height: 1.3; text-align: center; }
 @media (max-width: 600px) { .download-control { max-width: 70px; } }
+
+.sidebar-foot > a { display: flex; align-items: center; min-height: 44px; }

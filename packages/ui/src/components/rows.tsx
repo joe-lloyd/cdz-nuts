@@ -21,7 +21,7 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
       {rank != null ? <span className="rank">{rank}</span> : null}
       <PlayControl track={track} />
       {albumHref
-        ? <Link to={albumHref}><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
+        ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className="mid">
         <div>{track.name} {track.removed_at ? <span className="chip bad">{`removed ${day(track.removed_at)}`}</span> : null}</div>
@@ -47,7 +47,7 @@ export function SongCard({ track, meta }: { track: Track; meta?: string | undefi
     <div className={`song-card${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
       <PlayControl track={track} />
       {albumHref
-        ? <Link to={albumHref}><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
+        ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className="song-main">
         <b>{track.name}</b>
@@ -93,7 +93,7 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
 
   return (
     <div className={`al-card${extraClass ? ` ${extraClass}` : ''}`}>
-      {href ? <Link className="al-art" to={href}>{art}</Link> : <span className="al-art">{art}</span>}
+      {href ? <Link className="al-art" to={href} tabIndex={-1} aria-hidden="true">{art}</Link> : <span className="al-art">{art}</span>}
       <div className="al-body">
         <b>{href ? <Link to={href}>{name}</Link> : name}</b>
         <span className="sub">{album.artists ?? ''}</span>

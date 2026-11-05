@@ -37,7 +37,7 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
   const data = !loading && !results.error ? results.data : undefined;
   return <>
     <div className="global-search-bar" role="search">
-      <input ref={input} type="search" aria-label="Search music" placeholder="Search artists, albums, songs, playlists"
+      <input ref={input} type="search" role="combobox" aria-label="Search music" placeholder="Search artists, albums, songs, playlists"
         maxLength={200} value={query} aria-controls="search-results" aria-expanded={open}
         onFocus={() => { if (term) setOpen(true); }}
         onChange={e => {

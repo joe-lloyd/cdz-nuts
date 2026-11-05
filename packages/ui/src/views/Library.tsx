@@ -125,7 +125,7 @@ export function Playlists() {
           const art = (p.images ?? []).slice(0, 4);
           return (
             <div className={`al-card pl-card${p.removed_at ? ' gone' : ''}`} key={p.id}>
-              <Link className="al-art" to={`/playlist/${p.id}`}>
+              <Link className="al-art" to={`/playlist/${p.id}`} tabIndex={-1} aria-hidden="true">
                 {art.length ? (
                   <span className={`pl-collage n${art.length}`}>
                     {art.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)}
