@@ -149,6 +149,8 @@ export function ArtistDetail() {
     likedLive ? `${likedLive} liked songs` : '',
   ].filter(Boolean).join(' · ');
   const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
+  const likedNow = data!.liked.filter((t) => !t.removed_at);
+  const likedOnce = data!.liked.filter((t) => t.removed_at);
 
   return (
     <>
@@ -162,8 +164,8 @@ export function ArtistDetail() {
           {ranks.length ? <div className="chips rank-chips">{ranks.map((r) => <span className="chip" key={r}>{r}</span>)}</div> : null}
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
-            {data!.liked.length ? (
-              <button className="primary-action play-album" type="button" onClick={() => playAll(data!.liked)}>
+            {likedNow.length ? (
+              <button className="primary-action play-album" type="button" onClick={() => playAll(likedNow)}>
                 {PLAY_ICON} Play liked songs
               </button>
             ) : null}
@@ -174,12 +176,24 @@ export function ArtistDetail() {
       </div>
 
 
-      {data!.liked.length ? (
+      {/* Liked now, and liked once: one list under "Liked songs" would
+          contradict itself, so songs since unliked get their own heading. */}
+      {likedNow.length ? (
         <>
           <h2>Liked songs</h2>
-          <PlayScope tracks={data!.liked}>
+          <PlayScope tracks={likedNow}>
             <div className="rows">
-              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} removed="Unliked on Spotify" />)}
+              {likedNow.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
+            </div>
+          </PlayScope>
+        </>
+      ) : null}
+      {likedOnce.length ? (
+        <>
+          <h2>Liked once</h2>
+          <PlayScope tracks={likedOnce}>
+            <div className="rows">
+              {likedOnce.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} removed="Unliked on Spotify" />)}
             </div>
           </PlayScope>
         </>

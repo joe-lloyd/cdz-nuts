@@ -108,7 +108,7 @@ export function PlayerBar() {
             onClick={() => setPanel(panel === 'lyrics' ? null : 'lyrics')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M4 6h10M4 10h10M4 14h6" /><path d="M18 5v10" /><circle cx="16" cy="16.5" r="2.2" />
+              <path d="M5 7h4v4H6.5c0 2.2-.8 3.6-2 4.5M14 7h4v4h-2.5c0 2.2-.8 3.6-2 4.5" /><path d="M5 19h14" />
             </svg>
             <span className="button-label">Lyrics</span>
           </button>
@@ -118,7 +118,7 @@ export function PlayerBar() {
             onClick={() => setPanel(panel === 'queue' ? null : 'queue')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>
-            <span>{p.queue.length}</span>
+            {p.queue.length ? <span className="count-badge" aria-hidden="true">{p.queue.length}</span> : null}
           </button>
           <label className="volume-control">
             <svg viewBox="0 0 24 24" aria-hidden="true">

@@ -12,7 +12,7 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
     if (!open || p.activeLine < 0 || !player.mayAutoscroll()) return;
     const body = bodyRef.current;
     const el = body?.querySelector<HTMLElement>(`[data-line="${p.activeLine}"]`);
-    if (body && el) body.scrollTop = el.offsetTop - body.clientHeight / 2 + el.offsetHeight / 2;
+    if (body && el) body.scrollTop = el.offsetTop - body.clientHeight * 0.4 + el.offsetHeight / 2;
   }, [open, p.activeLine]);
 
   return (
@@ -20,7 +20,7 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
       <div className="queue-head">
         <div><span>{p.lyricsSource}</span><b>{p.lyricsTitle}</b></div>
         <div className="lyrics-tools" role="group" aria-label="Lyrics timing">
-          <small>Timing</small>
+          <small>Sync</small>
           <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>Earlier</button>
           <span aria-live="polite">{`${p.lyricOffset > 0 ? '+' : ''}${p.lyricOffset.toFixed(1)}s`}</span>
           <button type="button" aria-label="Shift lyrics half a second later" onClick={() => player.nudgeLyrics(0.5)}>Later</button>

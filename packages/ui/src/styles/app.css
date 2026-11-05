@@ -877,7 +877,7 @@ label.chk input { accent-color: var(--accent); }
   transform: scale(1.04);
 }
 
-.track-play svg { width: 11px; height: 11px; fill: currentColor; }
+.track-play svg { width: 13px; height: 13px; fill: currentColor; }
 
 .ext {
   flex: none;
@@ -3298,4 +3298,27 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
   .player-bar { padding-top: 18px; }
   .upgrade-add { display: inline-flex; justify-self: start; margin-bottom: 14px; min-height: 44px; }
   .upgrade-form:not(.open) { display: none; }
+}
+
+/* --- round eight --------------------------------------------------------- */
+.queue-button { position: relative; }
+.count-badge {
+  position: absolute;
+  top: 6px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  color: var(--ink);
+  background: var(--surface-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 14px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .grid .cell .sub { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 }

@@ -78,10 +78,10 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </span>
         {/* The state leads the last line, so a date is what gives way, not it. */}
-        {meta || archive !== 'held' ? (
+        {meta || (archive !== 'held' && !playing) ? (
           <span className="song-album">
-            {archive !== 'held' ? <span className="not-held">{playing ? 'Playing' : archive === 'ready' ? 'Ready to play' : 'Not in your archive'}</span> : null}
-            {archive !== 'held' && meta ? ' · ' : ''}
+            {archive !== 'held' && !playing ? <span className="not-held">{archive === 'ready' ? 'Ready to play' : 'Not in your archive'}</span> : null}
+            {archive !== 'held' && !playing && meta ? ' · ' : ''}
             {meta ? <span className="song-meta">{meta}</span> : null}
           </span>
         ) : null}
