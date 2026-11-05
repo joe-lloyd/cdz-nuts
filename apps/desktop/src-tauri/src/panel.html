@@ -143,7 +143,7 @@
     if (!state) return;
     $('art').style.backgroundImage = state.artworkUrl ? `url("${state.artworkUrl}")` : '';
     $('title').textContent = state.title;
-    $('sub').textContent = [state.artist, state.album].filter(Boolean).join(' — ');
+    $('sub').textContent = [state.artist, state.album].filter(Boolean).join(' · ');
     $('playIcon').setAttribute('d', state.playing ? PAUSE : PLAY);
     $('play').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
     $('prev').disabled = !state.canPrevious;

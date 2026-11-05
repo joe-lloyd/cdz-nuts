@@ -91,8 +91,8 @@ export function Shell() {
               <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
                 {SETTINGS_ICON}
                 <span>Settings</span>
+                <VersionChip />
               </NavLink>
-              <VersionChip />
             </div>
           </div>
         </aside>

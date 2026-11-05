@@ -123,7 +123,7 @@ const EMPTY: PlayerSnapshot = {
   state: 'idle',
   overline: 'Local archive',
   title: 'Choose a track',
-  byline: 'Play from your downloaded collection',
+  byline: 'Pick something to play',
   artistId: '', albumId: '', albumName: '', artUrl: '', artFallbackUrl: '', initial: 'MT',
   radioSeedId: null,
   queue: [], queueIndex: -1, currentId: null,

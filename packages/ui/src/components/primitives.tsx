@@ -59,7 +59,7 @@ export function Pic({ kind, id, cdn, name, overlay }: {
   const [failed, setFailed] = useState(!primary);
 
   return (
-    <div className="pic">
+    <div className={`pic pic-${kind}`}>
       {failed ? null : (
         <img
           src={src} alt="" loading="lazy"
@@ -174,9 +174,11 @@ const DOWNLOAD_ICON = (
  * sends the same "get me this" the player used to send when you pressed play
  * on something missing; it just says so up front now instead of after.
  */
-export function PlayControl({ track }: { track: Track }) {
+export function PlayControl({ track, current = true }: { track: Track; current?: boolean | undefined }) {
   const play = usePlayFromScope();
-  const state = useNowPlaying(track.id);
+  // A history can list the playing song twice; only the row that is current shows it.
+  const playing = useNowPlaying(track.id);
+  const state = current ? playing : '';
   const [requested, setRequested] = useState(false);
   const progress = useDownloadProgress(track, isHeld(track));
   const label = downloadLabel(progress.status) ?? (requested ? 'Waiting for download…' : null);

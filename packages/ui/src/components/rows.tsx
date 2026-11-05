@@ -52,7 +52,7 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
     <div className={`song-card${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
-      <PlayControl track={track} />
+      <PlayControl track={track} current={current} />
       {albumHref
         ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}

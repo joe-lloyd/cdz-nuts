@@ -23,11 +23,13 @@ export function AlbumDetail() {
   const tracks = data!.tracks;
 
   const meta = [
-    (album.release_date ?? '').slice(0, 10), album.album_type,
+    (album.release_date ?? '').slice(0, 4), album.album_type,
     album.total_tracks ? `${album.total_tracks} tracks` : '',
+    album.downloaded ? 'in your archive' : '',
+  ].filter(Boolean).join(' · ');
+  const detail = [
     album.label ?? '', album.popularity != null ? `popularity ${album.popularity}` : '',
     album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
-    album.downloaded ? 'in your archive' : '',
   ].filter(Boolean).join(' · ');
 
   const discs = [...new Set(tracks.map((t) => t.disc_number ?? 1))].sort((a, b) => a - b);
@@ -49,6 +51,7 @@ export function AlbumDetail() {
             ))}
           </div>
           <div className="meta">{meta}</div>
+          {detail ? <div className="meta meta-detail">{detail}</div> : null}
           <Badges row={album} />
           {editions.length || data!.canonical ? (
             <div className="meta editions">
@@ -81,8 +84,8 @@ export function AlbumDetail() {
         </div>
       </div>
 
-      {album.id && !album.local ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
-      <h2>Tracks{tracks.length ? ` (${tracks.length} in library)` : ''}</h2>
+      {album.id && !album.local && !(album.downloaded && album.total_tracks && tracks.length >= album.total_tracks) ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
+      <h2>Tracks{tracks.length ? ` (${tracks.length} in your archive)` : ''}</h2>
       {tracks.length ? (
         <PlayScope tracks={tracks}>
           {discs.map((disc) => (
@@ -133,9 +136,9 @@ export function ArtistDetail() {
   const meta = [
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
     artist.popularity != null ? `popularity ${artist.popularity}` : '',
-    likedLive ? `${likedLive} liked tracks` : '',
-    ...data!.topRanks.map((r) => `top artist #${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`),
+    likedLive ? `${likedLive} liked songs` : '',
   ].filter(Boolean).join(' · ');
+  const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
 
   return (
     <>
@@ -146,6 +149,7 @@ export function ArtistDetail() {
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
           <div className="meta">{meta}</div>
+          {ranks.length ? <div className="chips rank-chips">{ranks.map((r) => <span className="chip" key={r}>{r}</span>)}</div> : null}
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
             {data!.liked.length ? (
