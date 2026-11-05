@@ -97,3 +97,9 @@ export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo,
 
 /** "22 Sep 2026": a date short enough for a status chip. */
 export const shortDay = day;
+
+/** "Sept 2026" from "2026-09". */
+export const monthName = (ym: string): string => {
+  const [y, m] = ym.split('-').map(Number);
+  return y && m ? new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : ym;
+};

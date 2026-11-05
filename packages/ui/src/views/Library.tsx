@@ -194,8 +194,7 @@ export function PlaylistDetail() {
       <PlayScope tracks={rows}>
         <div className="rows">
           {rows.length ? rows.map((t) => (
-            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist"
-              endText={`${day(t.added_at)} · ${dur(t.duration_ms)}`} />
+            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist" added={t.added_at} />
           )) : <Empty>empty (or blocked by the API)</Empty>}
         </div>
       </PlayScope>
@@ -249,14 +248,14 @@ export function Plays() {
   const here = all.filter((p) => p.source === 'app').length;
   return (
     <>
-      <p className="note">{all.length.toLocaleString()} recent plays, {here.toLocaleString()} of them in this player</p>
+      <p className="note">{all.length.toLocaleString()} recent plays, {here.toLocaleString()} of them played here</p>
       <PlayScope tracks={all}>
         {/* History reads top to bottom, so one column; only the newest play of
             the current song is marked as playing. */}
         <div className="song-grid history">
           {all.map((p, i) => (
             <SongCard key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
-              meta={p.played_at ? (p.source === 'app' ? `${ago(p.played_at)} · this player` : ago(p.played_at)) : undefined} />
+              meta={p.played_at ? (p.source === 'app' ? `${ago(p.played_at)} · played here` : ago(p.played_at)) : undefined} />
           ))}
         </div>
       </PlayScope>

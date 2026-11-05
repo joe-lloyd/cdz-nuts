@@ -1,7 +1,7 @@
 import { LikeButton } from './LikeButton.tsx';
 import { Link } from 'react-router-dom';
 
-import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
+import { bareAlbumName, day, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
 import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useArchiveState, useNowPlaying } from './primitives.tsx';
 
@@ -27,8 +27,8 @@ function RowStatus({ track, archive, removed }: { track: Track; archive: 'held' 
   return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
 }
 
-export function TrackRow({ track, endText, rank, removed = 'Removed on Spotify' }: {
-  track: Track; endText?: string | undefined; rank?: number | null | undefined; removed?: string | undefined;
+export function TrackRow({ track, endText, rank, added, removed = 'Removed on Spotify' }: {
+  track: Track; endText?: string | undefined; rank?: number | null | undefined; added?: string | null | undefined; removed?: string | undefined;
 }) {
   const state = useNowPlaying(track.id);
   const archive = useArchiveState(track);
@@ -51,6 +51,7 @@ export function TrackRow({ track, endText, rank, removed = 'Removed on Spotify' 
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />
+      {added !== undefined ? <div className="row-date">{day(added)}</div> : null}
       <LikeButton track={track} />
       <div className="end">{endText ?? dur(track.duration_ms)}</div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
@@ -142,7 +143,7 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   // adds the weekday and, when one is announced, the time.
   const timed = when && (when.getHours() || when.getMinutes());
   const dateLine = when
-    ? when.toLocaleString(undefined, { weekday: 'long', ...(timed ? { hour: '2-digit', minute: '2-digit' } : {}) })
+    ? when.toLocaleString('en-GB', { weekday: 'long', ...(timed ? { hour: 'numeric', minute: '2-digit' } : {}) })
     : 'date TBA';
   const showTitle = event.name && (event.name ?? '').toLowerCase() !== (event.artist_name ?? '').toLowerCase()
     ? event.name : '';

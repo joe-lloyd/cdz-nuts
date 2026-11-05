@@ -183,7 +183,7 @@ export function ArtistDetail() {
           <h2>Liked songs</h2>
           <PlayScope tracks={likedNow}>
             <div className="rows">
-              {likedNow.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
+              {likedNow.map((t) => <TrackRow key={t.id} track={t} added={t.added_at} />)}
             </div>
           </PlayScope>
         </>
@@ -193,7 +193,7 @@ export function ArtistDetail() {
           <h2>Liked once</h2>
           <PlayScope tracks={likedOnce}>
             <div className="rows">
-              {likedOnce.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} removed="Unliked on Spotify" />)}
+              {likedOnce.map((t) => <TrackRow key={t.id} track={t} added={t.added_at} removed="Unliked on Spotify" />)}
             </div>
           </PlayScope>
         </>

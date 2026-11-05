@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { useTopArtists, useTopTracks, useWrapped } from '../api/hooks.ts';
-import { dur, genres as parseGenres } from '../lib/format.ts';
+import { dur, genres as parseGenres, monthName } from '../lib/format.ts';
 import { Podium, RabbitChart } from '../charts/charts.tsx';
 import { Empty, Pic, PlayControl, Skeleton, SpotifyLink } from '../components/primitives.tsx';
 import { PlayScope } from '../components/PlayScope.tsx';
@@ -175,7 +175,7 @@ function ByPlays({ from, to }: { from: string; to: string }) {
   const tt = d.topTracks[0];
   if (tt) insights.push(`${tt.track_name} ruled this era — ${tt.plays} plays, ${((tt.plays / t.plays) * 100).toFixed(1)}% of everything you heard`);
   const peak = (d.perMonth ?? []).reduce<{ month: string; n: number } | null>((a, b) => (b.n > (a?.n ?? 0) ? b : a), null);
-  if (peak && months > 1) insights.push(`Loudest month: ${peak.month}, ${peak.n} plays`);
+  if (peak && months > 1) insights.push(`Loudest month: ${monthName(peak.month)}, ${peak.n} plays`);
   const ta = d.topArtists[0];
   if (ta) insights.push(`You gave ${ta.artist_name} ${Math.round(ta.ms / 3.6e6)} hours — ${((ta.ms / t.ms) * 100).toFixed(1)}% of all listening`);
 

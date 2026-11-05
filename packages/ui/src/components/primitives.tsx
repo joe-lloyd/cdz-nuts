@@ -194,7 +194,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Not in the library yet — get it'}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Add to archive'}
         onClick={() => {
           if (progress.failed) { progress.refresh?.(); return; }
           setRequested(true);
