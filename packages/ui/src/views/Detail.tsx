@@ -1,4 +1,4 @@
-import { AlbumLikeButton, ArtistLikeButton } from '../components/LikeButton.tsx';
+import { AlbumLikeButton, ArtistLikeButton, LikeButton } from '../components/LikeButton.tsx';
 import { useState } from 'react';
 import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
@@ -94,14 +94,14 @@ export function AlbumDetail() {
                   <div className="row" key={t.id}>
                     <span className="rank">{t.track_number ?? ''}</span>
                     <PlayControl track={t} />
-                    <span className="heart" role={t.liked ? 'img' : undefined} aria-label={t.liked ? 'Liked' : undefined}>{t.liked ? <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg> : null}</span>
                     <div className="mid">
                       <div>{t.name}</div>
                       <div className="sub">{t.artists ?? ''}</div>
                     </div>
                     <MediaBadges row={t} />
-                    <div className="end">{dur(t.duration_ms)}</div>
                     <RadioControl track={t} />
+                    <LikeButton track={t} />
+                    <div className="end">{dur(t.duration_ms)}</div>
                     {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
                   </div>
                 ))}

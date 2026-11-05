@@ -2,7 +2,8 @@ import { GlobalSearch } from './GlobalSearch.tsx';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
-import { usePlayerStatus, useStats } from '../api/hooks.ts';
+import { useListenBrainz, usePlayerStatus, useStats } from '../api/hooks.ts';
+import { RadioEnabled } from '../components/primitives.tsx';
 import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
@@ -29,9 +30,11 @@ export function Shell() {
   }, [drawerOpen]);
 
   const { kicker, title, parent, detail } = describe(location.pathname);
+  // Unknown until it answers, so links show rather than flicker in.
+  const radio = useListenBrainz();
 
   return (
-    <>
+    <RadioEnabled value={radio.data?.enabled ?? true}>
       <div className="loader" aria-hidden="true" />
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
@@ -60,6 +63,9 @@ export function Shell() {
               <span className="brand-mark" aria-hidden="true"><span /></span>
               <span><b>Music Taste</b><small>Private archive</small></span>
             </Link>
+            <button className="drawer-close" type="button" aria-label="Close menu" onClick={() => setDrawerOpen(false)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
           </header>
           <nav id="nav" aria-label="Library">
             {(Object.keys(TABS) as TabId[]).map((tab) => (
@@ -84,7 +90,7 @@ export function Shell() {
 
         <section className="content-shell">
           <GlobalSearch>
-          <header className="page-head">
+          <header className={`page-head${detail ? ' is-detail' : ''}`}>
             <div>
               <BackButton parent={parent} className="page-back" />
               <span className="page-kicker">{kicker}</span>
@@ -101,7 +107,7 @@ export function Shell() {
 
       <PlayerBar />
       <Toast />
-    </>
+    </RadioEnabled>
   );
 }
 

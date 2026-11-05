@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { createContext, use, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import { artUrl, day, genres as parseGenres, initial } from '../lib/format.ts';
+import { artUrl, genres as parseGenres, initial, shortDay } from '../lib/format.ts';
 import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
 import { post } from '../api/client.ts';
 import { player, usePlayer } from '../player/usePlayer.ts';
@@ -81,9 +81,9 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
 /** Tombstones: history is kept, these say what changed and when. */
 export function Badges({ row }: { row: Tombstoned }) {
   const items = [
-    row.removed_at ? <Chip key="r" text={`Removed from Spotify ${day(row.removed_at)}`} bad /> : null,
-    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`Unfollowed ${day(row.unfollowed_at)}`} /> : null,
-    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`Unsaved ${day(row.unsaved_at)}`} /> : null,
+    row.removed_at ? <Chip key="r" text={`Off Spotify ${shortDay(row.removed_at)}`} bad /> : null,
+    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
+    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
   return items.length ? <div className="chips">{items}</div> : null;
 }
@@ -114,6 +114,12 @@ const sourceKey = (k?: string | null) =>
  * figure — so it survives being read at 9px and does not depend on telling
  * magenta from gold.
  */
+/** "320k" reads as a bitrate once it says its unit; FLAC and 24/96 already do. */
+const readableQuality = (label: string): string => {
+  const kbps = /^(\d+)k$/.exec(label);
+  return kbps ? `${kbps[1]} kbps` : label;
+};
+
 export function MediaBadges({ row }: { row: Badged }) {
   const quality = row.quality ? QUALITY_META[row.quality] : null;
   const key = sourceKey(row.source);
@@ -127,7 +133,7 @@ export function MediaBadges({ row }: { row: Badged }) {
       {quality ? (
         <span className={`q-badge ${quality.cls}`} title={`${quality.tip}${row.quality_label ? ` · ${row.quality_label}` : ''}`}>
           <span className="q-bars">{[1, 2, 3, 4].map((n) => <i key={n} className={n <= quality.bars ? 'on' : undefined} />)}</span>
-          {row.quality_label ? <b>{row.quality_label}</b> : null}
+          {row.quality_label ? <b>{readableQuality(row.quality_label)}</b> : null}
         </span>
       ) : null}
       {showSource ? (
@@ -207,8 +213,16 @@ export function PlayControl({ track }: { track: Track }) {
 }
 
 /** Every song can seed radio; catalog metadata lets the server find its recording. */
+/**
+ * Whether radio can run. Radio needs ListenBrainz, and with it off a radio
+ * link would only lead to the page saying so. The shell provides the answer;
+ * anything rendered outside it assumes radio works.
+ */
+export const RadioEnabled = createContext(true);
+
 export function RadioControl({ track }: { track: Track }) {
-  if (!track.id) return null;
+  const enabled = use(RadioEnabled);
+  if (!track.id || !enabled) return null;
   const seed = new URLSearchParams({ artist: track.artists ?? track.artist_name ?? '', title: track.name });
   if (track.recording_mbid) seed.set('mbid', track.recording_mbid);
   return (
@@ -222,7 +236,7 @@ export function RadioControl({ track }: { track: Track }) {
 }
 
 export const SpotifyLink = ({ type, id }: { type: string; id: string }) => (
-  <a className="ext" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener" title="open in Spotify">↗</a>
+  <a className="ext" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener" title="Open in Spotify" aria-label="Open in Spotify">↗</a>
 );
 
 export const SpotifyButton = ({ type, id }: { type: string; id: string }) => (

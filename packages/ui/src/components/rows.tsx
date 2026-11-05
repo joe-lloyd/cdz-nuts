@@ -1,7 +1,7 @@
 import { LikeButton } from './LikeButton.tsx';
 import { Link } from 'react-router-dom';
 
-import { bareAlbumName, day, dur } from '../lib/format.ts';
+import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
 import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useNowPlaying } from './primitives.tsx';
 
@@ -24,16 +24,18 @@ export function TrackRow({ track, endText, rank }: { track: Track; endText?: str
         ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className="mid">
-        <div>{track.name} {track.removed_at ? <span className="chip bad">{`removed ${day(track.removed_at)}`}</span> : null}</div>
+        <div>{track.name}</div>
         <div className="sub">
+          {track.removed_at ? <span className="chip bad">{`Removed ${shortDay(track.removed_at)}`}</span> : null}
           {track.artists ?? ''}
-          {track.album ? <> · {albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album}</> : null}
+          {track.artists && track.album ? ' · ' : ''}
+          {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </div>
       </div>
-      <LikeButton track={track} />
       <MediaBadges row={track} />
-      <div className="end">{endText ?? dur(track.duration_ms)}</div>
       <RadioControl track={track} />
+      <LikeButton track={track} />
+      <div className="end">{endText ?? dur(track.duration_ms)}</div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
     </div>
   );
@@ -53,16 +55,18 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
       <div className="song-main">
         <b>{track.name}</b>
         <span className="song-sub">{track.artists ?? track.artist_name ?? ''}</span>
-        {track.album ? (
-          <span className="song-album">{albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album}</span>
+        {track.album || meta ? (
+          <span className="song-album">
+            {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+            {track.album && meta ? ' · ' : ''}
+            {meta ? <span className="song-meta">{meta}</span> : null}
+          </span>
         ) : null}
       </div>
       <MediaBadges row={track} />
-      <div className="song-end">
-        <div className="song-actions"><RadioControl track={track} /><LikeButton track={track} /></div>
-        <span className="song-dur">{dur(track.duration_ms)}</span>
-        {meta ? <small>{meta}</small> : null}
-      </div>
+      <RadioControl track={track} />
+      <LikeButton track={track} />
+      <span className="song-dur">{dur(track.duration_ms)}</span>
     </div>
   );
 }
@@ -80,7 +84,7 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
   const type = (album.album_group && album.album_group !== 'album') ? album.album_group
     : (album.album_type === 'single' || album.kind === 'single') ? 'single' : '';
   const editions = album.editions?.length ? `${album.editions.length + 1} editions` : '';
-  const line = [year, type, editions, album.is_saved ? 'saved ✓' : ''].filter(Boolean).join(' · ');
+  const line = [year, type, editions, album.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
 
   const art = (
     <Pic

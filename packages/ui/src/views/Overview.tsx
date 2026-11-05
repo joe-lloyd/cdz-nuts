@@ -73,7 +73,7 @@ export function Overview() {
       <div className="tiles">
         <div className="tile">
           <b>{(c.downloaded ?? 0).toLocaleString()}</b>
-          <span>albums downloaded{o.downloadsSyncedAt ? ` · ${ago(o.downloadsSyncedAt)}` : ''}</span>
+          <span>albums downloaded{o.downloadsSyncedAt ? <small>checked {ago(o.downloadsSyncedAt)}</small> : null}</span>
         </div>
         {tiles.map(([k, v]) => <div className="tile" key={k}><b>{v}</b><span>{k}</span></div>)}
       </div>

@@ -88,3 +88,7 @@ export const gainFor = (position: number): number => Math.max(0, Math.min(1, Num
 export const positionFor = (gain: number): number => Math.sqrt(Math.max(0, Math.min(1, Number(gain))));
 
 export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+
+/** "22 Sep 2026": a date short enough for a status chip. */
+export const shortDay = (iso: string | null | undefined): string =>
+  iso ? new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '';

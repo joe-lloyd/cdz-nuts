@@ -74,11 +74,12 @@ function ServerVersion() {
   if (!data) return <Empty>Nothing to configure here yet.</Empty>;
   return (
     <>
-      <p className="lede">Web version, front end {data.digest.slice(0, 12)}</p>
+      <p className="lede">You are using the web version, which is always up to date.</p>
       <p className="note">
-        Updates apply to the desktop app. In a browser you always get whatever the server is
+        Updates only apply to the desktop app. A browser always gets whatever the server is
         serving, so there is nothing to install.
       </p>
+      <p className="build-id">Build {data.digest.slice(0, 7)}</p>
     </>
   );
 }
