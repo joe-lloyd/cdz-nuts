@@ -1,5 +1,5 @@
 import { AlbumLikeButton, ArtistLikeButton, LikeButton } from '../components/LikeButton.tsx';
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
 
@@ -26,11 +26,11 @@ export function AlbumDetail() {
     (album.release_date ?? '').slice(0, 4), album.album_type,
     album.total_tracks ? `${album.total_tracks} tracks` : '',
     album.downloaded ? 'in your archive' : '',
-  ].filter(Boolean).map(nb).join(' · ');
+  ];
   const detail = [
     album.label ?? '', album.popularity != null ? `Spotify popularity ${album.popularity}/100` : '',
     album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean);
 
   const discs = [...new Set(tracks.map((t) => t.disc_number ?? 1))].sort((a, b) => a - b);
   // The canonical is named separately, so it is not also "listed as".
@@ -42,16 +42,16 @@ export function AlbumDetail() {
         <Pic kind="albums" id={album.id} cdn={album.image_url} name={album.name} />
         <div>
           <h1>{album.name}</h1>
-          <div className="meta">
-            {data!.artists.map((x, i) => (
+          <Facts items={[
+            data!.artists.map((x, i) => (
               <span key={`${x.name}-${i}`}>
                 {i ? ', ' : ''}
                 {x.id ? <Link to={`/artist/${x.id}`}><b>{x.name}</b></Link> : <b>{x.name}</b>}
               </span>
-            ))}
-            {meta ? ` · ${meta}` : ''}
-          </div>
-          {detail ? <div className="meta meta-detail">{detail}</div> : null}
+            )),
+            ...meta,
+          ]} />
+          {detail.length ? <Facts items={detail} detail /> : null}
           <Badges row={album} />
           {editions.length || data!.canonical ? (
             <div className="meta editions">
@@ -129,8 +129,18 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
   );
 }
 
-/** Spaces inside one fact do not break, so a line only wraps at a separator. */
-const nb = (item: string | null | undefined): string => String(item ?? '').replace(/ /g, '\u00a0');
+/**
+ * Facts in a row, dot-separated. Each one keeps to itself and a line only
+ * wraps between them; a fact that starts a line drops its dot.
+ */
+function Facts({ items, detail = false }: { items: ReactNode[]; detail?: boolean }) {
+  const kept = items.filter((item) => item !== '' && item != null && item !== false);
+  return (
+    <div className={`meta facts${detail ? ' meta-detail' : ''}`}>
+      {kept.map((item, i) => <span key={i}>{item}</span>)}
+    </div>
+  );
+}
 
 const RANK_LABEL: Record<string, string> = { short_term: 'this month', medium_term: 'this half-year', long_term: 'all time' };
 const GROUPS: Array<[string, string]> = [
@@ -150,7 +160,7 @@ export function ArtistDetail() {
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
     artist.popularity != null ? `Spotify popularity ${artist.popularity}/100` : '',
     likedLive ? `${likedLive} liked songs` : '',
-  ].filter(Boolean).map(nb).join(' · ');
+  ];
   const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
   const likedNow = data!.liked.filter((t) => !t.removed_at);
   const likedOnce = data!.liked.filter((t) => t.removed_at);
@@ -163,7 +173,7 @@ export function ArtistDetail() {
           <h1>{artist.name}</h1>
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
-          <div className="meta">{meta}</div>
+          <Facts items={meta} />
           {ranks.length ? <div className="meta meta-detail">Top artist {ranks.join(' · ')}</div> : null}
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />

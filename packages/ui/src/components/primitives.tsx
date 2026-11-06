@@ -81,7 +81,9 @@ export function Pic({ kind, id, cdn, name, overlay }: {
 export const Chip = ({ text }: { text: string }) => <span className="chip">{text}</span>;
 
 /** A state, not a tag: a dot and words, so it never reads as a genre. */
-export const Status = ({ text }: { text: string }) => <span className="status">{text.replace(/(\d+) (\w+) (\d{4})/, '$1\u00a0$2\u00a0$3')}</span>;
+export const Status = ({ text, title }: { text: string; title?: string | undefined }) => (
+  <span className="status" title={title}>{text.replace(/(\d+) (\w+) (\d{4})/, '$1\u00a0$2\u00a0$3')}</span>
+);
 
 export const Chips = ({ children }: { children: ReactNode[] }) => {
   const kept = children.filter(Boolean);
@@ -93,10 +95,14 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
   return list.length ? <div className="chips">{list.map((g) => <Chip key={g} text={g} />)}</div> : null;
 };
 
-/** Tombstones: history is kept, these say what changed and when. */
-export function Badges({ row }: { row: Tombstoned }) {
+/**
+ * Tombstones: history is kept, these say what changed and when. A card is
+ * narrow, so there each one keeps to a line and the full words are a tooltip.
+ */
+export function Badges({ row, compact = false }: { row: Tombstoned; compact?: boolean | undefined }) {
+  const removed = row.removed_at ? `Removed from Spotify · ${shortDay(row.removed_at)}` : '';
   const items = [
-    row.removed_at ? <Status key="r" text={`Removed from Spotify · ${shortDay(row.removed_at)}`} /> : null,
+    row.removed_at ? <Status key="r" text={compact ? `Removed ${shortDay(row.removed_at)}` : removed} title={compact ? removed : undefined} /> : null,
     row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
     row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
@@ -197,7 +203,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request this song'}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request a download into your archive'}
         onClick={() => {
           if (progress.failed) { progress.refresh?.(); return; }
           setRequested(true);

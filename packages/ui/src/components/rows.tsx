@@ -44,7 +44,7 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       {albumHref
         ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
-      <div className={`mid${archive.state !== 'held' ? ' reserve' : ''}`}>
+      <div className="mid">
         <div>{track.name}</div>
         <div className="sub sub-line">
           <span className="sub-text">
@@ -97,7 +97,7 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
         <b>{href ? <Link to={href}>{name}</Link> : name}</b>
         <span className="sub">{album.artists ?? ''}</span>
         {line ? <span className="sub dim">{line}</span> : null}
-        <Badges row={album} />
+        <Badges row={album} compact />
         <MediaBadges row={album} />
       </div>
     </div>

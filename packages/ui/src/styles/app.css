@@ -3637,10 +3637,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 
 /* --- round fourteen ------------------------------------------------------- */
-/* A row waiting on the archive check holds three lines' height, centred. */
-@media (max-width: 760px) {
-  .row .mid.reserve { display: flex; flex-direction: column; justify-content: center; min-height: 58px; }
-}
+
 
 /* Quality is a fixed column, so its header sits over it on every list. */
 .row > .song-badges,
@@ -3667,10 +3664,10 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .player-actions > * { flex: none; }
 
 @media (max-width: 1280px) and (min-width: 761px) {
+  /* Lyrics keeps its word; Queue says enough with its icon and count. */
   .player-actions { gap: 12px; }
-  .lyrics-button .button-label,
   .queue-button:not(.lyrics-button) .button-label { display: none; }
-  .lyrics-button { padding: 0; }
+  .queue-button:not(.lyrics-button) { padding: 0 6px; }
   .volume-control input { width: 84px; }
 }
 
@@ -3683,7 +3680,6 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .pl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .pl-grid .al-body .sub.dim,
   .pl-grid .status { white-space: normal; }
-  .history .row > .row-date::before { content: 'at '; color: var(--ink-3); }
   .upgrade-card { padding-right: 14px; }
   .upgrade-card .upgrade-actions { position: static; display: flex; justify-content: flex-end; }
   .upgrade-actions button.quiet { min-height: 44px; }
@@ -3706,17 +3702,11 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .edition:hover { border-color: var(--accent); }
 
 /* A song's status follows its artist on one line, so every row is two lines
-   tall; the artist gives way first. On a phone it takes its own line. */
+   tall; the artist gives way first. */
 .row .mid .sub-line { display: flex; min-width: 0; }
 .sub-line .sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub-line .row-status { flex: none; max-width: 60%; white-space: nowrap; }
 .sub-line .row-status::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
-@media (max-width: 760px) {
-  .row .mid .sub-line { display: block; }
-  .sub-line .sub-text,
-  .sub-line .row-status { display: block; max-width: none; }
-  .sub-line .row-status::before { content: none; }
-}
 
 /* Create waits for a name, and looks like it. */
 .new-pl button:disabled { opacity: .5; }
@@ -3758,3 +3748,54 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .archive-state { min-width: 0; }
 .archive-state span:last-child { flex: 1 1 auto; }
 .archive-state small { white-space: normal; overflow-wrap: anywhere; }
+
+@media (max-width: 760px) {
+  /* Every segment is a full touch target, short labels too. */
+  .seg button { min-width: 44px; }
+  /* A phone album credit gets two lines before it gives way. */
+  .al-grid .al-body .sub:not(.dim) { display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+
+/* A play's time says "at", so it never reads as a length beside one. */
+.history .row:not(.row-head) > .row-date::before { content: 'at '; color: var(--ink-3); }
+
+/* A request in flight is a state, not a button: a clock with no ring. On a
+   phone it sits on a dark scrim so it shows on any cover. */
+.radio-get.queued { outline-color: transparent; color: var(--ink-2); }
+@media (max-width: 760px) {
+  .row:has(> a > .pic, > .pic) > .download-control .radio-get { color: #fff; background: rgba(0, 0, 0, .55); }
+}
+
+/* Button glyphs are big enough to read beside their words. */
+.primary-action svg { width: 14px; height: 14px; }
+
+/* Genres are tags, not actions: no outline, a faint fill. */
+.chip { border-color: transparent; background: rgba(255, 255, 255, .06); }
+
+/* The archive state lines up with the menu: dot under the icons, words under the labels. */
+.archive-state { padding-left: 16px; gap: 16px; }
+
+/* On a phone the lyrics title gets the row; Adjust sync is an icon by close. */
+/* The header's kicker style is for its label, not the button's word. */
+.queue-head .timing-toggle .timing-word { display: inline; color: inherit; font: inherit; letter-spacing: normal; text-transform: none; }
+@media (max-width: 760px) {
+  .queue-head .timing-toggle .timing-word { display: none; }
+  .lyrics-panel .timing-toggle { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+}
+
+/* Dot-separated facts: the dot sits before each fact, and the first 14px of
+   the line are clipped, so a fact that starts a line shows no stray dot. */
+.facts { display: flex; flex-wrap: wrap; margin-left: -14px; clip-path: inset(0 0 0 14px); }
+.facts > span { white-space: nowrap; }
+.facts > span::before { content: '·'; display: inline-block; width: 14px; color: var(--ink-3); text-align: center; }
+.facts > span:has(a) { white-space: normal; }
+
+@media (max-width: 760px) {
+  /* The phone hero keeps to one line of facts; the rest is on desktop. */
+  .hero .facts.meta-detail { display: none; }
+  /* A phone history shows when, not how long, so the title keeps its room. */
+  .history .row > .end { display: none; }
+}
+/* Status and artist share the line; the status gives way last. */
+.sub-line .sub-text { flex: 0 1 auto; min-width: 3em; }
+.sub-line .row-status { flex: 0 0 auto; max-width: 70%; overflow: hidden; text-overflow: ellipsis; }

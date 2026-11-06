@@ -41,7 +41,8 @@ test('quality tiers put the real pipelines where you would expect them', () => {
 test('quality labels stay short enough for a badge', () => {
   assert.equal(qualityLabel('hires', { codec: 'flac', bitrate: null, sampleRate: 96_000, bitDepth: 24 }), '24/96');
   assert.equal(qualityLabel('lossless', { codec: 'flac', bitrate: null, sampleRate: 44_100, bitDepth: 16 }), 'FLAC');
-  assert.equal(qualityLabel('high', { codec: 'mp3', bitrate: 320, sampleRate: 44_100, bitDepth: null }), '320k');
+  assert.equal(qualityLabel('high', { codec: 'mp3', bitrate: 320, sampleRate: 44_100, bitDepth: null }), 'MP3 320');
+  assert.equal(qualityLabel('high', { codec: null, bitrate: 320, sampleRate: 44_100, bitDepth: null }), '320k');
 });
 
 test('match keys ignore the credit noise that differs between tags and Spotify', () => {

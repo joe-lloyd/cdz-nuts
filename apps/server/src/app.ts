@@ -2578,7 +2578,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   // locally imported music, which has no row in the taste DB to join to.
   '/api/plays': () => {
     const rows = query(`
-      SELECT p.played_at, p.context_type, 'spotify' AS source, t.id, t.name,
+      SELECT p.played_at, p.context_type, 'spotify' AS source, t.id, t.name, t.duration_ms,
              al.image_url, al.id AS album_id,
              ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
@@ -2587,7 +2587,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       FROM plays p JOIN tracks t ON t.id = p.track_id
       LEFT JOIN albums al ON al.id = t.album_id
       UNION ALL
-      SELECT ap.played_at, NULL, 'app', t.id, t.name, al.image_url, al.id,
+      SELECT ap.played_at, NULL, 'app', t.id, t.name, t.duration_ms, al.image_url, al.id,
              ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
                 FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
@@ -2611,6 +2611,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
             source: 'app',
             id: track.id,
             name: track.name,
+            duration_ms: track.duration_ms,
             image_url: null,
             album_id: track.album_id,
             artists: track.artists,

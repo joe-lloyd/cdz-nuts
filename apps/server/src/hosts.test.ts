@@ -119,6 +119,11 @@ test('the routes answer the same from node:sqlite files and from a Durable Objec
     const artistLine = onNode.find((l) => l.startsWith('GET /api/artist?id=ar01 '))!;
     const artistPage = JSON.parse(artistLine.slice(artistLine.indexOf('{'))) as { liked: Array<{ id: string; quality?: string }> };
     assert.equal(artistPage.liked.find((t) => t.id === 'al01t2')?.quality, 'high');
+
+    // A play carries its song's length, so the history lines up with every other list.
+    const playsLine = onNode.find((l) => l.startsWith('GET /api/plays '))!;
+    const plays = JSON.parse(playsLine.slice(playsLine.indexOf('['))) as Array<{ duration_ms?: number | null }>;
+    assert.ok(plays.length > 0 && plays.every((p) => typeof p.duration_ms === 'number'), 'every play has a length');
   } finally {
     globalThis.fetch = realFetch;
     rmSync(dir, { recursive: true, force: true });

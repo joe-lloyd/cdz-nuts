@@ -69,7 +69,7 @@ export function qualityTier(info: AudioInfo): QualityTier {
   return 'low';
 }
 
-/** Short label for the badge, e.g. "FLAC 24" / "320". */
+/** Short label for the badge, e.g. "24/96", "FLAC" or "MP3 320". */
 export function qualityLabel(tier: QualityTier, info: AudioInfo): string {
   switch (tier) {
     case 'hires': {
@@ -79,8 +79,13 @@ export function qualityLabel(tier: QualityTier, info: AudioInfo): string {
     }
     case 'lossless':
       return String(info.codec ?? 'lossless').toUpperCase();
-    default:
-      return info.bitrate ? `${Math.round(Number(info.bitrate))}k` : String(info.codec ?? '').toUpperCase();
+    default: {
+      // Lossy names its format too, so "320" never leaves you guessing MP3 or AAC.
+      const codec = String(info.codec ?? '').trim().toUpperCase();
+      if (!info.bitrate) return codec;
+      const kbps = Math.round(Number(info.bitrate));
+      return codec ? `${codec} ${kbps}` : `${kbps}k`;
+    }
   }
 }
 

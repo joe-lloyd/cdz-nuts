@@ -16,6 +16,9 @@ import { useDesktop } from '../api/hooks.ts';
  * The player bar lives here, above the router outlet, and is never unmounted --
  * that is what lets audio survive navigation. Only <Outlet /> changes.
  */
+/** A detail page keeps its list's menu item lit, so you know where you are. */
+const parentTab = (path: string): string | undefined => PARENT_OF[path.split('/')[1] ?? ''];
+
 export function Shell() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -78,7 +81,7 @@ export function Shell() {
           </header>
           <nav id="nav" aria-label="Library">
             {(Object.keys(TABS) as TabId[]).map((tab) => (
-              <NavLink key={tab} to={`/${tab}`} className={({ isActive }) => (isActive ? 'on' : undefined)}>
+              <NavLink key={tab} to={`/${tab}`} className={({ isActive }) => (isActive || parentTab(location.pathname) === tab ? 'on' : undefined)}>
                 {TAB_ICONS[tab]}
                 <span>{TABS[tab]}</span>
               </NavLink>

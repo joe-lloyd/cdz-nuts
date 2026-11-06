@@ -46,7 +46,7 @@ export function Artists() {
               ].filter(Boolean).join('\u00a0· ')}
             </div>
             <GenreChips json={a.genres} />
-            <Badges row={a} />
+            <Badges row={a} compact />
           </div>
         )) : <Empty>no matches</Empty>}
       </div>
@@ -254,7 +254,7 @@ export function Plays() {
         {/* History reads top to bottom, so one column; only the newest play of
             the current song is marked as playing. */}
         <div className="rows history">
-          <TrackHeader date="Played" quality={false} length={false} />
+          <TrackHeader date="Played" quality={false} />
           {/* Grouped by day, with the clock time on each row, so a history
               reads in order instead of as a column of "25d ago". */}
           {all.map((p, i) => {
@@ -264,7 +264,7 @@ export function Plays() {
               <Fragment key={`${p.id}-${i}`}>
                 {first ? <div className="day-head">{dayLabel}</div> : null}
                 <TrackRow track={p} current={all.findIndex((x) => x.id === p.id) === i}
-                  date={clock(p.played_at)} note={p.source === 'app' ? 'On this player' : undefined} endText="" />
+                  date={clock(p.played_at)} note={p.source === 'app' ? 'On this player' : undefined} />
               </Fragment>
             );
           })}
@@ -333,6 +333,6 @@ function playDay(iso: string | null | undefined): string {
   return threeLetters(when.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) }));
 }
 
-/** "21:40", or "2:05" for a play after midnight. */
+/** "21:40", or "02:05" after midnight: a time of day, never a length. */
 const clock = (iso: string | null | undefined): string =>
-  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' }) : '';
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';

@@ -78,11 +78,11 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
         : results.error ? <div role="alert">Could not search your library. <button onClick={() => void results.refetch()}>Retry</button></div>
         : data && !Object.values(data).some(rows => rows.length) ? <p role="status">No music found for "{term}".</p> : null}
       {data && <>
-        {!!data.artists.length && <section><h2>Artists</h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
-        {!!data.albums.length && <section><h2>Albums</h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
-        {!!data.songs.length && <section><h2>Songs{data.songs.length === 100 ? <span className="count">first 100</span> : null}</h2>
+        {!!data.artists.length && <section><h2>Artists<span className="count">{data.artists.length}</span></h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
+        {!!data.albums.length && <section><h2>Albums<span className="count">{data.albums.length}</span></h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
+        {!!data.songs.length && <section><h2>Songs<span className="count">{data.songs.length === 100 ? 'first 100' : data.songs.length}</span></h2>
           <PlayScope tracks={data.songs}><div className="rows">{data.songs.map(track => <TrackRow key={track.id} track={track} />)}</div></PlayScope></section>}
-        {!!data.playlists.length && <section><h2>Playlists</h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
+        {!!data.playlists.length && <section><h2>Playlists<span className="count">{data.playlists.length}</span></h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
       </>}
     </section>}
   </>;
