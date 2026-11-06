@@ -135,10 +135,19 @@ other way; the installer just folds the same steps in.
 
 ## Updating
 
-The app updates itself. It checks once at startup and never installs on its
-own — finding an update posts a notification, and the tray installs it when you
-choose to. That is deliberate: installing means relaunching, and relaunching
-mid-album to save thirty seconds is a bad trade.
+The app updates itself. It checks at startup and installs straight away, since
+nothing is playing yet. While it runs it checks again every hour. When nothing
+is playing it installs and relaunches; when music is playing it waits and
+installs at the first hourly check that finds the player quiet. Installing means
+relaunching, and cutting off a song to save an hour is a bad trade. Settings and
+the tray can still install a found update at once.
+
+Since 0.7.1 the app is called **cdz-nutz**; before that it was Homelab Music.
+The bundle identifier is unchanged, so settings and the updater carry over, and
+the installers remove an install left under the old name. On macOS an update
+installed by the app keeps the old bundle's folder name; the installer moves it
+to `cdz-nutz.app`. The macOS bundle is ad-hoc signed in CI, so an update the
+app installs itself runs on Apple Silicon without the installer's re-signing.
 
 A failed check stays quiet unless you asked for it from the tray. Away from home
 and outside the tunnel the app genuinely cannot reach GitHub, and that is an
@@ -231,6 +240,7 @@ notice until the second release.
 | Embedded-UI drift check | done — 0.3.0 |
 | Userspace WireGuard tunnel | **next** |
 | Now-playing panel under the tray icon | done — 0.6.0 |
+| Hourly update check, installing when idle | done — 0.7.1 |
 | Media keys, notifications | **next** |
 
 ### Knowing the embedded UI has gone stale

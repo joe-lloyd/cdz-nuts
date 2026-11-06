@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install Homelab Music on macOS, from the latest GitHub release.
+# Install cdz-nutz on macOS, from the latest GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-macos.sh | bash
 #
@@ -13,15 +13,19 @@
 #      arm64 binary at all, regardless of Gatekeeper.
 #
 # It touches only this one app. Gatekeeper stays on, and no system-wide policy
-# is changed. Uninstall is `rm -rf "/Applications/Homelab Music.app"`.
+# is changed. Uninstall is `rm -rf "/Applications/cdz-nutz.app"`.
 #
-# After this, the app updates itself from the tray -- you should not need to run
-# this script twice.
+# After this, the app updates itself: at launch, and every hour while it runs,
+# installing once nothing is playing. You should not need to run this twice.
+#
+# Before 0.7.1 the app was called Homelab Music; an install under that name is
+# removed so the two never sit side by side.
 
 set -euo pipefail
 
 REPO="joe-lloyd/cdz-nuts"
-APP="Homelab Music.app"
+APP="cdz-nutz.app"
+OLD_APP="Homelab Music.app"
 DEST="${INSTALL_DIR:-/Applications}"
 
 case "$(uname -m)" in
@@ -59,6 +63,10 @@ tar -xzf "$TMP/app.tar.gz" -C "$TMP"
 if [[ -d "$DEST/$APP" ]]; then
   echo "==> Removing the previous install"
   rm -rf "$DEST/$APP"
+fi
+if [[ -d "$DEST/$OLD_APP" ]]; then
+  echo "==> Removing the install from before the rename ($OLD_APP)"
+  rm -rf "$DEST/$OLD_APP"
 fi
 
 echo "==> Installing to $DEST"

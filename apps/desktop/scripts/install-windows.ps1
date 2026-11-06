@@ -1,4 +1,4 @@
-# Install Homelab Music on Windows, from the latest GitHub release.
+# Install cdz-nutz on Windows, from the latest GitHub release.
 #
 #   irm https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-windows.ps1 | iex
 #
@@ -10,7 +10,10 @@
 # just downloaded from your own repository. Uninstall through Settings > Apps
 # like anything else.
 #
-# After this, the app updates itself from the tray.
+# After this, the app updates itself: at launch, and every hour while it runs.
+#
+# Before 0.7.1 the app was called Homelab Music, and NSIS installs per product
+# name, so an install under the old name is uninstalled first.
 
 $ErrorActionPreference = 'Stop'
 
@@ -18,7 +21,7 @@ $repo = 'joe-lloyd/cdz-nuts'
 
 Write-Host '==> Looking up the latest release'
 $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{
-    'User-Agent' = 'homelab-music-installer'
+    'User-Agent' = 'cdz-nutz-installer'
 }
 
 # The NSIS .exe is the installer; the .zip alongside it is the updater artifact
@@ -33,6 +36,24 @@ $out = Join-Path $env:TEMP $asset.name
 Write-Host "==> Downloading $($asset.name)"
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $out -UseBasicParsing
 
+$oldDir = Join-Path $env:LOCALAPPDATA 'Homelab Music'
+$oldUninstaller = Join-Path $oldDir 'uninstall.exe'
+if (Test-Path $oldUninstaller) {
+    Write-Host '==> Removing the install from before the rename (Homelab Music)'
+    # An NSIS uninstaller hands off to a copy of itself and exits at once, so
+    # its exit code says nothing. Run a copy with _?= instead: it uninstalls
+    # the folder in place, waits, and reports the real result. _?= goes last.
+    $copy = Join-Path $env:TEMP 'homelab-music-uninstall.exe'
+    Copy-Item $oldUninstaller $copy -Force
+    $old = Start-Process -FilePath $copy -ArgumentList '/S', "_?=$oldDir" -Wait -PassThru
+    Remove-Item $copy -Force -ErrorAction SilentlyContinue
+    if ($old.ExitCode -ne 0) {
+        Write-Error "The old uninstaller exited with code $($old.ExitCode); remove Homelab Music from Settings > Apps, then run this again."
+    }
+    # In-place mode leaves the uninstaller itself behind.
+    Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
+}
+
 Write-Host '==> Installing'
 # /S is NSIS silent mode. Waiting matters: without it the script reports success
 # while the installer is still running, and a following launch would race it.
@@ -45,5 +66,5 @@ if ($process.ExitCode -ne 0) {
 Remove-Item $out -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
-Write-Host "Installed Homelab Music $($release.tag_name)."
+Write-Host "Installed cdz-nutz $($release.tag_name)."
 Write-Host 'Find it in the Start menu. It lives in the tray once running.'

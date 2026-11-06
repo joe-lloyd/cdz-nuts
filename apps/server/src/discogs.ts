@@ -16,7 +16,7 @@ export const DISCOGS_FILE = process.env.DISCOGS_DB
 const API = 'https://api.discogs.com';
 // Discogs rejects requests without a descriptive agent, and asks that it
 // identify the application rather than impersonate a browser.
-const AGENT = process.env.DISCOGS_USER_AGENT ?? 'HomelabMusicTaste/1.0 (+https://music.home.arpa)';
+const AGENT = process.env.DISCOGS_USER_AGENT ?? 'cdz-nutz/1.0 (+https://music.home.arpa)';
 
 export type ShelfStatus = 'shelf' | 'ripping' | 'ripped' | 'skip';
 export const SHELF_STATUSES: ShelfStatus[] = ['shelf', 'ripping', 'ripped', 'skip'];

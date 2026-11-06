@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Install Homelab Music on Linux, from the latest GitHub release.
+# Install cdz-nutz on Linux, from the latest GitHub release.
 #
 #   curl -fsSL https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-linux.sh | bash
 #
@@ -8,7 +8,9 @@
 # up in your launcher. Nothing is installed system-wide and no root is needed.
 #
 # Uninstall:
-#   rm ~/.local/bin/homelab-music ~/.local/share/applications/homelab-music.desktop
+#   rm ~/.local/bin/cdz-nutz ~/.local/share/applications/cdz-nutz.desktop
+#
+# Before 0.7.1 the app was called Homelab Music; its files are removed on install.
 #
 # The AppImage needs FUSE. On a box without it, run with --appimage-extract-and-run,
 # or install libfuse2.
@@ -17,7 +19,7 @@ set -euo pipefail
 
 REPO="joe-lloyd/cdz-nuts"
 BIN_DIR="${INSTALL_DIR:-$HOME/.local/bin}"
-BIN="$BIN_DIR/homelab-music"
+BIN="$BIN_DIR/cdz-nutz"
 DESKTOP_DIR="$HOME/.local/share/applications"
 ICON_DIR="$HOME/.local/share/icons/hicolor/256x256/apps"
 
@@ -41,27 +43,30 @@ TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> Downloading $(basename "$URL")"
-curl -fsSL "$URL" -o "$TMP/homelab-music"
-chmod +x "$TMP/homelab-music"
+curl -fsSL "$URL" -o "$TMP/cdz-nutz"
+chmod +x "$TMP/cdz-nutz"
 
 mkdir -p "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 # Move into place last, so a failed download never replaces a working install.
-mv "$TMP/homelab-music" "$BIN"
+mv "$TMP/cdz-nutz" "$BIN"
+
+# The install from before the rename.
+rm -f "$BIN_DIR/homelab-music" "$DESKTOP_DIR/homelab-music.desktop" "$ICON_DIR/homelab-music.png"
 
 # Pull the icon out of the AppImage rather than shipping a second copy that can
 # drift from the one the app itself uses.
 if "$BIN" --appimage-extract 'usr/share/icons/hicolor/256x256/apps/*.png' >/dev/null 2>&1; then
-  find squashfs-root -name '*.png' -exec cp {} "$ICON_DIR/homelab-music.png" \; 2>/dev/null || true
+  find squashfs-root -name '*.png' -exec cp {} "$ICON_DIR/cdz-nutz.png" \; 2>/dev/null || true
   rm -rf squashfs-root
 fi
 
-cat > "$DESKTOP_DIR/homelab-music.desktop" <<EOF
+cat > "$DESKTOP_DIR/cdz-nutz.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=Homelab Music
+Name=cdz-nutz
 Comment=Tray player for the home music library
 Exec=$BIN
-Icon=homelab-music
+Icon=cdz-nutz
 Categories=AudioVideo;Audio;Player;
 Terminal=false
 StartupWMClass=homelab-music
@@ -77,4 +82,4 @@ if ! printf '%s' ":$PATH:" | grep -q ":$BIN_DIR:"; then
   echo "application menu, where the desktop entry just installed will appear."
 fi
 echo
-echo "Run it:  homelab-music"
+echo "Run it:  cdz-nutz"

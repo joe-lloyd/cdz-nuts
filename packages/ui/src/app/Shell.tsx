@@ -52,7 +52,7 @@ export function Shell() {
         </button>
         <Link className="brand-mini" to="/overview">
           <span className="brand-mark" aria-hidden="true"><span /></span>
-          <b>Music Taste</b>
+          <b>cdz-nutz</b>
         </Link>
         <BackButton parent={parent} className="page-back top-back" />
         <button
@@ -71,9 +71,9 @@ export function Shell() {
       <div className="app-shell">
         <aside className="sidebar" id="nav-drawer">
           <header className="brand-head">
-            <Link className="brand" to="/overview" aria-label="Music Taste home">
+            <Link className="brand" to="/overview" aria-label="cdz-nutz home">
               <span className="brand-mark" aria-hidden="true"><span /></span>
-              <span><b>Music Taste</b><small>Private archive</small></span>
+              <span><b>cdz-nutz</b><small>Private archive</small></span>
             </Link>
             <button className="drawer-close" type="button" aria-label="Close menu" onClick={() => setDrawerOpen(false)}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
