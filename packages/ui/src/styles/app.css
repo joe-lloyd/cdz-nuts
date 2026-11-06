@@ -4104,3 +4104,9 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 .seg button { white-space: nowrap; }
 .seg { flex-wrap: wrap; }
 .seg button { flex: 0 0 auto; }
+@media (max-width: 760px) {
+  /* A song's artist and album get two lines on a phone before they give way. */
+  .sub-line .sub-text { display: -webkit-box; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  /* The other-edition link is a full touch target. */
+  .hero .meta.editions .edition { min-height: 44px; align-items: center; }
+}
