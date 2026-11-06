@@ -15,6 +15,8 @@
 // is what "auto-update" has to mean for something that lives in the tray for
 // weeks at a time.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
@@ -125,9 +127,17 @@ pub async fn watch(app: AppHandle) {
 /// both take time, and a song started meanwhile must not be cut off. So the
 /// download comes first and the install waits until the player is quiet;
 /// installing is what ends playback (Windows quits the app to run the
-/// installer). Asked from the tray or settings, it goes straight through.
+/// installer). Asked from the tray or settings, it goes straight through, and
+/// if an automatic install is already waiting for quiet, it ends that wait.
 pub async fn install(app: AppHandle, wait_for_quiet: bool) {
-    let Some(update) = app.state::<PendingUpdate>().take() else {
+    let pending = app.state::<PendingUpdate>();
+    if pending.waiting.load(Ordering::SeqCst) {
+        if !wait_for_quiet {
+            pending.hurry.store(true, Ordering::SeqCst);
+        }
+        return;
+    }
+    let Some(update) = pending.take() else {
         notify(&app, "Nothing to install", "Check for updates first.");
         return;
     };
@@ -142,9 +152,14 @@ pub async fn install(app: AppHandle, wait_for_quiet: bool) {
     let installed = match update.download(|_chunk, _total| {}, || {}).await {
         Ok(bytes) => {
             if wait_for_quiet {
-                while app.state::<crate::panel::Panel>().is_playing() {
-                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                pending.waiting.store(true, Ordering::SeqCst);
+                while app.state::<crate::panel::Panel>().is_playing()
+                    && !pending.hurry.load(Ordering::SeqCst)
+                {
+                    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
                 }
+                pending.waiting.store(false, Ordering::SeqCst);
+                pending.hurry.store(false, Ordering::SeqCst);
             }
             update.install(bytes)
         }
@@ -163,23 +178,31 @@ pub async fn install(app: AppHandle, wait_for_quiet: bool) {
     }
 }
 
-/// Holds the update between finding it and being told to install it.
+/// Holds the update between finding it and installing it. `waiting` is set
+/// while a downloaded update waits for the player to go quiet; `hurry` is a
+/// manual request to stop waiting.
 #[derive(Default)]
-pub struct PendingUpdate(std::sync::Mutex<Option<tauri_plugin_updater::Update>>);
+pub struct PendingUpdate {
+    slot: std::sync::Mutex<Option<tauri_plugin_updater::Update>>,
+    waiting: AtomicBool,
+    hurry: AtomicBool,
+}
 
 impl PendingUpdate {
     fn set(&self, update: Option<tauri_plugin_updater::Update>) {
-        if let Ok(mut slot) = self.0.lock() {
+        if let Ok(mut slot) = self.slot.lock() {
             *slot = update;
         }
     }
 
     fn take(&self) -> Option<tauri_plugin_updater::Update> {
-        self.0.lock().ok().and_then(|mut slot| slot.take())
+        self.slot.lock().ok().and_then(|mut slot| slot.take())
     }
 
-    /// Whether a check has found something waiting, for the tray label.
+    /// Whether an update is found or downloaded and not yet installed, for
+    /// the tray label and the settings button.
     pub fn is_pending(&self) -> bool {
-        self.0.lock().map(|slot| slot.is_some()).unwrap_or(false)
+        self.waiting.load(Ordering::SeqCst)
+            || self.slot.lock().map(|slot| slot.is_some()).unwrap_or(false)
     }
 }
