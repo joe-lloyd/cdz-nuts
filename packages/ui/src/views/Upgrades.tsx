@@ -112,7 +112,7 @@ export function Upgrades() {
       <div className="tools queue-tools">
         <input type="search" aria-label="Find a request" placeholder="Find a request" value={needle} onChange={(e) => setNeedle(e.target.value)} />
         <div className="seg" role="group" aria-label="Show">
-          {([['all', 'All'], ['active', 'In progress'], ['done', 'Finished'], ['stopped', 'Stopped']] as const).map(([key, label]) => (
+          {([['all', 'All'], ['active', 'Active'], ['done', 'Finished'], ['stopped', 'Stopped']] as const).map(([key, label]) => (
             <button key={key} type="button" className={show === key ? 'on' : undefined} aria-pressed={show === key} onClick={() => setShow(key)}>{label}<span className="seg-count">{tally[key]}</span></button>
           ))}
         </div>
