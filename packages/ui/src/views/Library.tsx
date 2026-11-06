@@ -141,7 +141,7 @@ export function Playlists() {
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
                 <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs · {p.source === 'local' ? 'made here' : 'from Spotify'}</span>
-                {p.removed_at ? <span className="status" title={`Removed from Spotify · ${shortDay(p.removed_at)}`}>Removed from Spotify · {cardDay(p.removed_at)}</span>
+                {p.removed_at ? <span className="status" title={`Removed from Spotify · ${shortDay(p.removed_at)}`}>Off Spotify · {cardDay(p.removed_at)}</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>

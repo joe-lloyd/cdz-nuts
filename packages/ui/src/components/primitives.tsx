@@ -104,8 +104,8 @@ export function Badges({ row, compact = false }: { row: Tombstoned; compact?: bo
   const removed = row.removed_at ? `No longer on Spotify · ${shortDay(row.removed_at)}` : '';
   const items = [
     row.removed_at ? <Status key="r" text={compact ? `Off Spotify · ${cardDay(row.removed_at)}` : removed} title={compact ? removed : undefined} /> : null,
-    row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
-    row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
+    row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${(compact ? cardDay : shortDay)(row.unfollowed_at)}`} /> : null,
+    row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${(compact ? cardDay : shortDay)(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
   return items.length ? <div className="statuses">{items}</div> : null;
 }
