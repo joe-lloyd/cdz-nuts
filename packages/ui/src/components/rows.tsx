@@ -3,17 +3,11 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use } from 'react';
 
-const DownloadBadge = () => (
-  <span className="dl" title="This album is in your archive">
-    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
-      <path fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" d="m5 12.5 4.5 4.5L19 7.5" />
-    </svg>
-    <span>In archive</span>
-  </span>
-);
+/** Most of the shelf is in the archive, so the badge marks what is not. */
+const MissingBadge = () => <span className="dl missing" title="No copy in your archive yet">Not in archive</span>;
 
 /**
  * A song's state, in words, on a line of its own so it is never the part that
@@ -58,8 +52,6 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
-          {/* On a phone the quality column folds into this line. */}
-          {track.quality_label ? <span className="sub-quality"> · {readableQuality(track.quality_label)}</span> : null}
         </div>
         <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} reserve={archive.state !== 'held'} />
       </div>
@@ -92,7 +84,7 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
     <Pic
       kind="albums" id={id} cdn={album.image_url} name={name}
       overlay={<>
-        {album.downloaded ? <DownloadBadge /> : null}
+        {album.downloaded === 0 || album.downloaded === false ? <MissingBadge /> : null}
         {when ? <span className="al-when">{when}</span> : null}
       </>}
     />

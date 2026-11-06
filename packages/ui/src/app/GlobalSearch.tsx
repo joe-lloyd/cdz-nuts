@@ -63,7 +63,16 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
     </div>
     <div hidden={open}>{children}</div>
     {open && <section id="search-results" className="search-results" aria-label="Search results">
-      <h1>Search results</h1>
+      <header className="page-head search-head">
+        <div>
+          <span className="page-kicker">{data ? [
+            data.albums.length ? `${data.albums.length} ${data.albums.length === 1 ? 'album' : 'albums'}` : '',
+            data.songs.length ? `${data.songs.length === 100 ? '100+' : data.songs.length} ${data.songs.length === 1 ? 'song' : 'songs'}` : '',
+            data.artists.length ? `${data.artists.length} ${data.artists.length === 1 ? 'artist' : 'artists'}` : '',
+          ].filter(Boolean).join(' · ') || 'Search' : 'Search'}</span>
+          <h1>Results for “{term}”</h1>
+        </div>
+      </header>
       {term.length < 2 ? <p role="status">Type at least two characters.</p>
         : loading ? <p role="status">Searching...</p>
         : results.error ? <div role="alert">Could not search your library. <button onClick={() => void results.refetch()}>Retry</button></div>
@@ -71,7 +80,7 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
       {data && <>
         {!!data.artists.length && <section><h2>Artists</h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
         {!!data.albums.length && <section><h2>Albums</h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
-        {!!data.songs.length && <section><h2>Songs{data.songs.length === 100 ? ' · first 100 matches' : ''}</h2>
+        {!!data.songs.length && <section><h2>Songs{data.songs.length === 100 ? <span className="count">first 100</span> : null}</h2>
           <PlayScope tracks={data.songs}><div className="rows">{data.songs.map(track => <TrackRow key={track.id} track={track} />)}</div></PlayScope></section>}
         {!!data.playlists.length && <section><h2>Playlists</h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
       </>}

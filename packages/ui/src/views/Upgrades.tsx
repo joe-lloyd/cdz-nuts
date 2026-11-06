@@ -27,7 +27,7 @@ export function Upgrades() {
   const submit = useMutation({
     mutationFn: (values: Record<string, unknown>) => post('/api/upgrades', values),
     onSuccess: (_d, values) => {
-      player.notify(values.sourceMode === 'single' ? 'Added to the archive and FLAC queue' : 'Album intake queued');
+      player.notify(values.sourceMode === 'single' ? 'Requested; it joins the archive soon' : 'Album requested');
       refresh();
     },
     onError: (e: Error) => player.notify(e.message, true),
@@ -131,11 +131,7 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
         <span className={`upgrade-state ${job.status}`}>
           {job.status === 'working' ? <i className="spin" /> : null}{label}
         </span>
-        {job.current_codec ? (
-          <span className={`q-badge ${job.current_codec === 'flac' ? 'q-lossless' : 'q-standard'}`}>
-            <b>{job.current_codec.toUpperCase()}</b>
-          </span>
-        ) : null}
+
       </div>
       <b className="upgrade-title">{job.title}</b>
       <span className="upgrade-sub">{job.artist}{job.album ? ` · ${job.album}` : ''}</span>

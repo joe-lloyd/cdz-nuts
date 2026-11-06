@@ -96,7 +96,7 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
 /** Tombstones: history is kept, these say what changed and when. */
 export function Badges({ row }: { row: Tombstoned }) {
   const items = [
-    row.removed_at ? <Status key="r" text={`Pulled from Spotify ${shortDay(row.removed_at)}`} /> : null,
+    row.removed_at ? <Status key="r" text={`Removed from Spotify · ${shortDay(row.removed_at)}`} /> : null,
     row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
     row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);

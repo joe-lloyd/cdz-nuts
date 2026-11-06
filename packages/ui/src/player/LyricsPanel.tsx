@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { player, usePlayer } from './usePlayer.ts';
 
@@ -15,13 +15,16 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
     if (body && el) body.scrollTop = el.offsetTop - body.clientHeight * 0.4 + el.offsetHeight / 2;
   }, [open, p.activeLine]);
 
+  const [timing, setTiming] = useState(false);
   // The kind of lyrics heads the panel; where they came from closes it.
   const [kind, ...from] = p.lyricsSource.split(' · ');
   return (
     <aside className="queue-panel lyrics-panel" aria-label="Lyrics" hidden={!open}>
       <div className="queue-head">
         <div><span>{kind}</span><b>{p.lyricsTitle}</b></div>
-        <div className="lyrics-tools" role="group" aria-label="Lyrics timing">
+        {/* Timing is rarely needed, so on a phone it waits behind one button. */}
+        <button className="timing-toggle" type="button" aria-expanded={timing} onClick={() => setTiming(!timing)}>Timing</button>
+        <div className={`lyrics-tools${timing ? ' open' : ''}`} role="group" aria-label="Lyrics timing">
           <small>Lyrics timing</small>
           <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>−0.5s</button>
           <span aria-live="polite">{`${p.lyricOffset > 0 ? '+' : ''}${p.lyricOffset.toFixed(1)}s`}</span>

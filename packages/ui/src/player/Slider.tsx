@@ -1,3 +1,5 @@
+import type React from 'react';
+
 /**
  * The one range input in the player.
  *
@@ -36,6 +38,7 @@ export function Slider({
       className={className}
       disabled={disabled}
       value={Math.round(clamp01(value) * steps)}
+      style={{ '--fill': `${clamp01(value) * 100}%` } as React.CSSProperties}
       aria-label={label}
       onChange={(event) => onValue(Number(event.target.value) / steps)}
     />

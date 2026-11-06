@@ -272,7 +272,7 @@ function AlbumImport({ id, artist, album }: { id: string; artist: string; album:
       await post(mode === 'tracks' ? '/api/albums/import-tracks' : '/api/upgrades', mode === 'tracks'
         ? { albumId: id }
         : { sourceUrl: url, sourceMode: mode, artist, album, title: album, downloader: 'yt-dlp' });
-      setMessage('Album queued. Follow progress in the FLAC queue.');
+      setMessage('Album queued. Follow progress under Requests.');
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
   }

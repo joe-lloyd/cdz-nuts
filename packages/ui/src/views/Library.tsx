@@ -122,10 +122,6 @@ export function Playlists() {
 
   return (
     <>
-      <form className="tools" onSubmit={e => { e.preventDefault(); void create(); }}>
-        <input aria-label="New playlist name" placeholder="New playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
-        <button disabled={saving || !name.trim()}>Create playlist</button>
-      </form>
       {message && <p role="alert">{message}</p>}
       {hidden ? <p className="note">{hidden} playlist{hidden === 1 ? '' : 's'} hidden — Spotify returned no tracks for {hidden === 1 ? 'it' : 'them'}.</p> : null}
       <div className="al-grid pl-grid">
@@ -145,12 +141,17 @@ export function Playlists() {
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
                 <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs · {p.source === 'local' ? 'made here' : 'from Spotify'}</span>
-                {p.removed_at ? <span className="status">Gone from your Spotify {shortDay(p.removed_at)}</span>
+                {p.removed_at ? <span className="status">Removed from Spotify · {shortDay(p.removed_at)}</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>
           );
         })}
+        <form className="al-card new-pl" onSubmit={e => { e.preventDefault(); void create(); }}>
+          <span className="new-pl-mark" aria-hidden="true">+</span>
+          <input aria-label="New playlist name" placeholder="New playlist" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
+          <button disabled={saving || !name.trim()}>Create playlist</button>
+        </form>
       </div>
     </>
   );

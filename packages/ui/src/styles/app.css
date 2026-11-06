@@ -3489,3 +3489,94 @@ h2 .count { margin-left: 6px; color: var(--ink-3); font-weight: 600; }
 @media (max-width: 760px) {
   .hero-actions .spbtn { flex: 1 1 auto; padding-inline: 10px; }
 }
+
+/* --- round twelve --------------------------------------------------------- */
+/* Sliders: one drawn track, its fill the value, no browser outline. */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(var(--accent), var(--accent)) 0 / var(--fill, 0%) 100% no-repeat, rgba(255, 255, 255, .14);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  margin-top: -5px;
+  background: var(--ink);
+  border: 0;
+  border-radius: 50%;
+}
+input[type="range"]::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255, 255, 255, .14); }
+input[type="range"]::-moz-range-progress { height: 4px; border-radius: 2px; background: var(--accent); }
+input[type="range"]::-moz-range-thumb { width: 14px; height: 14px; background: var(--ink); border: 0; border-radius: 50%; }
+input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+.pic .dl.missing { color: var(--ink-2); background: rgba(10, 8, 10, .72); border-color: var(--line-strong); }
+.radio-get.queued { color: var(--ink-2); outline-color: var(--ink-3); outline-style: solid; }
+.section-head a::after { content: ' →'; }
+.lyrics-panel:not([hidden]) { display: flex; flex-direction: column; }
+.lyrics-panel .lyrics-body { flex: 1 1 auto; height: auto; min-height: 0; }
+.queue-head > .timing-toggle { display: none; }
+.search-head { margin-bottom: 18px; }
+.search-head h1 { font-size: 48px; }
+
+/* The desktop queue button names itself, with its count inline. */
+@media (min-width: 761px) {
+  .queue-button:not(.lyrics-button) { gap: 6px; padding: 0 10px; }
+  .queue-button:not(.lyrics-button) .button-label { display: inline; font-size: 12px; font-weight: 600; }
+  .queue-button:not(.lyrics-button) .count-badge { position: static; order: 2; }
+}
+
+/* A new playlist is the last tile of the grid. */
+.new-pl { display: flex; flex-direction: column; justify-content: center; gap: 10px; min-height: 160px; padding: 16px; border-style: dashed; }
+.new-pl-mark { color: var(--ink-3); font-size: 28px; line-height: 1; }
+.new-pl input { width: 100%; }
+
+.upgrade-form select {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23aea4ad' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right 10px center;
+  background-repeat: no-repeat;
+  background-size: 16px;
+}
+
+@media (max-width: 760px) {
+  /* On a phone the cover art is the play button: the separate circle sits on
+     the art, invisible until it has something to say, which frees the
+     width for the title. Lists without art keep the circle. */
+  .row { position: relative; }
+  .row:has(> a > .pic, > .pic) > .track-play,
+  .row:has(> a > .pic, > .pic) > .download-control { position: absolute; left: 3px; top: 50%; z-index: 1; transform: translateY(-50%); }
+  .row:has(> a > .pic, > .pic) > .track-play { padding: 0; outline: 0; background: transparent; border-radius: 8px; }
+  .row:has(> a > .pic, > .pic) > .track-play:not(.playing):not(.paused) svg { opacity: 0; }
+  .row:has(> a > .pic, > .pic) > .track-play.playing,
+  .row:has(> a > .pic, > .pic) > .track-play.paused { color: var(--accent); background: rgba(10, 8, 10, .62); }
+  .row:has(> a > .pic, > .pic) > .download-control .radio-get { padding: 0; outline: 0; background: rgba(10, 8, 10, .62); border-radius: 8px; }
+  .row > a { min-width: 44px; }
+  /* Titles get two lines, broken at a natural point. */
+  .row .mid > div:first-child { display: -webkit-box; overflow: hidden; white-space: normal; text-wrap: balance; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .liked-page .row > .like-control { display: none; }
+  .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 12px; }
+  .grid .cell .nm { font-size: 14px; white-space: normal; }
+  .player-bar.expanded .player-actions .like-button { width: 44px; height: 44px; border: 1px solid var(--line-strong); border-radius: 50%; }
+  .queue-head > .timing-toggle { display: inline-flex; align-items: center; width: auto; min-height: 44px; padding: 0 12px; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 999px; font-size: 12px; font-weight: 600; }
+  .lyrics-tools:not(.open) > :not(#lyrics-close) { display: none; }
+  .lyrics-panel .queue-head { flex-wrap: wrap; }
+  .upgrade-card { position: relative; padding-right: 96px; }
+  .upgrade-card .upgrade-actions { position: absolute; top: 8px; right: 8px; margin: 0; }
+}
+
+@media (max-width: 760px) {
+  .search-head h1 { font-size: 28px; }
+}
+@media (max-width: 760px) {
+  .lyrics-panel .queue-head > .timing-toggle + .lyrics-tools { flex: 1 1 0; justify-content: flex-end; }
+  .lyrics-panel .queue-head > .timing-toggle + .lyrics-tools.open { flex: 1 1 100%; justify-content: flex-start; }
+}

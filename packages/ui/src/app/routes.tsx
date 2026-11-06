@@ -29,7 +29,7 @@ export const TABS = {
   top: 'Top',
   shows: 'Shows',
   cds: 'CDs',
-  upgrades: 'FLAC queue',
+  upgrades: 'Requests',
   plays: 'Plays',
 } as const;
 
@@ -81,7 +81,7 @@ export const PAGE_COPY: Record<string, [string, string]> = {
   top: ['Listening, counted honestly', 'Your top music'],
   shows: ['Artists leaving the speakers', 'Upcoming shows'],
   cds: ['The discs on the shelf', 'CD collection'],
-  upgrades: ['Lossless, eventually', 'FLAC upgrade queue'],
+  upgrades: ['Downloads, then lossless (FLAC) copies', 'Requests'],
   plays: ['The latest signals', 'Recently played'],
 };
 
@@ -105,7 +105,7 @@ export const SETTINGS_ICON: ReactNode = (
 export const DETAIL_COPY = {
   artist: ['Artist in your archive', 'Artist'],
   album: ['Release in your archive', 'Album'],
-  playlist: ['A hand-built path', 'Playlist'],
+  playlist: ['Playlist', 'Playlist'],
 } as const;
 
 /** Where a sub page goes back to when there is no history of ours behind us. */

@@ -33,9 +33,9 @@
   }
   .side { flex: 1; min-width: 0; display: flex; flex-direction: column; }
   .head { display: flex; align-items: flex-start; gap: 6px; }
-  .head > div { flex: 1; min-width: 0; }
+  .head > .title { flex: 1; min-width: 0; }
   .title { display: block; width: 100%; font-size: 16px; font-weight: 600; background: none; cursor: pointer; }
-  button.expand { flex: none; height: 24px; margin: -2px -4px 0 0; padding: 0 8px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; font-size: 11px; font-weight: 600; line-height: 1; }
+  button.expand { flex: none; height: 24px; margin: -2px -4px 0 0; padding: 0 8px; color: var(--ink-2); border: 1px solid var(--line); border-radius: 999px; font: inherit; font-size: 12px; font-weight: 600; line-height: 1; }
   button.expand:hover { color: var(--ink); background: rgba(255, 255, 255, .08); filter: none; }
   .art:focus-visible, .title:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .sub { color: var(--ink-2); margin-top: 2px; }
@@ -78,12 +78,10 @@
   <button class="art" id="art" aria-label="Open player"></button>
   <div class="side">
     <div class="head">
-      <div>
-        <button class="title" id="title" title="Open player"></button>
-        <div class="sub" id="sub"></div>
-      </div>
+      <button class="title" id="title" title="Open player"></button>
       <button class="expand" id="expand" title="Open the player window">Open player</button>
     </div>
+    <div class="sub" id="sub"></div>
     <div class="controls">
       <button id="prev" aria-label="Previous"><svg viewBox="0 0 24 24"><path d="M6 5h2v14H6zM20 5v14L9 12z"/></svg></button>
       <button id="play" class="play" aria-label="Play"><svg viewBox="0 0 24 24"><path id="playIcon" d="M7 4v16l13-8z"/></svg></button>
