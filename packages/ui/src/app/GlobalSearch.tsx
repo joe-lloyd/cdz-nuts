@@ -29,7 +29,8 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
     // On a phone the field folds back into the top bar's search button, and
     // focus goes back to that button.
     if (document.body.classList.contains('search-open')) {
-      document.body.classList.remove('search-open');
+      // Both classes hide the button; clear them before focus can land on it.
+      document.body.classList.remove('search-open', 'searching');
       document.querySelector<HTMLButtonElement>('.search-toggle')?.focus({ preventScroll: true });
     } else input.current?.focus({ preventScroll: true });
     // Only results moved the page; an empty field left it where it was.
