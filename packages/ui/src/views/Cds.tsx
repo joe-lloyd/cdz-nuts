@@ -54,7 +54,7 @@ export function Cds() {
     return (
       <Notice
         title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
-        setup="Connect your CD shelf"
+        setup="Show setup steps"
         steps={[
           <>On the <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Discogs developer settings ↗</a> page, skip the app box and choose <b>Generate new token</b>.</>,
           <>Whoever runs this server adds it to <code>.env</code> as <code>DISCOGS_TOKEN</code> and restarts the web container.</>,
@@ -64,7 +64,7 @@ export function Cds() {
       >
         {half
           ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
-          : 'Your CD shelf is not connected yet. Once whoever runs this server links it to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
+          : 'Your CD shelf is not connected yet. Once whoever runs this server links it to your Discogs account, every CD you own shows here with its cover and what is already ripped. Only the server owner can finish this.'}
       </Notice>
     );
   }

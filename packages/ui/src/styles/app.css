@@ -4046,12 +4046,15 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   /* A lone secondary button fits its words, as on albums and artists. */
   .hero-actions > .spbtn:only-child,
   .hero-actions > .play-album + .spbtn:last-child { flex: 0 0 auto; }
-  /* Requests on a phone: a compact card, status beside the title, tries
-     as one line, Cancel small at the end of it. */
-  .upgrade-card { padding: 12px 14px; }
+  /* Requests on a phone: a compact card, its actions at the end of the
+     tries line rather than on a row of their own. */
+  .upgrade-card { position: relative; padding: 12px 14px; }
   .upgrade-card .upgrade-head { margin-bottom: 4px; }
-  .upgrade-card .upgrade-dots { display: none; }
-  .upgrade-card .upgrade-actions { margin-top: 0; }
+  .upgrade-card:has(.upgrade-actions) > div:has(.upgrade-dots) { padding-right: 112px; }
+  .upgrade-card .upgrade-actions { position: absolute; top: auto; right: 10px; bottom: 6px; margin: 0; }
+  .upgrade-card .upgrade-actions button.quiet { min-height: 36px; padding: 0 12px; }
+  /* Album cards keep their quality chip on a phone, as on desktop. */
+  .al-body .song-badges:not(:empty) { display: flex; }
 }
 
 /* The Home summary's line breaks evenly, never leaving one word behind. */
@@ -4059,3 +4062,21 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 
 /* The setup button is a button, so it carries no disclosure chevron. */
 .notice-details > summary.setup-summary::before { content: none; }
+
+/* Every on toggle looks the same: its icon in the accent beside a white label. */
+.like-button.worded[aria-pressed="true"] { color: var(--ink); }
+.like-button.worded[aria-pressed="true"] svg { color: var(--accent); }
+
+/* Phone lyrics start their fade lower, so the first visible line is whole. */
+@media (max-width: 760px) {
+  .lyrics-body {
+    -webkit-mask-image: linear-gradient(transparent 0 36px, #000 112px, #000 calc(100% - 120px), transparent);
+    mask-image: linear-gradient(transparent 0 36px, #000 112px, #000 calc(100% - 120px), transparent);
+  }
+}
+@media (max-width: 760px) {
+  /* Phone album cards read at the list's metadata size. */
+  .al-grid .al-body .sub { font-size: 13px; }
+  /* Other editions are a link worth having on a phone too. */
+  .hero .meta.editions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; grid-column: 1 / -1; }
+}
