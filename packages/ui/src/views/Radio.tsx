@@ -25,9 +25,9 @@ export function Radio() {
     return (
       <Notice
         title="Radio needs ListenBrainz"
-        actions={<a className="spbtn" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">ListenBrainz settings ↗</a>}
+        setup="Set up Radio"
         steps={[
-          <>Copy the user token from your ListenBrainz settings.</>,
+          <>Copy the user token from your <a href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">ListenBrainz settings ↗</a>.</>,
           <>Whoever runs this server adds it to <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code> and restarts the web container.</>,
           <>Radio turns on here by itself after the restart.</>,
         ]}

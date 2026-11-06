@@ -4023,3 +4023,12 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   .history .row > .end,
   .history .row > .end:has(.end-quality) { display: none; }
 }
+
+/* A setup card's one button opens its steps: a filled pill that turns its
+   chevron when open; the outside links live inside the steps. */
+.notice-details > summary.setup-summary { min-height: 40px; margin-top: 18px; padding: 0 16px; color: var(--accent-ink); background: var(--accent); border-radius: 999px; }
+.notice-details > summary.setup-summary:hover { color: var(--accent-ink); filter: brightness(1.08); }
+.notice-details[open] > summary.setup-summary { color: var(--ink); background: transparent; border: 1px solid var(--line-strong); }
+.notice-steps a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.notice-steps a:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 760px) { .notice-details > summary.setup-summary { min-height: 44px; } }

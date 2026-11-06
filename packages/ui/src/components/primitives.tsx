@@ -302,11 +302,11 @@ export const Empty = ({ children }: { children: ReactNode }) => <div className="
 
 /**
  * A page with nothing to show yet: what it means and who can fix it in plain
- * words, the first thing to do, and the numbered steps folded away for
- * whoever runs the server.
+ * words, then one button (`setup`) that opens the numbered steps, any outside
+ * links sitting inside the step that needs them.
  */
-export function Notice({ title, children, steps, actions, details }: {
-  title: string; children?: ReactNode; steps?: ReactNode[]; actions?: ReactNode; details?: ReactNode;
+export function Notice({ title, children, steps, actions, details, setup = 'Setup instructions' }: {
+  title: string; children?: ReactNode; steps?: ReactNode[]; actions?: ReactNode; details?: ReactNode; setup?: string;
 }) {
   return (
     <section className="notice">
@@ -315,7 +315,7 @@ export function Notice({ title, children, steps, actions, details }: {
       {actions ? <div className="notice-actions">{actions}</div> : null}
       {steps?.length || details ? (
         <details className="notice-details">
-          <summary>Setup instructions</summary>
+          <summary className={steps?.length ? 'setup-summary' : undefined}>{setup}</summary>
           {details}
           {steps?.length ? <ol className="notice-steps">{steps.map((step, i) => <li key={i}><span>{step}</span></li>)}</ol> : null}
         </details>
