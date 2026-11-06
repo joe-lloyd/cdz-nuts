@@ -8,7 +8,7 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, useNowPlaying,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
 import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -86,7 +86,7 @@ export function AlbumDetail() {
       </div>
 
       {album.id && !album.local && !(album.downloaded && album.total_tracks && tracks.length >= album.total_tracks) ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
-      <h2>Tracks{tracks.length ? ` (${tracks.length} in your archive)` : ''}</h2>
+      <h2>Tracks {tracks.length ? <span className="count">{tracks.length} in your archive</span> : null}</h2>
       {tracks.length ? (
         <PlayScope tracks={tracks}>
           {discs.map((disc) => (
@@ -118,7 +118,10 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
       <PlayControl track={t} />
       <div className="mid">
         <div>{t.name}</div>
-        <div className="sub">{t.artists ?? ''}</div>
+        <div className="sub">
+          {t.artists ?? ''}
+          {t.quality_label ? <span className="sub-quality"> · {readableQuality(t.quality_label)}</span> : null}
+        </div>
       </div>
       <MediaBadges row={t} />
       <RadioControl track={t} />
@@ -212,7 +215,7 @@ export function ArtistDetail() {
         const rows = data!.albums.filter((al) => (al.album_group ?? 'album') === group);
         return rows.length ? (
           <div key={group}>
-            <h2>{title} ({rows.length})</h2>
+            <h2>{title} <span className="count">{rows.length}</span></h2>
             <div className="al-grid">{rows.map((r) => <AlbumCell key={r.id ?? r.name} album={r} />)}</div>
           </div>
         ) : null;
@@ -244,13 +247,13 @@ export function Shows() {
   }
   return (
     <>
-      <h2>Near you ({d.countries.join(', ')})</h2>
+      <h2>Near you <span className="count">{d.countries.join(', ')} · {d.near.length}</span></h2>
       {d.near.length
         ? <div className="gig-grid">{d.near.map((e, i) => <GigCard key={i} event={e} index={i} />)}</div>
         : <Empty>nothing announced nearby</Empty>}
       {d.elsewhere.length ? (
         <>
-          <h2>Elsewhere ({d.elsewhere.length})</h2>
+          <h2>Elsewhere <span className="count">{d.elsewhere.length}</span></h2>
           <div className="gig-grid">{d.elsewhere.map((e, i) => <GigCard key={i} event={e} index={i} />)}</div>
         </>
       ) : null}

@@ -96,7 +96,8 @@ export const positionFor = (gain: number): number => Math.sqrt(Math.max(0, Math.
 export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 
 /** "22 Sep 2026": a date short enough for a status chip. */
-export const shortDay = day;
+/** A date for a status line, kept on one line. */
+export const shortDay = (iso: string | null | undefined): string => day(iso).replace(/ /g, '\u00a0');
 
 /** "Sept 2026" from "2026-09". */
 export const monthName = (ym: string): string => {

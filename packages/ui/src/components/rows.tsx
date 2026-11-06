@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use } from 'react';
 
 const DownloadBadge = () => (
@@ -58,6 +58,8 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+          {/* On a phone the quality column folds into this line. */}
+          {track.quality_label ? <span className="sub-quality"> · {readableQuality(track.quality_label)}</span> : null}
         </div>
         <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} reserve={archive.state !== 'held'} />
       </div>
@@ -121,7 +123,8 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   const dateLine = when
     ? when.toLocaleString('en-GB', { weekday: 'long', ...(timed ? { hour: 'numeric', minute: '2-digit' } : {}) })
     : 'date TBA';
-  const showTitle = event.name && (event.name ?? '').toLowerCase() !== (event.artist_name ?? '').toLowerCase()
+  // An event name that only repeats the artist adds nothing under the artist.
+  const showTitle = event.name && !(event.name ?? '').toLowerCase().startsWith((event.artist_name ?? '').toLowerCase())
     ? event.name : '';
 
   const art = (

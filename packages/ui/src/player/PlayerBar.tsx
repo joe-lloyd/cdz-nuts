@@ -89,12 +89,13 @@ export function PlayerBar() {
           </div>
           {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
             ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
-          {/* The full view is where a phone likes the song it is playing. */}
-          {expanded && p.currentId ? <LikeButton track={{ id: p.currentId, name: p.title }} /> : null}
           <button
             className="player-expand" type="button" aria-label="Open now playing" aria-expanded={expanded}
             disabled={!p.canPlay} onClick={() => setExpanded(true)}
-          />
+          >
+            {/* The visible sign that the bar opens. */}
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+          </button>
         </div>
 
         <div className="player-transport">
@@ -127,6 +128,8 @@ export function PlayerBar() {
         </div>
 
         <div className="player-actions">
+          {/* The full view is where a phone likes the song it is playing. */}
+          {expanded && p.currentId ? <LikeButton track={{ id: p.currentId, name: p.title }} /> : null}
           <button
             className="queue-button lyrics-button" type="button" aria-label="Lyrics" title="Lyrics"
             aria-expanded={panel === 'lyrics'} disabled={!p.lyrics}

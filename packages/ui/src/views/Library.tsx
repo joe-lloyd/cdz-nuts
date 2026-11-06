@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -43,7 +43,7 @@ export function Artists() {
                 (a.liked ?? a.is_followed) ? 'Followed' : '',
                 a.liked_count ? `${a.liked_count} liked` : '',
                 a.top_rank ? `top #${a.top_rank}` : '',
-              ].filter(Boolean).join(' · ')}
+              ].filter(Boolean).join('\u00a0· ')}
             </div>
             <GenreChips json={a.genres} />
             <Badges row={a} />
@@ -61,7 +61,7 @@ export function Songs() {
   // A song liked here and on Spotify is one song, listed once.
   const rows = [...new Map((data ?? []).filter(t => !t.removed_at).map(t => [t.id, t])).values()];
   return <>
-    <h2>{rows.length.toLocaleString()} liked songs</h2>
+    <h2>All liked songs <span className="count">{rows.length.toLocaleString()}</span></h2>
     {rows.length ? <PlayScope tracks={rows}><div className="rows liked-page">
       <TrackHeader date="Liked" />
       {rows.map(t => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
@@ -80,7 +80,7 @@ export function Albums() {
     <>
       {savedRows.length ? (
         <>
-          <h2>Saved ({savedRows.length})</h2>
+          <h2>Saved <span className="count">{savedRows.length}</span></h2>
           <div className="al-grid">{savedRows.map((a) => <AlbumCell key={a.id ?? a.name} album={a} />)}</div>
         </>
       ) : null}
@@ -257,10 +257,19 @@ export function Plays() {
             the current song is marked as playing. */}
         <div className="rows history">
           <TrackHeader date="Played" quality={false} length={false} />
-          {all.map((p, i) => (
-            <TrackRow key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
-              date={p.played_at ? ago(p.played_at) : ''} note={p.source === 'app' ? 'On this player' : undefined} endText="" />
-          ))}
+          {/* Grouped by day, with the clock time on each row, so a history
+              reads in order instead of as a column of "25d ago". */}
+          {all.map((p, i) => {
+            const dayLabel = playDay(p.played_at);
+            const first = i === 0 || playDay(all[i - 1]!.played_at) !== dayLabel;
+            return (
+              <Fragment key={`${p.id}-${i}`}>
+                {first ? <div className="day-head">{dayLabel}</div> : null}
+                <TrackRow track={p} current={all.findIndex((x) => x.id === p.id) === i}
+                  date={clock(p.played_at)} note={p.source === 'app' ? 'On this player' : undefined} endText="" />
+              </Fragment>
+            );
+          })}
         </div>
       </PlayScope>
     </>
@@ -314,3 +323,18 @@ function PlaylistEditor({ id, name, description, tracks }: { id: string; name: s
     <p role="status">{message}</p>
   </details>;
 }
+
+/** "Today", "Yesterday", or "Mon 12 Oct" for a play's local day. */
+function playDay(iso: string | null | undefined): string {
+  if (!iso) return 'Undated';
+  const when = new Date(iso);
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(when)) / 864e5);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return when.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
+}
+
+/** "21:40" for a play. */
+const clock = (iso: string | null | undefined): string =>
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';

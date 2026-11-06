@@ -81,7 +81,7 @@ export function Pic({ kind, id, cdn, name, overlay }: {
 export const Chip = ({ text }: { text: string }) => <span className="chip">{text}</span>;
 
 /** A state, not a tag: a dot and words, so it never reads as a genre. */
-export const Status = ({ text }: { text: string }) => <span className="status">{text}</span>;
+export const Status = ({ text }: { text: string }) => <span className="status">{text.replace(/(\d+) (\w+) (\d{4})/, '$1\u00a0$2\u00a0$3')}</span>;
 
 export const Chips = ({ children }: { children: ReactNode[] }) => {
   const kept = children.filter(Boolean);
@@ -130,7 +130,7 @@ const sourceKey = (k?: string | null) =>
  * magenta from gold.
  */
 /** "320k" reads as a bitrate once it says its unit; FLAC and 24/96 already do. */
-const readableQuality = (label: string): string => {
+export const readableQuality = (label: string): string => {
   const kbps = /^(\d+)k$/.exec(label);
   return kbps ? `${kbps[1]} kbps` : label;
 };
@@ -166,6 +166,13 @@ const DOWNLOAD_ICON = (
   </svg>
 );
 
+/** A request already made: a clock, not another arrow to press. */
+const WAITING_ICON = (
+  <svg viewBox="0 0 24 24" aria-hidden="true">
+    <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm-1 2v6l5 3 1-1.6-4-2.4V7z" />
+  </svg>
+);
+
 /**
  * Play this, or go and get it.
  *
@@ -196,7 +203,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Add to archive'}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request this song for the archive'}
         onClick={() => {
           if (progress.failed) { progress.refresh?.(); return; }
           setRequested(true);
@@ -212,7 +219,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
             .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
         }}
       >
-        {DOWNLOAD_ICON}
+        {busy ? WAITING_ICON : DOWNLOAD_ICON}
       </button>
       {progress.failed || label ? <span className="download-status" role="status">{progress.failed ? 'Progress unavailable · retry' : label}</span> : null}
       </span>
