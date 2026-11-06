@@ -258,7 +258,9 @@ class PlayerEngine {
       queueIndex: this.queueIndex,
       currentId: this.current?.id ?? null,
       positionText: formatTime(this.audio.currentTime),
-      remainingText: `−${formatTime(Math.max(0, duration - this.audio.currentTime))}`,
+      // Whole seconds on both sides, from the length the lists show, so the
+      // two times always add up to it.
+      remainingText: `−${formatTime(Math.max(0, Math.round(duration) - Math.floor(this.audio.currentTime)))}`,
       progress: duration ? this.audio.currentTime / duration : 0,
       volumePosition: Math.sqrt(clamp(this.audio.volume, 0, 1)),
       lyrics: this.lyricsData,

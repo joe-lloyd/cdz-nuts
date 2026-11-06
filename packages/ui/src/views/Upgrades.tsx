@@ -101,7 +101,7 @@ export function Upgrades() {
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Give up after</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} aria-describedby="give-up-unit" /><small id="give-up-unit">searches for a lossless copy</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
-          {batch ? 'Import the album' : 'Request the song'}
+          {batch ? 'Import the album' : 'Request a song'}
         </button>
       </form>
 

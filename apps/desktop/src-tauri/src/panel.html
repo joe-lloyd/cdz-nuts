@@ -138,7 +138,7 @@
     const shown = dragging ? Number(seek.value) : at;
     seek.style.setProperty('--done', `${duration ? (shown / duration) * 100 : 0}%`);
     $('elapsed').textContent = clock(shown);
-    $('remaining').textContent = `−${clock(duration - shown)}`;
+    $('remaining').textContent = `−${clock(Math.round(duration) - Math.floor(shown))}`;
   }
 
   function draw() {

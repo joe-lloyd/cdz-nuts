@@ -3435,7 +3435,6 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
   font-weight: 600;
 }
 
-.sub-quality { display: none; }
 
 .like-button.worded { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 0 14px 0 10px; border: 1px solid var(--line-strong); border-radius: 999px; font-size: 13px; font-weight: 600; }
 .like-button.worded svg { width: 18px; height: 18px; }
@@ -3451,7 +3450,6 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
 .hero, .hero > * { min-width: 0; max-width: 100%; }
 
 @media (max-width: 760px) {
-  .sub-quality { display: inline; }
   /* One line per title, with the heart and length kept narrow. */
   .row .mid > div:first-child { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .row > .like-control { flex-basis: 36px; }
@@ -3718,12 +3716,6 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .lyrics-panel .queue-head { padding-left: calc(clamp(18px, 6vw, 90px) + 16px); }
 }
 
-/* An album track's quality never gives way to a long list of artists. */
-.row .mid .sub-split { display: flex; min-width: 0; }
-.sub-split .sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-split .sub-quality { flex: none; }
-.sub-split .sub-text:not(:empty) + .sub-quality::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
-
 /* A slow view names what is on its way; a detail page keeps its header's shape. */
 .skeleton-label { margin: 0 0 12px; color: var(--ink-3); font-size: 13px; }
 .skeleton-hero { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; }
@@ -3940,14 +3932,6 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 .scrubber-row, .scrubber-row span { font-family: inherit; font-variant-numeric: tabular-nums; }
 .scrubber-row { font-size: 12px; }
 
-/* A song's first meta line: artist and album, then on a phone its quality,
-   which never gives way. On desktop the pair is just part of the line. */
-.sub-first { display: contents; }
-@media (max-width: 760px) {
-  .sub-line .sub-first { display: flex; min-width: 0; }
-  .sub-first > .sub-quality { flex: none; }
-  .sub-first > .sub-text:not(:empty) + .sub-quality::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
-}
 
 /* The bar's heart for the playing song, beside its title. */
 .player-like { display: flex; flex: none; align-items: center; }
@@ -3995,3 +3979,24 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 .seg button { min-width: 56px; padding-inline: 14px; }
 /* The lyrics view is opaque, so no glow from the page shows through. */
 .lyrics-panel { background: #0a080a; }
+
+/* A song's quality sits in small type under its length on a phone, so the
+   artist line keeps its room and every copy still says what it is. */
+.end-quality { display: none; }
+@media (max-width: 760px) {
+  .row > .end:has(.end-quality) { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; min-width: 52px; }
+  .end-quality { display: block; color: var(--ink-3); font-size: 11px; white-space: nowrap; }
+}
+
+/* Lossless copies stand out in green; lossy keeps the quiet outline. */
+.q-badge.q-lossless, .q-badge.q-hires { color: #6fd0b4; border-color: rgba(39, 156, 126, .45); background: rgba(39, 156, 126, .12); }
+
+/* Every overlay closes with the same bordered square. */
+.queue-head > button[aria-label^="Close"],
+.lyrics-tools #lyrics-close { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; color: var(--ink-2); background: transparent; border: 1px solid var(--line); border-radius: 10px; font-size: 20px; line-height: 1; cursor: pointer; }
+@media (max-width: 760px) {
+  .queue-head > button[aria-label^="Close"],
+  .lyrics-tools #lyrics-close { width: 44px; height: 44px; }
+  /* The mini player's open control is a clear ringed button. */
+  .player-bar:not(.expanded) .player-expand { border: 1px solid var(--line); border-radius: 50%; color: var(--ink-2); }
+}

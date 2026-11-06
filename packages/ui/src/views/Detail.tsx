@@ -8,7 +8,7 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, isLossless, readableQuality, useNowPlaying,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -115,15 +115,15 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
       <PlayControl track={t} />
       <div className="mid">
         <div>{t.name}</div>
-        <div className="sub sub-split">
-          <span className="sub-text">{t.artists ?? ''}</span>
-          {t.quality_label && isLossless(t.quality) ? <span className="sub-quality">{readableQuality(t.quality_label)}</span> : null}
-        </div>
+        <div className="sub">{t.artists ?? ''}</div>
       </div>
       <MediaBadges row={t} />
       <RadioControl track={t} />
       <LikeButton track={t} />
-      <div className="end">{dur(t.duration_ms)}</div>
+      <div className="end">
+        {dur(t.duration_ms)}
+        {t.quality_label ? <small className="end-quality">{readableQuality(t.quality_label)}</small> : null}
+      </div>
       {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
     </div>
   );

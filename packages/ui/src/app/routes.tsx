@@ -77,12 +77,12 @@ export const PAGE_COPY: Record<string, [string, string]> = {
   artists: ['Everyone in your orbit', 'Artists'],
   liked: ['Saved here and on Spotify', 'Liked songs'],
   albums: ['The record shelf', 'Albums'],
-  playlists: ['Your hand-built paths', 'Playlists'],
-  top: ['Listening, counted honestly', 'Your top music'],
-  shows: ['Artists leaving the speakers', 'Upcoming shows'],
-  cds: ['The discs on the shelf', 'CD collection'],
+  playlists: ['Made here and from Spotify', 'Playlists'],
+  top: ['Your most played, counted honestly', 'Top'],
+  shows: ['Artists leaving the speakers', 'Shows'],
+  cds: ['The discs on the shelf', 'CDs'],
   upgrades: ['Downloads, then lossless (FLAC) copies', 'Requests'],
-  plays: ['The latest signals', 'Recently played'],
+  plays: ['Recently played', 'Plays'],
 };
 
 /**

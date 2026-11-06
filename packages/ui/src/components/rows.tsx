@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use, type ReactNode } from 'react';
 
 /** Most of the shelf is in the archive, so the badge marks what is not. */
@@ -53,15 +53,10 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       <div className="mid">
         <div>{track.name}</div>
         <div className="sub sub-line">
-          <span className="sub-first">
-            <span className="sub-text">
-              {track.artists ?? ''}
-              {track.artists && track.album ? ' · ' : ''}
-              {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
-            </span>
-            {/* The phone has no quality column, so a lossless copy says so on this
-                line there; lossy is the norm and would only crowd out the artist. */}
-            {track.quality_label && isLossless(track.quality) ? <span className="sub-quality">{readableQuality(track.quality_label)}</span> : null}
+          <span className="sub-text">
+            {track.artists ?? ''}
+            {track.artists && track.album ? ' · ' : ''}
+            {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
           </span>
           <RowStatus
             track={track} archive={playing ? '' : archive.label} removed={removed} note={note}
@@ -73,7 +68,11 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       <RadioControl track={track} />
       {date !== undefined ? <div className="row-date">{date}</div> : null}
       <LikeButton track={track} />
-      <div className="end">{endText ?? dur(track.duration_ms)}</div>
+      <div className="end">
+        {endText ?? dur(track.duration_ms)}
+        {/* The phone has no quality column, so the quality sits under the length there. */}
+        {track.quality_label ? <small className="end-quality">{readableQuality(track.quality_label)}</small> : null}
+      </div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
     </div>
   );
@@ -92,7 +91,7 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
   const type = (album.album_group && album.album_group !== 'album') ? album.album_group
     : (album.album_type === 'single' || album.kind === 'single') ? 'single' : '';
   const editions = album.editions?.length ? `${album.editions.length + 1} editions` : '';
-  const line = [year, type, editions, album.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
+  const line = [year, type, editions].filter(Boolean).join(' · ');
 
   const art = (
     <Pic
