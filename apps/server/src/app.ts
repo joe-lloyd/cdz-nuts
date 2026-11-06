@@ -1923,7 +1923,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       liked: query(`
         SELECT t.id, t.name, t.duration_ms, lt.added_at, lt.removed_at,
                al.name AS album, al.id AS album_id, al.image_url,
-               (SELECT group_concat(a.name, ', ') FROM track_artists ta2 JOIN artists a ON a.id = ta2.artist_id WHERE ta2.track_id = t.id) AS artists
+               (SELECT group_concat(a.name, ', ' ORDER BY ta2.position) FROM track_artists ta2 JOIN artists a ON a.id = ta2.artist_id WHERE ta2.track_id = t.id) AS artists
         FROM track_artists ta
         JOIN tracks t ON t.id = ta.track_id
         JOIN liked_tracks lt ON lt.track_id = t.id

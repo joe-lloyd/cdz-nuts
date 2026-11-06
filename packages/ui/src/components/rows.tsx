@@ -124,7 +124,8 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   const countdown = days == null ? '' : days <= 0 ? 'tonight' : days === 1 ? 'tomorrow' : `in ${days} days`;
   // The leaf already gives the date and the badge the countdown; the foot
   // adds the weekday and, when one is announced, the time.
-  const timed = when && (when.getHours() || when.getMinutes());
+  // A date-only value parses as UTC midnight, which is not a time anyone announced.
+  const timed = when && !/^\d{4}-\d{2}-\d{2}$/.test(event.datetime ?? '') && (when.getHours() || when.getMinutes());
   const dateLine = when
     ? when.toLocaleString('en-GB', { weekday: 'long', ...(timed ? { hour: 'numeric', minute: '2-digit' } : {}) })
     : 'date TBA';

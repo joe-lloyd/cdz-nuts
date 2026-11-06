@@ -4144,3 +4144,7 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   /* Filter chips fit one line: tighter padding, no minimum width. */
   .seg button { min-width: 0; padding-inline: 12px; }
 }
+
+/* Cancel shows with results, and on a phone as soon as the field is open. */
+.search-cancel:not(.is-open) { display: none; }
+body.search-open .search-cancel { display: inline-flex; align-items: center; }

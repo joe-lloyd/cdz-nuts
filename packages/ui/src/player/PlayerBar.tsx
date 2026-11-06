@@ -64,7 +64,12 @@ export function PlayerBar() {
         </div>
         <div className="player-track">
           {artHref ? (
-            <Link className="player-art linked" to={artHref} tabIndex={-1} aria-hidden="true">
+            // The album link in the byline covers keyboards and screen readers;
+            // with no album name to show there, the art is the way in.
+            <Link
+              className="player-art linked" to={artHref}
+              {...(p.albumName ? { tabIndex: -1, 'aria-hidden': true } : { 'aria-label': 'Open the album' })}
+            >
               <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.currentId ? p.initial : IDLE_MARK} />
             </Link>
           ) : (

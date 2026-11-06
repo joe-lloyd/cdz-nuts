@@ -39,7 +39,8 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
   useEffect(() => {
     function shortcut(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); input.current?.focus(); }
-      if (e.key === 'Escape' && open) { e.preventDefault(); close(); }
+      // A phone's opened search field closes on Escape even before anything is typed.
+      if (e.key === 'Escape' && (open || document.body.classList.contains('search-open'))) { e.preventDefault(); close(); }
     }
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
@@ -48,8 +49,8 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
   const data = !loading && !results.error ? results.data : undefined;
   return <>
     <div className="global-search-bar" role="search">
-      <input ref={input} type="search" role="combobox" aria-label="Search music" placeholder="Search artists, albums, songs, playlists"
-        maxLength={200} value={query} aria-controls="search-results" aria-expanded={open}
+      <input ref={input} type="search" aria-label="Search music" placeholder="Search artists, albums, songs, playlists"
+        maxLength={200} value={query} aria-controls={open ? 'search-results' : undefined}
         onFocus={() => { if (term) setOpen(true); }}
         onChange={e => {
           if (!open) pageScroll.current = window.scrollY;
@@ -59,7 +60,8 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
           if (next && !open) window.scrollTo(0, 0);
           if (!next) requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
         }} />
-      {open && <button type="button" onClick={close}>Cancel</button>}
+      {/* Shown while results are up, and on a phone whenever the field is open, empty or not. */}
+      <button type="button" className={`search-cancel${open ? ' is-open' : ''}`} onClick={close}>Cancel</button>
     </div>
     <div hidden={open}>{children}</div>
     {open && <section id="search-results" className="search-results" aria-label="Search results">

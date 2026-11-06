@@ -48,17 +48,23 @@ export function Upgrades() {
 
   if (isPending) return <Skeleton label="Loading requests…" />;
   const jobs = data?.jobs ?? [];
-  const active = ACTIVE.reduce((n, k) => n + Number(data?.counts?.[k] ?? 0), 0);
-  const finished = Number(data?.counts?.upgraded ?? 0) + Number(data?.counts?.already_lossless ?? 0);
-  const stopped = Number(data?.counts?.exhausted ?? 0) + Number(data?.counts?.cancelled ?? 0);
-  // The counts live on the filters they describe, not in a summary of their own.
-  const tally = { all: jobs.length, active, done: finished, stopped } as const;
+  const inFilter = (key: typeof show, job: UpgradeJob): boolean =>
+    key === 'all' || (key === 'active' ? ACTIVE.includes(job.status)
+      : key === 'done' ? job.status === 'upgraded' || job.status === 'already_lossless'
+      : job.status === 'exhausted' || job.status === 'cancelled');
+  // The counts live on the filters they describe, and count only the requests
+  // this page holds, so a filter never promises rows it cannot show.
+  const tally = {
+    all: jobs.length,
+    active: jobs.filter((job) => inFilter('active', job)).length,
+    done: jobs.filter((job) => inFilter('done', job)).length,
+    stopped: jobs.filter((job) => inFilter('stopped', job)).length,
+  } as const;
+  // The server sends the newest requests only; say so when there are more.
+  const total = Object.values(data?.counts ?? {}).reduce((n, v) => n + Number(v ?? 0), 0);
   const batch = mode !== 'single';
   const term = needle.trim().toLowerCase();
-  const shown = jobs.filter((job) =>
-    (show === 'all' || (show === 'active' ? ACTIVE.includes(job.status)
-      : show === 'done' ? job.status === 'upgraded' || job.status === 'already_lossless'
-      : job.status === 'exhausted' || job.status === 'cancelled'))
+  const shown = jobs.filter((job) => inFilter(show, job)
     && (!term || `${job.title} ${job.artist} ${job.album ?? ''}`.toLowerCase().includes(term)));
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -117,6 +123,7 @@ export function Upgrades() {
           ))}
         </div>
       </div>
+      {total > jobs.length ? <p className="note">Showing the newest {jobs.length} of {total.toLocaleString()} requests; search and filters cover these.</p> : null}
       <div className="upgrade-list">
         {shown.length
           ? shown.map((job) => <Card key={job.id} job={job} onAct={(action) => act.mutate({ action, id: job.id })} />)
