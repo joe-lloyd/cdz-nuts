@@ -139,6 +139,15 @@ const sourceKey = (k?: string | null) =>
 /** Whether a copy is lossless, the tier that earns the green. */
 export const isLossless = (tier: string | null | undefined): boolean => tier === 'lossless' || tier === 'hires';
 
+/** A quality label in plain words, for a tooltip or a screen reader: "MP3 at 320 kbps, lossy". */
+export const describeQuality = (tier: string | null | undefined, label: string): string => {
+  const lossy = /^(\w+) (\d+)$/.exec(label) ?? /^()(\d+)k$/.exec(label);
+  if (lossy) return `${lossy[1] ? `${lossy[1]} at ` : ''}${lossy[2]} kbps, lossy`;
+  const hires = /^(\d+)\/([\d.?]+)$/.exec(label);
+  if (hires) return `${hires[1]}-bit ${hires[2]} kHz, hi-res lossless`;
+  return isLossless(tier) ? `${label}, lossless` : label;
+};
+
 /** "320k" reads as a bitrate once it says its unit; FLAC and 24/96 already do. */
 export const readableQuality = (label: string): string => {
   const kbps = /^(\d+)k$/.exec(label);
@@ -156,7 +165,7 @@ export function MediaBadges({ row }: { row: Badged }) {
   return (
     <div className="song-badges">
       {quality ? (
-        <span className={`q-badge ${quality.cls}`} title={`${quality.tip}${row.quality_label ? ` · ${row.quality_label}` : ''}`}>
+        <span className={`q-badge ${quality.cls}`} title={row.quality_label ? describeQuality(row.quality, row.quality_label) : quality.tip}>
           <span className="q-bars">{[1, 2, 3, 4].map((n) => <i key={n} className={n <= quality.bars ? 'on' : undefined} />)}</span>
           {row.quality_label ? <b>{readableQuality(row.quality_label)}</b> : null}
         </span>

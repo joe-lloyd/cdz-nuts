@@ -93,7 +93,7 @@ export const PAGE_COPY: Record<string, [string, string]> = {
  * once-a-month page in front of the twelve you use daily.
  */
 export const ASIDE_COPY: Record<string, [string, string]> = {
-  settings: ['This app and this machine', 'About'],
+  settings: ['Version and updates', 'About'],
 };
 
 export const NOT_FOUND_COPY: [string, string] = ['Nothing at this address', 'Page not found'];

@@ -4119,3 +4119,28 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   .player-bar:not(.expanded) .player-expand { color: var(--ink); }
   .player-bar:not(.expanded) .player-expand svg { width: 22px; height: 22px; }
 }
+
+/* Row play triangles are big enough to read as play. */
+.track-play svg { width: 16px; height: 16px; margin-left: 1px; }
+
+/* The New playlist card starts at the top line of its row. */
+@media (min-width: 761px) { .al-grid > .new-pl { justify-content: flex-start; padding-top: 18px; } }
+
+/* Lyrics sit on the page's content edge. */
+@media (min-width: 761px) {
+  .lyrics-body { padding-left: 42px; padding-right: 42px; }
+  .lyrics-panel .queue-head { padding-left: 58px; }
+}
+
+@media (max-width: 760px) {
+  /* The phone artist header keeps its genres, in one scrolling row, and its ranks. */
+  .hero .chips { display: flex; flex-wrap: nowrap; overflow-x: auto; gap: 6px; grid-column: 1 / -1; }
+  .hero .chips .chip { flex: none; }
+  .hero .meta-detail:not(.facts) { display: block; }
+  /* Another edition on a phone is a plain link line, not a wrapped pill. */
+  .hero .meta.editions .edition { display: inline; min-height: 0; margin-left: 4px; padding: 0; border: 0; background: none; }
+  .hero .meta.editions .edition span::before { content: ' · '; }
+  .hero .meta.editions .edition b { color: var(--accent); }
+  /* Filter chips fit one line: tighter padding, no minimum width. */
+  .seg button { min-width: 0; padding-inline: 12px; }
+}

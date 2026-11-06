@@ -8,7 +8,7 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, isLossless, readableQuality, useNowPlaying,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, describeQuality, isLossless, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -24,7 +24,7 @@ export function AlbumDetail() {
 
   const meta = [
     (album.release_date ?? '').slice(0, 4), album.album_type,
-    album.total_tracks ? `${album.total_tracks} tracks` : '',
+    album.total_tracks ? `${album.total_tracks} songs` : '',
     album.downloaded ? 'in your archive' : '',
   ];
   const detail = [
@@ -59,7 +59,7 @@ export function AlbumDetail() {
               {data!.canonical && editions.length ? ' · ' : ''}
               {editions.length ? 'Also listed as ' : ''}
               {editions.map((e) => {
-                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : '', e.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
+                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} songs` : '', e.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
                 return (
                   <Link className="edition" to={`/album/${e.id}`} key={e.id}>
                     <b>{e.name}</b>{detail ? <span>{detail}</span> : null}
@@ -83,7 +83,7 @@ export function AlbumDetail() {
       </div>
 
       {album.id && !album.local && !(album.downloaded && album.total_tracks && tracks.length >= album.total_tracks) ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
-      <h2>Tracks {tracks.length ? <span className="count">{tracks.length} in your archive</span> : null}</h2>
+      <h2>Songs {tracks.length ? <span className="count">{tracks.length} in your archive</span> : null}</h2>
       {tracks.length ? (
         <PlayScope tracks={tracks}>
           {discs.map((disc) => (
@@ -122,7 +122,7 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
       <LikeButton track={t} />
       <div className="end">
         {dur(t.duration_ms)}
-        {t.quality_label ? <small className={`end-quality${isLossless(t.quality) ? ' lossless' : ''}`}>{readableQuality(t.quality_label)}</small> : null}
+        {t.quality_label ? <small className={`end-quality${isLossless(t.quality) ? ' lossless' : ''}`} title={describeQuality(t.quality, t.quality_label)}>{readableQuality(t.quality_label)}</small> : null}
       </div>
       {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
     </div>

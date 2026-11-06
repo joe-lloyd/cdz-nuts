@@ -42,7 +42,7 @@ export function Artists() {
               {[
                 (a.liked ?? a.is_followed) ? 'Followed' : '',
                 a.liked_count ? `${a.liked_count} liked` : '',
-                a.top_rank ? `top #${a.top_rank}` : '',
+                a.top_rank ? `Spotify #${a.top_rank} · 6 months` : '',
               ].filter(Boolean).join('\u00a0· ')}
             </div>
             <GenreChips json={a.genres} />

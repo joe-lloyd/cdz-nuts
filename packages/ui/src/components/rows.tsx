@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, describeQuality, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use, type ReactNode } from 'react';
 
 /** Most of the shelf is in the archive, so the badge marks what is not. */
@@ -71,7 +71,7 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       <div className="end">
         {endText ?? dur(track.duration_ms)}
         {/* The phone has no quality column, so the quality sits under the length there. */}
-        {track.quality_label ? <small className={`end-quality${isLossless(track.quality) ? ' lossless' : ''}`}>{readableQuality(track.quality_label)}</small> : null}
+        {track.quality_label ? <small className={`end-quality${isLossless(track.quality) ? ' lossless' : ''}`} title={describeQuality(track.quality, track.quality_label)}>{readableQuality(track.quality_label)}</small> : null}
       </div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
     </div>
