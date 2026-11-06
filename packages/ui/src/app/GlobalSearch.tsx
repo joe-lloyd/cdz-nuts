@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { get, qs } from '../api/client.ts';
 import type { Album, Artist, Playlist, Track } from '../api/types.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
-import { AlbumCell, SongCard } from '../components/rows.tsx';
+import { AlbumCell, TrackRow } from '../components/rows.tsx';
 import { PlayScope } from '../components/PlayScope.tsx';
 
 interface Results { songs: Track[]; artists: Artist[]; albums: Album[]; playlists: Playlist[] }
@@ -72,7 +72,7 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
         {!!data.artists.length && <section><h2>Artists</h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
         {!!data.albums.length && <section><h2>Albums</h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
         {!!data.songs.length && <section><h2>Songs{data.songs.length === 100 ? ' · first 100 matches' : ''}</h2>
-          <PlayScope tracks={data.songs}><div className="song-grid">{data.songs.map(track => <SongCard key={track.id} track={track} />)}</div></PlayScope></section>}
+          <PlayScope tracks={data.songs}><div className="rows">{data.songs.map(track => <TrackRow key={track.id} track={track} />)}</div></PlayScope></section>}
         {!!data.playlists.length && <section><h2>Playlists</h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
       </>}
     </section>}

@@ -5,7 +5,7 @@ import { Link, useParams } from 'react-router-dom';
 
 import { useAlbum, useArtist, useEvents } from '../api/hooks.ts';
 import { day, dur, shortDay } from '../lib/format.ts';
-import { AlbumCell, GigCard, TrackRow } from '../components/rows.tsx';
+import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
   PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, useNowPlaying,
@@ -93,6 +93,7 @@ export function AlbumDetail() {
             <div key={disc}>
               {discs.length > 1 ? <h2>Disc {disc}</h2> : null}
               <div className="rows">
+                <TrackHeader rank art={false} />
                 {tracks.filter((t) => (t.disc_number ?? 1) === disc).map((t) => (
                   <AlbumTrackRow key={t.id} track={t} />
                 ))}
@@ -186,7 +187,8 @@ export function ArtistDetail() {
           <h2>Liked songs</h2>
           <PlayScope tracks={likedNow}>
             <div className="rows">
-              {likedNow.map((t) => <TrackRow key={t.id} track={t} added={t.added_at} />)}
+              <TrackHeader date="Liked" />
+              {likedNow.map((t) => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
             </div>
           </PlayScope>
         </>
@@ -196,7 +198,7 @@ export function ArtistDetail() {
           <h2>Liked once</h2>
           <PlayScope tracks={likedOnce}>
             <div className="rows">
-              {likedOnce.map((t) => <TrackRow key={t.id} track={t} added={t.added_at} removed="Unliked on Spotify" />)}
+              {likedOnce.map((t) => <TrackRow key={t.id} track={t} date={day(t.added_at)} removed="Unliked on Spotify" />)}
             </div>
           </PlayScope>
         </>

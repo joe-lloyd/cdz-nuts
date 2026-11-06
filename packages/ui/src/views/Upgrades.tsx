@@ -89,9 +89,9 @@ export function Upgrades() {
         <button className="upgrade-more" type="button" aria-expanded={more || batch} onClick={() => setMore(!more)} hidden={batch}>
           {more ? 'Fewer details' : 'Add artist, title or album'}
         </button>
-        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>Needed for YouTube links</small></label>
-        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Title</span><input name="title" placeholder="Song title" disabled={batch} /><small>Single tracks only</small></label>
-        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>Needed to import an album</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>{batch ? 'Required' : 'Optional; helps match a YouTube link'}</small></label>
+        {batch ? null : <label className={`upgrade-extra${more ? ' open' : ''}`}><span>Title</span><input name="title" placeholder="Song title" /><small>Optional</small></label>}
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Searches before giving up</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
           {batch ? 'Import album + queue every track for FLAC' : 'Add to archive + FLAC queue'}

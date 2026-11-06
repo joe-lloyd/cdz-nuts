@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 
 import { formatTime } from '../lib/format.ts';
 import { LyricsPanel } from './LyricsPanel.tsx';
@@ -17,7 +17,19 @@ import { Slider } from './Slider.tsx';
  */
 export function PlayerBar() {
   const p = usePlayer();
-  const [panel, setPanel] = useState<'queue' | 'lyrics' | null>(null);
+  const [panel, setPanelState] = useState<'queue' | 'lyrics' | null>(null);
+  // On a phone the bar rests compact and opens into a full now-playing view.
+  const [expanded, setExpanded] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setExpanded(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [expanded]);
+  // A panel opens over the page, so the full view steps back for it.
+  const setPanel = (next: 'queue' | 'lyrics' | null) => { setExpanded(false); setPanelState(next); };
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -42,7 +54,13 @@ export function PlayerBar() {
 
   return (
     <>
-      <section className="player-bar" id="player-bar" data-state={p.state} aria-label="Music player">
+      <section className={`player-bar${expanded ? ' expanded' : ''}`} id="player-bar" data-state={p.state} aria-label="Music player">
+        <div className="player-sheet-head">
+          <button className="player-collapse" type="button" aria-label="Close now playing" onClick={() => setExpanded(false)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <span>Now playing</span>
+        </div>
         <div className="player-track">
           {artHref ? (
             <Link className="player-art linked" to={artHref} tabIndex={-1} aria-hidden="true">
@@ -70,6 +88,10 @@ export function PlayerBar() {
           </div>
           {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
             ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
+          <button
+            className="player-expand" type="button" aria-label="Open now playing" aria-expanded={expanded}
+            disabled={!p.canPlay} onClick={() => setExpanded(true)}
+          />
         </div>
 
         <div className="player-transport">
@@ -119,6 +141,7 @@ export function PlayerBar() {
           >
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>
             {p.queue.length ? <span className="count-badge" aria-hidden="true">{p.queue.length}</span> : null}
+            <span className="button-label">Queue</span>
           </button>
           <label className="volume-control">
             <svg viewBox="0 0 24 24" aria-hidden="true">

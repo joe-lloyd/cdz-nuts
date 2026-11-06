@@ -604,7 +604,6 @@ p a,
   font-weight: 600;
 }
 
-
 .cards {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(min(420px, 100%), 1fr));
@@ -732,7 +731,6 @@ p a,
   font-size: 12px;
   white-space: nowrap;
 }
-
 
 .tools {
   display: flex;
@@ -1213,9 +1211,7 @@ input[type="range"] {
 .track-play.paused::after { opacity: .6; }
 
 .row.playing,
-.row.paused,
-.song-card.playing,
-.song-card.paused { background: var(--accent-soft); }
+.row.paused { background: var(--accent-soft); }
 
 @media (prefers-reduced-motion: reduce) {
   .track-play.playing::after { animation: none; }
@@ -1314,60 +1310,6 @@ input[type="range"] {
 
 .queue-button:disabled { opacity: .35; cursor: default; }
 
-/* Songs page: two columns of dense song cards on desktop. */
-.song-grid {
-  display: grid;
-  /* One column: a song list is read down, and two columns cut titles short. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
-  margin-bottom: 8px;
-}
-
-.song-card {
-  display: grid;
-  /* Fixed slots, placed by class below, so a missing radio link or a
-     narrower badge never moves the heart or the length. */
-  grid-template-columns: 44px 44px minmax(0, 1fr) auto 44px 44px 3.2em;
-  align-items: center;
-  gap: 10px;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--line);
-  border-radius: 10px;
-  transition: background .14s ease;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 60px;
-}
-
-.song-card:hover { background: rgba(255, 255, 255, .03); }
-.song-card.gone > a, .song-card.gone > .track-play, .song-card.gone > .download-control { opacity: .45; }
-
-.song-card .pic {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  aspect-ratio: auto;
-  border-radius: 7px;
-}
-
-.song-main { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
-
-/* Keeps album rows aligned with song rows, which lead with a play button. */
-.song-spacer { display: block; width: 26px; }
-
-.song-main b,
-.song-sub,
-.song-album {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.song-main b { font-size: 14px; font-weight: 600; }
-.song-sub { color: var(--ink-2); font-size: 13px; }
-.song-album { color: var(--ink-3); font-size: 12px; }
-.song-album a:hover { color: var(--accent); }
-
-
 .sub-head {
   margin: 18px 0 8px;
   color: var(--ink-2);
@@ -1375,14 +1317,6 @@ input[type="range"] {
   font-weight: 600;
   letter-spacing: .1em;
   text-transform: uppercase;
-}
-
-@media (max-width: 760px) {
-  .song-grid { grid-template-columns: 1fr; gap: 0; }
-  /* A phone row is for telling songs apart: play, art, the title on up to two
-     lines, the heart and the length. Radio, quality and dates live on the
-     album page and in the player. */
-  .song-card .pic { width: 40px; height: 40px; }
 }
 
 /* The rabbit hole as a strip: one line of copy beside a short curve, instead
@@ -2816,8 +2750,6 @@ input[type="range"] {
 .download-status { color: var(--ink-3); font-size: 12px; line-height: 1.3; text-align: center; }
 @media (max-width: 600px) { .download-control { max-width: 70px; } }
 
-
-
 /* --- shared controls and states ------------------------------------------ */
 
 /* Every text field and select looks like the search box. */
@@ -2941,8 +2873,7 @@ details > summary:hover { color: var(--ink); }
 }
 
 /* Where a file came from is detail for the album page, not every card. */
-.al-body .s-badge,
-.song-card .s-badge { display: none; }
+.al-body .s-badge { display: none; }
 
 .like-button svg,
 .heart svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linejoin: round; }
@@ -2954,8 +2885,6 @@ details > summary:hover { color: var(--ink); }
 .seg-label { color: var(--ink-3); font-size: 12px; font-weight: 600; }
 .tools:has(.seg-group) { gap: 12px 32px; }
 .seg button { min-height: 36px; }
-
-.song-grid.history { grid-template-columns: minmax(0, 1fr); }
 
 /* While search results cover the page, no page in the menu is current. */
 body.searching #nav a.on { color: var(--ink-2); background: transparent; border-color: transparent; }
@@ -3029,44 +2958,17 @@ form button:not([class]):disabled {
 .track-play:hover { transform: none; }
 .download-control { flex: 0 0 44px; width: 44px; }
 
-.song-card > .track-play,
-.song-card > .download-control { grid-column: 1; }
-.song-card > a,
-.song-card > .pic { grid-column: 2; }
-.song-card > .song-main { grid-column: 3; }
-.song-card > .song-badges { grid-column: 4; }
-.song-card > .track-radio { grid-column: 5; }
-.song-card > .like-control { grid-column: 6; }
-.song-card > .song-dur { grid-column: 7; }
-.song-card > * { grid-row: 1; }
-
-.song-dur {
-  color: var(--ink-2);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.song-meta { color: var(--ink-3); }
-
 .row > .like-control { flex: 0 0 44px; justify-content: center; }
 .row > .end { flex: 0 0 auto; min-width: 3.2em; color: var(--ink-2); font-family: inherit; font-size: 12px; }
 .row > .song-badges { min-width: 64px; }
 
 /* Radio in a list is an icon with a name, not a word. */
-.row > .track-radio,
-.song-card > .track-radio { width: 44px; height: 44px; padding: 0; }
-.row > .track-radio > span,
-.song-card > .track-radio > span { display: none; }
+.row > .track-radio { width: 44px; height: 44px; padding: 0; }
+.row > .track-radio > span { display: none; }
 
 .row .mid .sub .chip { margin-right: 6px; white-space: nowrap; }
 
 @media (max-width: 760px) {
-  .song-card { grid-template-columns: 44px 44px minmax(0, 1fr) 44px 2.8em; gap: 8px; padding-inline: 0; }
-  .song-card > .song-badges,
-  .song-card > .track-radio { display: none; }
-  .song-card > .like-control { grid-column: 4; }
-  .song-card > .song-dur { grid-column: 5; }
   /* Heart and Play share the first line, the two outside links the second. */
   .hero-actions .play-album { flex: 1 1 calc(100% - 54px); }
   .hero-actions .spbtn { flex: 1 1 0; }
@@ -3275,7 +3177,6 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
 
 .page-back { font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; letter-spacing: 0; text-transform: none; }
 
-
 @media (min-width: 761px) {
   .lyrics-button .button-label { display: inline; font-size: 12px; font-weight: 600; }
   .lyrics-button { padding: 0 10px; gap: 6px; }
@@ -3326,7 +3227,7 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
 .row > .row-date { flex: 0 0 auto; min-width: 6.6em; color: var(--ink-3); font-size: 12px; font-variant-numeric: tabular-nums; text-align: right; }
 .row > .end { min-width: 3.2em; }
 .queue-duration { font-family: inherit; letter-spacing: 0; }
-.radio-get { outline-style: solid; }
+.radio-get { color: var(--ink-2); outline-style: dashed; outline-color: var(--ink-3); }
 #main > :first-child { margin-top: 0; }
 .status { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status::before { display: inline-block; margin-right: 6px; vertical-align: middle; }
@@ -3336,7 +3237,7 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
   .row > .row-date { display: none; }
   .hero h1, .pl-head h1 { font-size: 28px; }
   input:not([type="range"]):not([type="checkbox"]):not([type="radio"]):not([type="search"]) { min-height: 44px; }
-  .row > a, .song-card > a { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
+  .row > a { display: grid; place-items: center; min-width: 44px; min-height: 44px; }
 }
 
 /* --- after round eight ---------------------------------------------------- */
@@ -3358,5 +3259,127 @@ body:has(.queue-panel:not(.lyrics-panel):not([hidden])) .app-shell::after {
 }
 
 /* The words for a download in progress live on the row's status line. */
-.row .download-status,
-.song-card .download-status { display: none; }
+.row .download-status { display: none; }
+
+/* --- round nine: one row, with column names ------------------------------ */
+.row-head {
+  min-height: 32px;
+  padding-block: 0 6px;
+  color: var(--ink-3);
+  font: 600 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  content-visibility: visible;
+}
+.row-head:hover { background: none; }
+.row-head .mid { font: inherit; }
+.row-head .head-lead { flex: 0 0 44px; }
+.row-head .head-art { flex: 0 0 40px; }
+.row-head .head-badges { min-width: 64px; text-align: right; }
+.row-head .head-radio,
+.row-head .head-like { flex: 0 0 44px; }
+.row-head .end,
+.row-head .row-date { color: inherit; font: inherit; }
+
+/* Metadata a person reads is 13px; dates and lengths line up as figures. */
+.row .mid .sub,
+.row-status { font-size: 13px; }
+.row > .row-date,
+.row > .end { font-size: 13px; font-variant-numeric: tabular-nums; }
+.row > .end:empty { display: none; }
+
+@media (max-width: 760px) {
+  .row-head { display: none; }
+  .history .row > .row-date { display: block; min-width: 0; }
+}
+
+/* --- the phone player: compact at rest, a full view when opened ---------- */
+.player-sheet-head,
+.player-expand { display: none; }
+
+@media (max-width: 760px) {
+  :root { --player: 72px; }
+
+  /* At rest: art, title and artist, play and next. The bar opens on a tap. */
+  .player-bar:not(.expanded) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto;
+    gap: 0 4px;
+    padding: 12px 10px 10px 12px;
+  }
+  .player-bar:not(.expanded) .player-track { position: relative; grid-column: 1; grid-row: 1; padding-right: 0; }
+  .player-bar:not(.expanded) .player-expand {
+    position: absolute;
+    inset: -4px 0;
+    z-index: 1;
+    display: block;
+    padding: 0;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+  .player-bar:not(.expanded) .player-art { flex-basis: 44px; width: 44px; height: 44px; }
+  .player-bar:not(.expanded) .player-transport { grid-column: 2; grid-row: 1; display: flex; align-items: center; }
+  .player-bar:not(.expanded) .scrubber-row > span,
+  .player-bar:not(.expanded) .player-controls .player-icon:first-child,
+  .player-bar:not(.expanded) .player-actions,
+  .player-bar:not(.expanded) .track-radio { display: none; }
+  .player-bar:not(.expanded) .player-play { width: 44px; height: 44px; }
+  /* The progress line runs along the top edge, with a 44px band to grab. */
+  .player-bar:not(.expanded) .scrubber-row > input { position: absolute; top: -20px; left: 0; right: 0; height: 44px; }
+
+  /* Opened: the whole screen is the song. */
+  .player-bar.expanded {
+    position: fixed;
+    inset: 0;
+    z-index: 95;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+    min-height: 0;
+    padding: 12px 22px 32px;
+    overflow-y: auto;
+    background:
+      radial-gradient(circle at 50% 20%, rgba(255, 87, 217, .1), transparent 60%),
+      var(--surface);
+    border: 0;
+  }
+  .player-bar.expanded .player-sheet-head { display: flex; align-self: stretch; justify-content: flex-start; align-items: center; gap: 8px; color: var(--ink-2); font-size: 13px; font-weight: 600; }
+  .player-collapse {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    margin-left: -10px;
+    padding: 0;
+    color: var(--ink);
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+  }
+  .player-collapse svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  .player-bar.expanded .player-track { flex-direction: column; align-items: center; gap: 22px; padding-right: 0; text-align: center; }
+  .player-bar.expanded .player-art { flex-basis: auto; width: min(78vw, 340px); height: min(78vw, 340px); border-radius: 18px; box-shadow: var(--shadow); }
+  .player-bar.expanded .player-copy { align-items: center; max-width: 100%; }
+  .player-bar.expanded .player-copy b { font-size: 24px; white-space: normal; }
+  .player-bar.expanded .player-copy > span:last-child { font-size: 14px; }
+  .player-bar.expanded .player-overline { display: block; }
+  .player-bar.expanded .player-transport {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "bar bar" "t1 t2" "ctl ctl";
+    gap: 4px 0;
+  }
+  .player-bar.expanded .player-transport { align-self: stretch; width: 100%; max-width: none; }
+  .player-bar.expanded .scrubber-row > input { position: static; grid-area: bar; width: 100%; height: 44px; }
+  .player-bar.expanded .queue-button .button-label { display: inline; font-size: 12px; font-weight: 600; }
+  .player-bar.expanded .count-badge { position: static; margin-left: 2px; }
+  .player-bar.expanded .scrubber-row > span:last-child { text-align: right; }
+  .player-bar.expanded .player-controls { gap: 28px; margin-top: 8px; }
+  .player-bar.expanded .player-play { width: 68px; height: 68px; }
+  .player-bar.expanded .player-play svg { width: 28px; height: 28px; }
+  .player-bar.expanded .player-icon svg { width: 26px; height: 26px; }
+  .player-bar.expanded .player-actions { position: static; justify-content: center; gap: 16px; }
+  .player-bar.expanded .lyrics-button { padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; }
+  .player-bar.expanded .queue-button:not(.lyrics-button) { padding: 0 14px; border: 1px solid var(--line-strong); border-radius: 999px; }
+}

@@ -9,7 +9,7 @@ import {
 import { get, post, qs } from '../api/client.ts';
 import { ago, day, dur, initial, shortDay } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
-import { AlbumCell, SongCard, TrackRow } from '../components/rows.tsx';
+import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
 import { Badges, Empty, GenreChips, PLAY_ICON, Pic, Skeleton } from '../components/primitives.tsx';
 import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -58,11 +58,13 @@ export function Songs() {
   const { data, isPending, error } = useLikedTracks();
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
-  const rows = (data ?? []).filter(t => !t.removed_at);
+  // A song liked here and on Spotify is one song, listed once.
+  const rows = [...new Map((data ?? []).filter(t => !t.removed_at).map(t => [t.id, t])).values()];
   return <>
     <h2>{rows.length.toLocaleString()} liked songs</h2>
-    {rows.length ? <PlayScope tracks={rows}><div className="song-grid">
-      {rows.map(t => <SongCard key={t.id} track={t} meta={t.added_at ? day(t.added_at) : undefined} />)}
+    {rows.length ? <PlayScope tracks={rows}><div className="rows">
+      <TrackHeader date="Liked" />
+      {rows.map(t => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
     </div></PlayScope> : <Empty>Like a song to save it here alongside your Spotify likes.</Empty>}
   </>;
 }
@@ -193,8 +195,9 @@ export function PlaylistDetail() {
       {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
       <PlayScope tracks={rows}>
         <div className="rows">
+          {rows.length ? <TrackHeader rank date="Added" /> : null}
           {rows.length ? rows.map((t) => (
-            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist" added={t.added_at} />
+            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist" date={day(t.added_at)} />
           )) : <Empty>empty (or blocked by the API)</Empty>}
         </div>
       </PlayScope>
@@ -252,10 +255,11 @@ export function Plays() {
       <PlayScope tracks={all}>
         {/* History reads top to bottom, so one column; only the newest play of
             the current song is marked as playing. */}
-        <div className="song-grid history">
+        <div className="rows history">
+          <TrackHeader date="Played" />
           {all.map((p, i) => (
-            <SongCard key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
-              meta={p.played_at ? (p.source === 'app' ? `${ago(p.played_at)} · played here` : ago(p.played_at)) : undefined} />
+            <TrackRow key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
+              date={p.played_at ? ago(p.played_at) : ''} note={p.source === 'app' ? 'Played here' : undefined} endText="" />
           ))}
         </div>
       </PlayScope>

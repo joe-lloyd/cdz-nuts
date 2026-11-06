@@ -11,7 +11,7 @@ vi.mock('../api/hooks.ts', () => ({
   usePlaylists: () => ({ data: [{ id: 'local-playlist:one', name: 'Mine', source: 'local', synced_tracks: 0 }], isPending: false }),
   usePlaylistTracks: () => ({ data: [{ id: 'one', name: 'Even Less' }, { id: 'two', name: 'Dark Matter' }], isPending: false }),
 }));
-vi.mock('../components/rows.tsx', () => ({ TrackRow: () => null }));
+vi.mock('../components/rows.tsx', () => ({ TrackRow: () => null, TrackHeader: () => null }));
 vi.mock('../components/PlayScope.tsx', () => ({ PlayScope: ({ children }: { children: ReactNode }) => children, usePlayAll: () => () => {} }));
 const { Playlists, PlaylistDetail } = await import('./Library.tsx');
 
