@@ -26,11 +26,14 @@ export function Radio() {
       <Notice
         title="Radio needs ListenBrainz"
         actions={<a className="primary-action" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">Get a ListenBrainz token ↗</a>}
-        details={<p>Copy the user token from your ListenBrainz settings into the server&apos;s <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code>, then restart the web container.</p>}
+        steps={[
+          <>Copy the user token from your ListenBrainz settings.</>,
+          <>Whoever runs this server adds it to <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code> and restarts the web container.</>,
+          <>Radio turns on here by itself after the restart.</>,
+        ]}
       >
         Radio picks songs you have not heard yet from what you already play. It
-        turns on once this server is linked to a ListenBrainz account: get a
-        token, then Setup details says where it goes.
+        needs this server linked to a ListenBrainz account.
       </Notice>
     );
   }

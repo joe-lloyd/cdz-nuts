@@ -74,7 +74,7 @@ export function Upgrades() {
 
       {/* On a phone the queue comes first; the form opens when asked for. */}
       <button className="primary-action upgrade-add" type="button" aria-expanded={adding} onClick={() => setAdding(!adding)}>
-        {adding ? 'Close the form' : 'Add a request'}
+        {adding ? 'Close the form' : 'Request a song'}
       </button>
       <form className={`upgrade-form${adding ? ' open' : ''}`} onSubmit={onSubmit}>
         <label>
@@ -101,7 +101,7 @@ export function Upgrades() {
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Give up after</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} aria-describedby="give-up-unit" /><small id="give-up-unit">searches for a lossless copy</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
-          {batch ? 'Import the album' : 'Add the song'}
+          {batch ? 'Import the album' : 'Request the song'}
         </button>
       </form>
 

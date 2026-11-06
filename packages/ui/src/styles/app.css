@@ -3871,5 +3871,31 @@ code, kbd, samp { font-family: var(--mono); font-size: .92em; }
   .grid .cell { min-height: 72px; padding: 8px 0; }
   /* Cancel sits under the progress line, on the left, as on desktop. */
   .upgrade-card .upgrade-actions { justify-content: flex-start; margin-top: 2px; }
-  .upgrade-actions button.quiet { min-height: 40px; }
+}
+
+/* A setup card shows its steps, numbered, before the first action. */
+.notice-steps { display: grid; gap: 8px; margin: 14px 0 18px; padding: 0; color: var(--ink-2); font-size: 13px; line-height: 1.5; list-style: none; counter-reset: step; }
+.notice-steps li { display: grid; grid-template-columns: 22px 1fr; column-gap: 8px; counter-increment: step; }
+.notice-steps li::before { content: counter(step); display: grid; place-items: center; width: 22px; height: 22px; color: var(--ink); background: rgba(255, 255, 255, .06); border-radius: 50%; font-size: 12px; font-weight: 600; }
+@media (max-width: 760px) {
+  .notice-actions a { min-height: 44px; }
+}
+.notice-steps + .notice-actions { margin-top: 0; }
+
+/* Filled buttons that are links never underline, at any width. */
+a.primary-action, a.primary-action:hover { text-decoration: none; }
+
+/* One section-heading style: 16px/600, its count in the secondary colour. */
+.section-head h2 { font-size: 16px; font-weight: 600; }
+
+@media (max-width: 760px) {
+  /* Phone list rows end in a straight rule. */
+  .row:not(.playing):not(.paused), .grid .cell { border-radius: 0; }
+}
+
+/* A shorter list-page header, so a library shows more of itself above the fold. */
+@media (min-width: 761px) {
+  .global-search-bar { margin-bottom: 8px; }
+  .page-head { margin-bottom: 20px; padding-bottom: 16px; }
+  .page-head:not(.is-detail) h1 { font-size: 40px; }
 }

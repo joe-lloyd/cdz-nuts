@@ -55,14 +55,16 @@ export function Cds() {
       <Notice
         title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
         actions={<a className="primary-action" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Open Discogs settings ↗</a>}
-        details={<>
-          {half ? <p>The consumer key and secret only reach the public catalogue. Reading your own collection needs a personal access token.</p> : null}
-          <p>On the Discogs developer settings page, scroll past the OAuth app box to <b>Generate new token</b>. Add it to the server&apos;s <code>.env</code> as <code>DISCOGS_TOKEN</code> and restart the web container.</p>
-        </>}
+        steps={[
+          <>On the Discogs developer settings page, skip the app box and choose <b>Generate new token</b>.</>,
+          <>Whoever runs this server adds it to <code>.env</code> as <code>DISCOGS_TOKEN</code> and restarts the web container.</>,
+          <>Your CDs show here by themselves after the restart.</>,
+        ]}
+        details={half ? <p>The consumer key and secret only reach the public catalogue. Reading your own collection needs a personal access token.</p> : undefined}
       >
         {half
           ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
-          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped. Make a token on Discogs, then Setup details says where it goes.'}
+          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
       </Notice>
     );
   }

@@ -298,16 +298,17 @@ export const BandcampButton = ({ query, type = 'a', label = 'Bandcamp ↗' }: {
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
 
 /**
- * A page with nothing to show yet: what it means in plain words, what to do,
- * and any technical steps folded away for whoever runs the server.
+ * A page with nothing to show yet: what it means in plain words, the steps
+ * that fix it, what to do first, and any extra detail folded away.
  */
-export function Notice({ title, children, actions, details }: {
-  title: string; children?: ReactNode; actions?: ReactNode; details?: ReactNode;
+export function Notice({ title, children, steps, actions, details }: {
+  title: string; children?: ReactNode; steps?: ReactNode[]; actions?: ReactNode; details?: ReactNode;
 }) {
   return (
     <section className="notice">
       <h2>{title}</h2>
       {children ? <p>{children}</p> : null}
+      {steps?.length ? <ol className="notice-steps">{steps.map((step, i) => <li key={i}><span>{step}</span></li>)}</ol> : null}
       {actions ? <div className="notice-actions">{actions}</div> : null}
       {details ? <details className="notice-details"><summary>Setup details</summary>{details}</details> : null}
     </section>
