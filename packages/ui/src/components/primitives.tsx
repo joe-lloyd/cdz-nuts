@@ -136,6 +136,9 @@ const sourceKey = (k?: string | null) =>
  * figure — so it survives being read at 9px and does not depend on telling
  * magenta from gold.
  */
+/** Whether a copy is lossless, the tier worth calling out where room is short. */
+export const isLossless = (tier: string | null | undefined): boolean => tier === 'lossless' || tier === 'hires';
+
 /** "320k" reads as a bitrate once it says its unit; FLAC and 24/96 already do. */
 export const readableQuality = (label: string): string => {
   const kbps = /^(\d+)k$/.exec(label);

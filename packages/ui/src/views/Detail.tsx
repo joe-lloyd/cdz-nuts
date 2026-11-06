@@ -8,7 +8,7 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, readableQuality, useNowPlaying,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, isLossless, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -117,7 +117,7 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
         <div>{t.name}</div>
         <div className="sub sub-split">
           <span className="sub-text">{t.artists ?? ''}</span>
-          {t.quality_label ? <span className="sub-quality">{readableQuality(t.quality_label)}</span> : null}
+          {t.quality_label && isLossless(t.quality) ? <span className="sub-quality">{readableQuality(t.quality_label)}</span> : null}
         </div>
       </div>
       <MediaBadges row={t} />

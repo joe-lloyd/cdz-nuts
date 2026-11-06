@@ -117,7 +117,7 @@ const icon = (path: ReactNode): ReactNode => path;
 
 export const TAB_ICONS: Record<TabId, ReactNode> = {
   overview: icon(<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /></svg>),
-  albums: icon(<svg viewBox="0 0 24 24"><rect x="3" y="5" width="13" height="14" rx="1.5" /><path d="M16 7.2a5 5 0 1 1 0 9.6" /><circle cx="9.5" cy="12" r="2" /></svg>),
+  albums: icon(<svg viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="14" rx="1.5" /><path d="M7 3h14v14" /></svg>),
   artists: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>),
   liked: icon(<svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg>),
   playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h12M4 11h12M4 16h7M19 8v9" /><circle cx="16.5" cy="17" r="2.5" /></svg>),

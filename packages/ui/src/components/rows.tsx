@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use, type ReactNode } from 'react';
 
 /** Most of the shelf is in the archive, so the badge marks what is not. */
@@ -59,8 +59,9 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
               {track.artists && track.album ? ' · ' : ''}
               {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
             </span>
-            {/* The phone has no quality column, so the copy's quality joins this line there. */}
-            {track.quality_label ? <span className="sub-quality">{readableQuality(track.quality_label)}</span> : null}
+            {/* The phone has no quality column, so a lossless copy says so on this
+                line there; lossy is the norm and would only crowd out the artist. */}
+            {track.quality_label && isLossless(track.quality) ? <span className="sub-quality">{readableQuality(track.quality_label)}</span> : null}
           </span>
           <RowStatus
             track={track} archive={playing ? '' : archive.label} removed={removed} note={note}
