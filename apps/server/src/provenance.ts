@@ -551,7 +551,8 @@ export class ProvenanceStore {
   albumBadges(): Map<string, Badge> {
     this.revalidate();
     if (this.albumCache) return this.albumCache;
-    const groups = new Map<string, { tiers: Map<QualityTier, number>; sources: Map<Source, number>; sample: ProvenanceRow }>();
+    // One sample file per tier, so the label describes a file of the tier shown.
+    const groups = new Map<string, { tiers: Map<QualityTier, number>; sources: Map<Source, number>; samples: Map<QualityTier, ProvenanceRow> }>();
     for (const row of this.handle()
       .prepare("SELECT * FROM track_provenance WHERE album IS NOT NULL AND album <> ''")
       .all() as ProvenanceRow[]) {
@@ -559,11 +560,12 @@ export class ProvenanceStore {
       if (!key) continue;
       let group = groups.get(key);
       if (!group) {
-        group = { tiers: new Map(), sources: new Map(), sample: row };
+        group = { tiers: new Map(), sources: new Map(), samples: new Map() };
         groups.set(key, group);
       }
       const tier = badgeOf(row).tier;
       group.tiers.set(tier, (group.tiers.get(tier) ?? 0) + 1);
+      if (!group.samples.has(tier)) group.samples.set(tier, row);
       group.sources.set(row.source, (group.sources.get(row.source) ?? 0) + 1);
     }
     const top = <T,>(counts: Map<T, number>): T => [...counts.entries()]
@@ -571,16 +573,17 @@ export class ProvenanceStore {
     const map = new Map<string, Badge>();
     for (const [key, group] of groups) {
       const tier = top(group.tiers);
+      const sample = group.samples.get(tier)!;
       map.set(key, {
         tier,
         quality: qualityLabel(tier, {
-          codec: group.sample.codec,
-          bitrate: group.sample.bitrate,
-          sampleRate: group.sample.sample_rate,
-          bitDepth: group.sample.bit_depth,
+          codec: sample.codec,
+          bitrate: sample.bitrate,
+          sampleRate: sample.sample_rate,
+          bitDepth: sample.bit_depth,
         }),
         source: top(group.sources),
-        detail: group.sample.detail,
+        detail: sample.detail,
       });
     }
     this.albumCache = map;

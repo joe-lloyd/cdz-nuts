@@ -3799,3 +3799,10 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 /* Status and artist share the line; the status gives way last. */
 .sub-line .sub-text { flex: 0 1 auto; min-width: 3em; }
 .sub-line .row-status { flex: 0 0 auto; max-width: 70%; overflow: hidden; text-overflow: ellipsis; }
+
+/* Two text weights below display size, and one monospace stack. */
+b, strong { font-weight: 600; }
+code, kbd, samp { font-family: var(--mono); font-size: .92em; }
+.skip-link { font-weight: 600; }
+.q-badge b { font-size: 11px; }
+.tile small { font-weight: 400; }

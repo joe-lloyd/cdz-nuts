@@ -135,6 +135,22 @@ test('an album badge reports the modal tier, not the best or worst track', () =>
   });
 });
 
+test("an album badge's label comes from a file of the tier it shows", () => {
+  withStore((store) => {
+    // The FLAC scans first, but three MP3s make this an MP3 record.
+    store.upsert([
+      row({ path: '/lib/0.flac', title: 'Bonus', album: 'Seasons in the Abyss' }),
+      ...[1, 2, 3].map((i) => row({
+        path: `/lib/${i}.mp3`, title: `Track ${i}`, album: 'Seasons in the Abyss',
+        codec: 'mp3', bitrate: 320, bit_depth: null,
+      })),
+    ]);
+    const badge = store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'));
+    assert.equal(badge?.tier, 'high');
+    assert.equal(badge?.quality, 'MP3 320');
+  });
+});
+
 test('rescanning invalidates the album cache as well as the track cache', () => {
   withStore((store) => {
     store.upsert([row({ path: '/lib/a.mp3', codec: 'mp3', bitrate: 320, bit_depth: null })]);
