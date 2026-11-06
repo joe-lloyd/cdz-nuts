@@ -3778,12 +3778,9 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 /* On a phone the lyrics title gets the row; Adjust sync is an icon by close. */
 /* The header's kicker style is for its label, not the button's word. */
 .queue-head .timing-toggle .timing-word { display: inline; color: inherit; font: inherit; letter-spacing: normal; text-transform: none; }
-/* On a phone the title gets the row and the button says just "Sync", beside close. */
-.queue-head .timing-toggle .timing-word-short { display: none; }
+/* On a phone the title takes what room is left; Adjust sync sits beside close. */
 @media (max-width: 760px) {
-  .queue-head .timing-toggle .timing-word { display: none; }
-  .queue-head .timing-toggle .timing-word-short { display: inline; color: inherit; font: inherit; letter-spacing: normal; text-transform: none; }
-  .lyrics-panel .timing-toggle { min-height: 44px; padding: 0 14px; gap: 6px; }
+  .lyrics-panel .timing-toggle { min-height: 44px; padding: 0 10px; gap: 5px; }
   .lyrics-panel .queue-head > div:first-child { flex: 1 1 0; min-width: 0; }
   .lyrics-panel .queue-head > .timing-toggle + .lyrics-tools:not(.open) { flex: 0 0 auto; }
 }
@@ -3819,20 +3816,24 @@ code, kbd, samp { font-family: var(--mono); font-size: .92em; }
 .row-status > span + span::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
 .row-status > .row-request { flex: none; overflow: visible; }
 .row-request:empty { display: none; }
-.row-action { min-height: 24px; padding: 0; color: var(--accent); background: none; border: 0; font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.row-action { display: inline-flex; align-items: center; min-height: 24px; margin: -6px 0; padding: 0; color: var(--accent); background: none; border: 0; font: inherit; font-weight: 600; line-height: inherit; vertical-align: baseline; cursor: pointer; }
 .row-action:hover { text-decoration: underline; text-underline-offset: 3px; }
 .row-action-note { color: var(--ink-2); }
 .track-play-slot { flex: 0 0 44px; width: 44px; height: 44px; }
 @media (max-width: 760px) {
   .row:has(> a > .pic, > .pic) > .track-play-slot { display: none; }
-  /* On a phone the button says it all, and where a play happened can wait. */
-  .row-status > .archive-label:has(+ .row-request:not(:empty)) { display: none; }
-  .row-status > .archive-label:has(+ .row-request:not(:empty)) + .row-request::before { content: none; }
+  /* On a phone a status has its own line, in full, under the artist; where
+     a play happened can wait. */
+  .row .mid .sub-line { display: block; }
+  .sub-line .sub-text { display: block; }
+  /* One line, never wrapping, so nothing moves when a request goes in. */
+  .sub-line .row-status { display: flex; align-items: baseline; margin-top: 1px; }
+  .sub-line .row-status::before { content: none; }
+  .ra-long { display: none; }
+  .ra-short { display: inline; }
   .row-status > .row-note { display: none; }
   .sub-line:has(.row-status > .row-note:only-child) .row-status { display: none; }
   .row-action { min-height: 44px; margin: -14px 0; }
-  .ra-long { display: none; }
-  .ra-short { display: inline; }
 }
 
 /* The request form leads with the link: link, type and Add on one row,
@@ -3853,3 +3854,22 @@ code, kbd, samp { font-family: var(--mono); font-size: .92em; }
 .sub-line .row-status:has(.row-action) { flex-shrink: 0; }
 /* A playlist description gets two lines and ends with an ellipsis, never mid-word. */
 .pl-grid .al-body .sub.dim { display: -webkit-box; overflow: hidden; white-space: normal; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+
+/* "Help it match" opens more fields, so it looks like the other disclosures. */
+.upgrade-form .upgrade-more:not([hidden]) { gap: 8px; color: var(--ink-2); font-size: 13px; font-weight: 600; text-decoration: none; }
+.upgrade-more::before { content: ''; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform .15s ease; }
+.upgrade-more[aria-expanded="true"]::before { transform: rotate(45deg); }
+
+/* The queue marks the playing song the way every list does. */
+.queue-item.on b { color: var(--accent); }
+
+/* Quality badges carry their meaning in words; the tiny bars only added noise. */
+.q-badge .q-bars { display: none; }
+
+@media (max-width: 760px) {
+  /* Artist rows hug their text, centred on the picture. */
+  .grid .cell { min-height: 72px; padding: 8px 0; }
+  /* Cancel sits under the progress line, on the left, as on desktop. */
+  .upgrade-card .upgrade-actions { justify-content: flex-start; margin-top: 2px; }
+  .upgrade-actions button.quiet { min-height: 40px; }
+}

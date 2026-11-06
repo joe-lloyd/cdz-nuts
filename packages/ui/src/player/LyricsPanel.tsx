@@ -25,7 +25,7 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
         {/* Timing is rarely needed, so on a phone it waits behind one button. */}
         <button className="timing-toggle" type="button" aria-label="Adjust sync" title="Adjust sync" aria-expanded={timing} onClick={() => setTiming(!timing)}>
           <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" /><path d="M12 9v4l2 2M10 3h4" /></svg>
-          <span className="timing-word">Adjust sync</span><span className="timing-word-short">Sync</span>
+          <span className="timing-word">Adjust sync</span>
         </button>
         <div className={`lyrics-tools${timing ? ' open' : ''}`} role="group" aria-label="Lyrics timing">
           <small>Lyrics timing</small>

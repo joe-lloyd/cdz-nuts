@@ -251,7 +251,7 @@ export function Shows() {
   }
   return (
     <>
-      <h2>Near you <span className="count">{d.countries.join(', ')} · {d.near.length}</span></h2>
+      <h2>Near you · {d.countries.join(', ')} <span className="count">{d.near.length}</span></h2>
       {d.near.length
         ? <div className="gig-grid">{d.near.map((e, i) => <GigCard key={i} event={e} index={i} />)}</div>
         : <Empty>nothing announced nearby</Empty>}

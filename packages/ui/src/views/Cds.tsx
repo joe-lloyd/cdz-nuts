@@ -54,7 +54,7 @@ export function Cds() {
     return (
       <Notice
         title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
-        actions={<a className="spbtn" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Open Discogs settings ↗</a>}
+        actions={<a className="primary-action" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Open Discogs settings ↗</a>}
         details={<>
           {half ? <p>The consumer key and secret only reach the public catalogue. Reading your own collection needs a personal access token.</p> : null}
           <p>On the Discogs developer settings page, scroll past the OAuth app box to <b>Generate new token</b>. Add it to the server&apos;s <code>.env</code> as <code>DISCOGS_TOKEN</code> and restart the web container.</p>

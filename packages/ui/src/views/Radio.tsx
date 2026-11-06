@@ -25,7 +25,7 @@ export function Radio() {
     return (
       <Notice
         title="Radio needs ListenBrainz"
-        actions={<a className="spbtn" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">Get a ListenBrainz token ↗</a>}
+        actions={<a className="primary-action" href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">Get a ListenBrainz token ↗</a>}
         details={<p>Copy the user token from your ListenBrainz settings into the server&apos;s <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code>, then restart the web container.</p>}
       >
         Radio picks songs you have not heard yet from what you already play. It
