@@ -188,8 +188,8 @@ function RecentlyAdded() {
   return (
     <section className="recent" aria-labelledby="recent-head">
       <div className="section-head">
-        <h2 id="recent-head">Recently added</h2>
-        <Link to="/latest">All latest downloads</Link>
+        <h2 id="recent-head">Latest downloads</h2>
+        <Link to="/latest">See all</Link>
       </div>
       <div className="al-grid recent-row">
         {rows.map((row, i) => <AlbumCell key={`${row.id ?? row.album_id ?? row.name}-${i}`} album={row} />)}

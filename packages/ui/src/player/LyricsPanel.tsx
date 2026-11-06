@@ -23,7 +23,10 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
       <div className="queue-head">
         <div><span>{kind}</span><b>{p.lyricsTitle}</b></div>
         {/* Timing is rarely needed, so on a phone it waits behind one button. */}
-        <button className="timing-toggle" type="button" aria-expanded={timing} onClick={() => setTiming(!timing)}>Timing</button>
+        <button className="timing-toggle" type="button" aria-expanded={timing} onClick={() => setTiming(!timing)}>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="13" r="7" /><path d="M12 9v4l2 2M10 3h4" /></svg>
+          Adjust sync
+        </button>
         <div className={`lyrics-tools${timing ? ' open' : ''}`} role="group" aria-label="Lyrics timing">
           <small>Lyrics timing</small>
           <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>−0.5s</button>

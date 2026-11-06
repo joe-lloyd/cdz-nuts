@@ -37,7 +37,7 @@ export function useArchiveState(track: Track): { state: 'held' | 'missing' | 're
   if (held) return { state: 'held', label: '' };
   if (progress.status?.ready) return { state: 'ready', label: '' };
   // A download under way says how far it has got; otherwise, plainly, missing.
-  return { state: 'missing', label: downloadLabel(progress.status) ?? 'Not in your archive' };
+  return { state: 'missing', label: downloadLabel(progress.status) ?? 'Not in archive' };
 }
 
 export const PLAY_ICON = (
@@ -203,7 +203,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request this song for the archive'}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request this song'}
         onClick={() => {
           if (progress.failed) { progress.refresh?.(); return; }
           setRequested(true);

@@ -14,13 +14,11 @@ const MissingBadge = () => <span className="dl missing" title="No copy in your a
  * gets cut off. `removed` names what removed_at means where the row is shown:
  * un-liked on a liked list, taken out on a playlist.
  */
-function RowStatus({ track, archive, removed, note, reserve }: {
-  track: Track; archive: string; removed: string; note?: string | undefined; reserve: boolean;
+function RowStatus({ track, archive, removed, note }: {
+  track: Track; archive: string; removed: string; note?: string | undefined;
 }) {
   const parts = [track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '', archive, note ?? ''].filter(Boolean);
-  // A song the list did not know it had keeps the line while the check runs,
-  // so the row does not change height when the answer comes back.
-  return parts.length || reserve ? <div className="row-status">{parts.join(' · ') || '\u00a0'}</div> : null;
+  return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
 }
 
 /**
@@ -46,14 +44,14 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       {albumHref
         ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
-      <div className="mid">
+      <div className={`mid${archive.state !== 'held' ? ' reserve' : ''}`}>
         <div>{track.name}</div>
         <div className="sub">
           {track.artists ?? ''}
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </div>
-        <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} reserve={archive.state !== 'held'} />
+        <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} />
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />

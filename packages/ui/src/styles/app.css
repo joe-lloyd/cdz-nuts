@@ -3635,3 +3635,55 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .new-pl .new-pl-mark { flex: 1 1 100%; }
   .new-pl input { flex: 1 1 0; min-width: 0; }
 }
+
+/* --- round fourteen ------------------------------------------------------- */
+/* A row waiting on the archive check holds three lines' height, centred. */
+.row .mid.reserve { display: flex; flex-direction: column; justify-content: center; min-height: 58px; }
+
+/* Quality is a fixed column, so its header sits over it on every list. */
+.row > .song-badges,
+.row-head > .head-badges { flex: 0 0 96px; min-width: 0; justify-content: flex-end; }
+
+.glyph-line { fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.like-button.worded svg.glyph-line { fill: none; }
+.like-button.worded svg .glyph-fill { fill: currentColor; }
+.hero-actions .like-button.worded,
+.hero-actions .spbtn { min-height: 38px; height: 38px; }
+
+.queue-head > .timing-toggle { gap: 6px; margin-left: auto; }
+.queue-head > .timing-toggle svg { width: 15px; height: 15px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+
+.overview-hero h2 em { margin-left: .12em; }
+
+.upgrade-dots { gap: 5px; }
+.upgrade-dots i { width: 8px; height: 8px; }
+.upgrade-dots i.used { background: var(--ink-2); border-color: var(--ink-2); }
+
+.radio-get { outline-style: solid; outline-color: var(--line-strong); }
+
+/* The player's right-hand controls never shrink into each other. */
+.player-actions > * { flex: none; }
+
+@media (max-width: 1280px) and (min-width: 761px) {
+  .player-actions { gap: 12px; }
+  .lyrics-button .button-label,
+  .queue-button:not(.lyrics-button) .button-label { display: none; }
+  .lyrics-button { padding: 0; }
+  .volume-control input { width: 84px; }
+}
+
+@media (min-width: 761px) {
+  .global-search-bar > button { display: none; }
+}
+
+@media (max-width: 760px) {
+  .al-body .sub.dim { display: block; font-size: 12px; }
+  .pl-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .pl-grid .al-body .sub.dim,
+  .pl-grid .status { white-space: normal; }
+  .history .row > .row-date::before { content: 'at '; color: var(--ink-3); }
+  .upgrade-card { padding-right: 14px; }
+  .upgrade-card .upgrade-actions { position: static; display: flex; justify-content: flex-end; }
+  .upgrade-actions button.quiet { min-height: 44px; }
+  .recent-row { scroll-snap-type: x proximity; align-items: start; }
+}

@@ -75,7 +75,7 @@ function ServerVersion() {
   return (
     <>
       <p className="lede">You are using the web version, which is always up to date. There is nothing to install.</p>
-      <p className="build-id">Build {data.digest.slice(0, 7)}</p>
+      <p className="build-id">Web version · build {data.digest.slice(0, 7)}</p>
     </>
   );
 }
