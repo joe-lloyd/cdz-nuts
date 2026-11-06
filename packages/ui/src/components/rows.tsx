@@ -18,15 +18,15 @@ function RowStatus({ track, archive, removed, note }: {
   track: Track; archive: string; removed: string; note?: string | undefined;
 }) {
   const parts = [track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '', archive, note ?? ''].filter(Boolean);
-  return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
+  return parts.length ? <span className="row-status">{parts.join(' · ')}</span> : null;
 }
 
 /**
  * THE song row. Every song list renders through this, in the same slots:
- * rank, play, art, title over artist and album, a status line when there is
- * something to say, then quality, radio, the date column, heart and length.
+ * rank, play, art, title over artist and album with any status after it,
+ * then quality, radio, the date column, heart and length.
  * `date` is already-formatted text for the date column; `note` joins the
- * status line; `current` says whether this row is the one playing, for a
+ * status; `current` says whether this row is the one playing, for a
  * history that can list the same song twice.
  */
 export function TrackRow({ track, endText, rank, date, note, current = true, removed = 'Removed on Spotify' }: {
@@ -46,12 +46,14 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className={`mid${archive.state !== 'held' ? ' reserve' : ''}`}>
         <div>{track.name}</div>
-        <div className="sub">
-          {track.artists ?? ''}
-          {track.artists && track.album ? ' · ' : ''}
-          {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+        <div className="sub sub-line">
+          <span className="sub-text">
+            {track.artists ?? ''}
+            {track.artists && track.album ? ' · ' : ''}
+            {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+          </span>
+          <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} />
         </div>
-        <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} />
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />

@@ -160,12 +160,6 @@ export function MediaBadges({ row }: { row: Badged }) {
   );
 }
 
-const DOWNLOAD_ICON = (
-  <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M11 3h2v8h3l-4 4-4-4h3z" /><path d="M5 19h14v2H5z" />
-  </svg>
-);
-
 /** A request already made: a clock, not another arrow to press. */
 const WAITING_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -219,7 +213,7 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
             .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
         }}
       >
-        {busy ? WAITING_ICON : DOWNLOAD_ICON}
+        {busy ? WAITING_ICON : <span className="get-word" aria-hidden="true">Get</span>}
       </button>
       {progress.failed || label ? <span className="download-status" role="status">{progress.failed ? 'Progress unavailable · retry' : label}</span> : null}
       </span>
@@ -293,11 +287,18 @@ export function Notice({ title, children, actions, details }: {
   );
 }
 
-/** Shown only when a view takes noticeably long, so cached views never flash. */
-export function Skeleton() {
+/**
+ * Shown only when a view takes noticeably long, so cached views never flash.
+ * It says what is coming, and a detail page keeps the shape of its header.
+ */
+export function Skeleton({ label = 'Loading…', hero = false, rows = 9 }: {
+  label?: string | null | undefined; hero?: boolean | undefined; rows?: number | undefined;
+}) {
   return (
     <div className="skeleton">
-      {Array.from({ length: 9 }, (_, i) => (
+      {label ? <p className="skeleton-label" role="status">{label}</p> : null}
+      {hero ? <div className="skeleton-hero"><span className="skeleton-art" /><div><span /><span /><span /></div></div> : null}
+      {Array.from({ length: rows }, (_, i) => (
         <div className="skeleton-row" key={i}><span /><span /></div>
       ))}
     </div>

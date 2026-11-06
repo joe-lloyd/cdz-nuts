@@ -20,7 +20,7 @@ export function Radio() {
   const lb = useListenBrainz();
   const top = useTopArtists();
   const stats = useStats();
-  if (lb.isPending) return <Skeleton />;
+  if (lb.isPending) return <Skeleton label="Checking radio…" />;
   if (!lb.data?.enabled) {
     return (
       <Notice
@@ -176,7 +176,7 @@ export function Station() {
   }, [pending.length, stationKey, states]);
 
   if (isPending) return <><div role="status"><h1>{kind === 'track' ? 'Song radio' : 'Radio'}</h1>
-    <p>Building your station… Finding related songs with ListenBrainz.</p></div><Skeleton /></>;
+    <p>Building your station… Finding related songs with ListenBrainz.</p></div><Skeleton label={null} /></>;
   if (error) return <div role="alert"><p>Could not build this station. {error.message}</p>
     <button type="button" onClick={() => void refetch()}>Try again</button></div>;
   if (data?.error || !tracks.length) {

@@ -136,7 +136,7 @@ export function PlayerBar() {
             onClick={() => setPanel(panel === 'lyrics' ? null : 'lyrics')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M5 7h4v4H6.5c0 2.2-.8 3.6-2 4.5M14 7h4v4h-2.5c0 2.2-.8 3.6-2 4.5" /><path d="M5 19h14" />
+              <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
             </svg>
             <span className="button-label">Lyrics</span>
           </button>

@@ -46,7 +46,7 @@ export function Upgrades() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading requests…" />;
   const jobs = data?.jobs ?? [];
   const active = ACTIVE.reduce((n, k) => n + Number(data?.counts?.[k] ?? 0), 0);
   const finished = Number(data?.counts?.upgraded ?? 0) + Number(data?.counts?.already_lossless ?? 0);

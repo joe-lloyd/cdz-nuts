@@ -30,7 +30,7 @@ export function Settings() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Checking for updates…" rows={1} />;
 
   return (
     <>
@@ -70,7 +70,7 @@ export function Settings() {
 function ServerVersion() {
   const { data, isPending } = useUiBuild();
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Checking the version…" rows={1} />;
   if (!data) return <Empty>Nothing to configure here yet.</Empty>;
   return (
     <>

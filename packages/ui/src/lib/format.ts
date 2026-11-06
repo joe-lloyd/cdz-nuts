@@ -15,13 +15,16 @@ export const formatTime = (seconds: number): string => {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
 };
 
-/** "1 Sept 2026". A bare date is read in UTC so it never slips a day. */
+/** "1 Sep 2026". A bare date is read in UTC so it never slips a day. */
 export const day = (iso: string | null | undefined): string => {
   if (!iso) return '';
   const when = new Date(iso);
   if (Number.isNaN(when.getTime())) return iso;
-  return when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: 'UTC' } : {}) });
+  return threeLetters(when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: 'UTC' } : {}) }));
 };
+
+/** British English writes "Sept"; every other month has three letters. */
+export const threeLetters = (date: string): string => date.replace('Sept', 'Sep');
 
 export const ago = (iso: string): string => {
   const m = (Date.now() - new Date(iso).getTime()) / 60000;
@@ -95,12 +98,11 @@ export const positionFor = (gain: number): number => Math.sqrt(Math.max(0, Math.
 
 export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
 
-/** "22 Sep 2026": a date short enough for a status chip. */
 /** A date for a status line, kept on one line. */
 export const shortDay = (iso: string | null | undefined): string => day(iso).replace(/ /g, '\u00a0');
 
-/** "Sept 2026" from "2026-09". */
+/** "Sep 2026" from "2026-09". */
 export const monthName = (ym: string): string => {
   const [y, m] = ym.split('-').map(Number);
-  return y && m ? new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' }) : ym;
+  return y && m ? threeLetters(new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })) : ym;
 };

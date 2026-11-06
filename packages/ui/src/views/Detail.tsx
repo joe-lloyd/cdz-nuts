@@ -16,7 +16,7 @@ import type { Track } from '../api/types.ts';
 export function AlbumDetail() {
   const { id } = useParams();
   const { data, isPending, error } = useAlbum(id);
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading album…" hero rows={4} />;
   if (error) return <Empty>{error.message}</Empty>;
   const album = data?.album;
   if (!album) return <Empty>unknown album</Empty>;
@@ -28,7 +28,7 @@ export function AlbumDetail() {
     album.downloaded ? 'in your archive' : '',
   ].filter(Boolean).map(nb).join(' · ');
   const detail = [
-    album.label ?? '', album.popularity != null ? `popularity ${album.popularity}` : '',
+    album.label ?? '', album.popularity != null ? `Spotify popularity ${album.popularity}/100` : '',
     album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
   ].filter(Boolean).join(' · ');
 
@@ -49,21 +49,21 @@ export function AlbumDetail() {
                 {x.id ? <Link to={`/artist/${x.id}`}><b>{x.name}</b></Link> : <b>{x.name}</b>}
               </span>
             ))}
+            {meta ? ` · ${meta}` : ''}
           </div>
-          <div className="meta">{meta}</div>
           {detail ? <div className="meta meta-detail">{detail}</div> : null}
           <Badges row={album} />
           {editions.length || data!.canonical ? (
             <div className="meta editions">
-              {data!.canonical ? <>an edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link></> : null}
+              {data!.canonical ? <>An edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link></> : null}
               {data!.canonical && editions.length ? ' · ' : ''}
-              {editions.length ? 'also listed as ' : ''}
-              {editions.map((e, i) => {
-                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : ''].filter(Boolean).join(', ');
+              {editions.length ? 'Also listed as ' : ''}
+              {editions.map((e) => {
+                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : '', e.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
                 return (
-                  <span key={e.id}>
-                    {i ? ', ' : ''}<Link to={`/album/${e.id}`}>{e.name}</Link>{detail ? ` (${detail}${e.is_saved ? ', saved' : ''})` : e.is_saved ? ' (saved)' : ''}
-                  </span>
+                  <Link className="edition" to={`/album/${e.id}`} key={e.id}>
+                    <b>{e.name}</b>{detail ? <span>{detail}</span> : null}
+                  </Link>
                 );
               })}
             </div>
@@ -115,9 +115,9 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
       <PlayControl track={t} />
       <div className="mid">
         <div>{t.name}</div>
-        <div className="sub">
-          {t.artists ?? ''}
-          {t.quality_label ? <span className="sub-quality"> · {readableQuality(t.quality_label)}</span> : null}
+        <div className="sub sub-split">
+          <span className="sub-text">{t.artists ?? ''}</span>
+          {t.quality_label ? <span className="sub-quality">{readableQuality(t.quality_label)}</span> : null}
         </div>
       </div>
       <MediaBadges row={t} />
@@ -140,7 +140,7 @@ const GROUPS: Array<[string, string]> = [
 export function ArtistDetail() {
   const { id } = useParams();
   const { data, isPending, error } = useArtist(id);
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading artist…" hero rows={4} />;
   if (error) return <Empty>{error.message}</Empty>;
   const artist = data?.artist;
   if (!artist) return <Empty>unknown artist</Empty>;
@@ -148,7 +148,7 @@ export function ArtistDetail() {
   const likedLive = data!.liked.filter((t) => !t.removed_at).length;
   const meta = [
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
-    artist.popularity != null ? `popularity ${artist.popularity}` : '',
+    artist.popularity != null ? `Spotify popularity ${artist.popularity}/100` : '',
     likedLive ? `${likedLive} liked songs` : '',
   ].filter(Boolean).map(nb).join(' · ');
   const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
@@ -233,7 +233,7 @@ export function ArtistDetail() {
 
 export function Shows() {
   const { data, isPending, error } = useEvents();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading shows…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const d = data!;
   if (!d.near.length && !d.elsewhere.length) {

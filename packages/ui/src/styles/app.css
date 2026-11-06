@@ -3613,7 +3613,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .al-body .sub { font-size: 12px; }
   .pic .dl { top: 6px; right: 6px; height: 20px; padding: 0 6px; font-size: 11px; }
   .recent-row,
-  .search-results .al-grid { grid-auto-columns: 120px; }
+  .search-results .al-grid { grid-auto-columns: 120px; grid-template-columns: none; gap: 10px; }
   /* Artists as a list: picture, name, what you share, and any status. */
   .grid { display: flex; flex-direction: column; gap: 0; }
   .grid .cell { display: grid; grid-template-columns: 56px minmax(0, 1fr); column-gap: 14px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
@@ -3638,7 +3638,9 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 
 /* --- round fourteen ------------------------------------------------------- */
 /* A row waiting on the archive check holds three lines' height, centred. */
-.row .mid.reserve { display: flex; flex-direction: column; justify-content: center; min-height: 58px; }
+@media (max-width: 760px) {
+  .row .mid.reserve { display: flex; flex-direction: column; justify-content: center; min-height: 58px; }
+}
 
 /* Quality is a fixed column, so its header sits over it on every list. */
 .row > .song-badges,
@@ -3687,3 +3689,72 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .upgrade-actions button.quiet { min-height: 44px; }
   .recent-row { scroll-snap-type: x proximity; align-items: start; }
 }
+
+/* ---- Round fifteen ------------------------------------------------------- */
+/* A song you do not hold says "Get" in a rounded square, so it never reads
+   as a second Play. A request in flight keeps the clock. */
+.radio-get { border-radius: 14px; outline-style: solid; outline-color: var(--line-strong); }
+.radio-get:not(.queued) { color: var(--ink); }
+.get-word { font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 1; }
+.radio-get:hover:not(:disabled) { color: var(--ink); background: var(--accent-soft); outline-color: var(--accent); }
+
+/* Album hero: other editions as chips you can follow. */
+@media (min-width: 761px) { .hero .meta.editions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; } }
+.edition { display: inline-flex; align-items: baseline; gap: 6px; padding: 4px 10px; border: 1px solid var(--line-strong); border-radius: 999px; color: var(--ink); font-size: 13px; text-decoration: none; }
+.edition b { font-weight: 600; }
+.edition span { color: var(--ink-3); }
+.edition:hover { border-color: var(--accent); }
+
+/* A song's status follows its artist on one line, so every row is two lines
+   tall; the artist gives way first. On a phone it takes its own line. */
+.row .mid .sub-line { display: flex; min-width: 0; }
+.sub-line .sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-line .row-status { flex: none; max-width: 60%; white-space: nowrap; }
+.sub-line .row-status::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+@media (max-width: 760px) {
+  .row .mid .sub-line { display: block; }
+  .sub-line .sub-text,
+  .sub-line .row-status { display: block; max-width: none; }
+  .sub-line .row-status::before { content: none; }
+}
+
+/* Create waits for a name, and looks like it. */
+.new-pl button:disabled { opacity: .5; }
+
+/* Cancel request is a small outlined button, findable but not loud. */
+.upgrade-actions button.quiet { min-height: 32px; padding: 0 14px; color: var(--ink-2); border: 1px solid var(--line-strong); text-decoration: none; }
+.upgrade-actions button.quiet:hover { color: var(--ink); border-color: var(--ink-3); }
+@media (max-width: 760px) { .upgrade-actions button.quiet { min-height: 44px; } }
+
+/* The lyrics title starts where the lines start. */
+@media (min-width: 761px) {
+  .lyrics-panel .queue-head { padding-left: calc(clamp(18px, 6vw, 90px) + 16px); }
+}
+
+/* An album track's quality never gives way to a long list of artists. */
+.row .mid .sub-split { display: flex; min-width: 0; }
+.sub-split .sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sub-split .sub-quality { flex: none; }
+.sub-split .sub-text:not(:empty) + .sub-quality::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+
+/* A slow view names what is on its way; a detail page keeps its header's shape. */
+.skeleton-label { margin: 0 0 12px; color: var(--ink-3); font-size: 13px; }
+.skeleton-hero { display: flex; align-items: center; gap: 20px; margin-bottom: 20px; padding: 20px; border: 1px solid var(--line); border-radius: 18px; }
+.skeleton-art { flex: none; width: 168px; aspect-ratio: 1; border-radius: 12px; background: rgba(255, 255, 255, .06); animation: skeleton-pulse 1.2s ease-in-out infinite; }
+.skeleton-hero > div { display: flex; flex: 1; flex-direction: column; gap: 12px; }
+.skeleton-hero > div span { height: 12px; border-radius: 6px; background: rgba(255, 255, 255, .06); animation: skeleton-pulse 1.2s ease-in-out infinite; }
+.skeleton-hero > div span:first-child { width: 50%; height: 28px; }
+.skeleton-hero > div span:nth-child(2) { width: 36%; }
+.skeleton-hero > div span:nth-child(3) { width: 28%; opacity: .6; }
+@media (max-width: 760px) {
+  .skeleton-hero { gap: 14px; padding: 14px; }
+  .skeleton-art { width: 96px; }
+  /* Header actions are full touch targets on a phone. */
+  .hero .hero-actions .spbtn,
+  .hero .hero-actions .like-control > button { min-height: 44px; }
+}
+
+/* The archive state's detail wraps inside the sidebar, however long it is. */
+.archive-state { min-width: 0; }
+.archive-state span:last-child { flex: 1 1 auto; }
+.archive-state small { white-space: normal; overflow-wrap: anywhere; }

@@ -7,7 +7,7 @@ import {
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
-import { ago, day, dur, initial, shortDay } from '../lib/format.ts';
+import { ago, day, dur, initial, shortDay, threeLetters } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
 import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
@@ -17,7 +17,7 @@ import type { Track } from '../api/types.ts';
 export function Artists() {
   const { data, isPending, error } = useArtists();
   const [followedOnly, setFollowedOnly] = useState(false);
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading artists…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
   // A heart pressed here counts the same as a Spotify follow.
@@ -56,7 +56,7 @@ export function Artists() {
 
 export function Songs() {
   const { data, isPending, error } = useLikedTracks();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading liked songs…" />;
   if (error) return <Empty>{error.message}</Empty>;
   // A song liked here and on Spotify is one song, listed once.
   const rows = [...new Map((data ?? []).filter(t => !t.removed_at).map(t => [t.id, t])).values()];
@@ -72,7 +72,7 @@ export function Songs() {
 export function Albums() {
   const saved = useSavedAlbums();
   const library = useLibraryAlbums();
-  if (saved.isPending && library.isPending) return <Skeleton />;
+  if (saved.isPending && library.isPending) return <Skeleton label="Loading albums…" />;
   const savedRows = saved.data ?? [];
   const libRows = library.data ?? [];
 
@@ -110,7 +110,7 @@ export function Playlists() {
     finally { setSaving(false); }
   }
   const { data, isPending, error } = usePlaylists();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading playlists…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
   // Spotify refuses to enumerate some playlists, so they sync with zero tracks.
@@ -149,7 +149,7 @@ export function Playlists() {
         })}
         <form className="al-card new-pl" onSubmit={e => { e.preventDefault(); void create(); }}>
           <span className="new-pl-mark">New playlist</span>
-          <input aria-label="New playlist name" placeholder="New playlist" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
+          <input aria-label="New playlist name" placeholder="Playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
           <button disabled={saving || !name.trim()}>Create playlist</button>
         </form>
       </div>
@@ -161,7 +161,7 @@ export function PlaylistDetail() {
   const { id } = useParams();
   const playlists = usePlaylists();
   const tracks = usePlaylistTracks(id);
-  if (tracks.isPending) return <Skeleton />;
+  if (tracks.isPending) return <Skeleton label="Loading playlist…" hero rows={4} />;
   const rows = tracks.data ?? [];
   const meta = playlists.data?.find((p) => p.id === id);
   return (
@@ -205,7 +205,7 @@ export function PlaylistDetail() {
 
 export function Latest() {
   const { data, isPending, error } = useLatest();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading downloads…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const rows = data ?? [];
   if (!rows.length) return <Empty>nothing downloaded yet — or the archive is asleep</Empty>;
@@ -243,7 +243,7 @@ export function Latest() {
 
 export function Plays() {
   const { data, isPending } = usePlays();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading plays…" />;
   const all = data ?? [];
   if (!all.length) return <Empty>no plays captured yet</Empty>;
   const here = all.filter((p) => p.source === 'app').length;
@@ -330,9 +330,9 @@ function playDay(iso: string | null | undefined): string {
   const days = Math.round((start(new Date()) - start(when)) / 864e5);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
-  return when.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) });
+  return threeLetters(when.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) }));
 }
 
-/** "21:40" for a play. */
+/** "21:40", or "2:05" for a play after midnight. */
 const clock = (iso: string | null | undefined): string =>
-  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: 'numeric', minute: '2-digit' }) : '';

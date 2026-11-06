@@ -43,7 +43,7 @@ export function Cds() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading your CDs…" />;
   const d = data!;
 
   if (!d.canSync && !d.items.length) {
