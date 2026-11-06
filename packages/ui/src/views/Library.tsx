@@ -62,7 +62,7 @@ export function Songs() {
   const rows = [...new Map((data ?? []).filter(t => !t.removed_at).map(t => [t.id, t])).values()];
   return <>
     <h2>{rows.length.toLocaleString()} liked songs</h2>
-    {rows.length ? <PlayScope tracks={rows}><div className="rows">
+    {rows.length ? <PlayScope tracks={rows}><div className="rows liked-page">
       <TrackHeader date="Liked" />
       {rows.map(t => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
     </div></PlayScope> : <Empty>Like a song to save it here alongside your Spotify likes.</Empty>}
@@ -256,10 +256,10 @@ export function Plays() {
         {/* History reads top to bottom, so one column; only the newest play of
             the current song is marked as playing. */}
         <div className="rows history">
-          <TrackHeader date="Played" />
+          <TrackHeader date="Played" quality={false} length={false} />
           {all.map((p, i) => (
             <TrackRow key={`${p.id}-${i}`} track={p} current={all.findIndex((x) => x.id === p.id) === i}
-              date={p.played_at ? ago(p.played_at) : ''} note={p.source === 'app' ? 'Played here' : undefined} endText="" />
+              date={p.played_at ? ago(p.played_at) : ''} note={p.source === 'app' ? 'On this player' : undefined} endText="" />
           ))}
         </div>
       </PlayScope>

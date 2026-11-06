@@ -35,7 +35,7 @@ export function useArchiveState(track: Track): { state: 'held' | 'missing' | 're
   const held = isHeld(track);
   const progress = useDownloadProgress(track, held);
   if (held) return { state: 'held', label: '' };
-  if (progress.status?.ready) return { state: 'ready', label: 'Ready to play' };
+  if (progress.status?.ready) return { state: 'ready', label: '' };
   // A download under way says how far it has got; otherwise, plainly, missing.
   return { state: 'missing', label: downloadLabel(progress.status) ?? 'Not in your archive' };
 }

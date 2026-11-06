@@ -90,7 +90,7 @@ export function Shell() {
             <div className="foot-row">
               <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
                 {SETTINGS_ICON}
-                <span>Settings</span>
+                <span>About</span>
                 <VersionChip />
               </NavLink>
             </div>
@@ -209,7 +209,7 @@ function ArchiveState() {
   return (
     <div className="archive-state" data-state={state}>
       <span className="state-dot" aria-hidden="true" />
-      <span><b>{label}</b><small>{data?.detail ?? 'Jellyfin connection'}</small></span>
+      <span><b>{label}</b><small>{(data?.detail ?? 'Jellyfin connection').replace(/ ready$/, '')}</small></span>
     </div>
   );
 }

@@ -9,9 +9,9 @@ import { player } from '../player/usePlayer.ts';
 import type { UpgradeJob, UpgradeStatus } from '../api/types.ts';
 
 const LABEL: Record<UpgradeStatus, string> = {
-  pending_source: 'downloading source', queued: 'ready for upgrade', working: 'working now',
-  retry_wait: 'retry scheduled', upgraded: 'upgraded', already_lossless: 'already lossless',
-  exhausted: 'retries exhausted', cancelled: 'cancelled',
+  pending_source: 'Waiting to download', queued: 'MP3 in, waiting for FLAC', working: 'Working on it now',
+  retry_wait: 'Will try again', upgraded: 'Lossless now', already_lossless: 'Already lossless',
+  exhausted: 'Gave up', cancelled: 'Cancelled',
 };
 const ACTIVE: UpgradeStatus[] = ['pending_source', 'queued', 'working', 'retry_wait'];
 
@@ -94,7 +94,7 @@ export function Upgrades() {
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Searches before giving up</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
-          {batch ? 'Import album + queue every track for FLAC' : 'Add to archive + FLAC queue'}
+          {batch ? 'Import the album' : 'Add the song'}
         </button>
       </form>
 
@@ -112,7 +112,7 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
   const batch = job.source_mode && job.source_mode !== 'single';
   const label = batch && job.status === 'upgraded' ? 'album imported' : LABEL[job.status] ?? job.status;
   const due = job.next_attempt_at && (['retry_wait', 'queued', 'pending_source'] as string[]).includes(job.status)
-    ? `${job.status === 'retry_wait' ? 'retry ' : ''}${until(job.next_attempt_at)}` : '';
+    ? `next attempt ${until(job.next_attempt_at).replace('due now', 'now')}` : '';
   const attempts = job.phase === 'source'
     ? { used: job.source_attempts, max: 3, what: 'source' }
     : { used: job.upgrade_attempts, max: job.max_attempts, what: 'FLAC' };

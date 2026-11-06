@@ -15,10 +15,12 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
     if (body && el) body.scrollTop = el.offsetTop - body.clientHeight * 0.4 + el.offsetHeight / 2;
   }, [open, p.activeLine]);
 
+  // The kind of lyrics heads the panel; where they came from closes it.
+  const [kind, ...from] = p.lyricsSource.split(' · ');
   return (
     <aside className="queue-panel lyrics-panel" aria-label="Lyrics" hidden={!open}>
       <div className="queue-head">
-        <div><span>{p.lyricsSource}</span><b>{p.lyricsTitle}</b></div>
+        <div><span>{kind}</span><b>{p.lyricsTitle}</b></div>
         <div className="lyrics-tools" role="group" aria-label="Lyrics timing">
           <small>Lyrics timing</small>
           <button type="button" aria-label="Shift lyrics half a second earlier" onClick={() => player.nudgeLyrics(-0.5)}>−0.5s</button>
@@ -53,6 +55,7 @@ export function LyricsPanel({ open, onClose }: { open: boolean; onClose: () => v
         ) : (
           <div className="empty">{p.lyrics ? 'No lyrics found for this track' : 'Play a track to follow its lyrics'}</div>
         )}
+        {from.length ? <p className="lyrics-credit">Lyrics from {from.join(' · ')}</p> : null}
       </div>
     </aside>
   );

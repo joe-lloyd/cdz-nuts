@@ -6,6 +6,7 @@ import { LyricsPanel } from './LyricsPanel.tsx';
 import { QueuePanel } from './QueuePanel.tsx';
 import { player, usePlayer } from './usePlayer.ts';
 import { RadioControl } from '../components/primitives.tsx';
+import { LikeButton } from '../components/LikeButton.tsx';
 import { Slider } from './Slider.tsx';
 
 /**
@@ -88,6 +89,8 @@ export function PlayerBar() {
           </div>
           {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
             ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
+          {/* The full view is where a phone likes the song it is playing. */}
+          {expanded && p.currentId ? <LikeButton track={{ id: p.currentId, name: p.title }} /> : null}
           <button
             className="player-expand" type="button" aria-label="Open now playing" aria-expanded={expanded}
             disabled={!p.canPlay} onClick={() => setExpanded(true)}
@@ -96,7 +99,7 @@ export function PlayerBar() {
 
         <div className="player-transport">
           <div className="player-controls">
-            <button className="player-icon" type="button" aria-label="Previous track" onClick={() => player.previous()}>
+            <button className="player-icon" type="button" aria-label="Previous track" disabled={!p.queue.length} onClick={() => player.previous()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zm3 7 9-7v14z" /></svg>
             </button>
             <button
@@ -107,7 +110,7 @@ export function PlayerBar() {
               <svg className="play-shape" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
               <svg className="pause-shape" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" /></svg>
             </button>
-            <button className="player-icon" type="button" aria-label="Next track" onClick={() => void player.next()}>
+            <button className="player-icon" type="button" aria-label="Next track" disabled={!p.queue.length} onClick={() => void player.next()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z" /></svg>
             </button>
           </div>

@@ -93,13 +93,13 @@ export const PAGE_COPY: Record<string, [string, string]> = {
  * once-a-month page in front of the twelve you use daily.
  */
 export const ASIDE_COPY: Record<string, [string, string]> = {
-  settings: ['This app and this machine', 'Settings'],
+  settings: ['This app and this machine', 'About'],
 };
 
 export const NOT_FOUND_COPY: [string, string] = ['Nothing at this address', 'Page not found'];
 
 export const SETTINGS_ICON: ReactNode = (
-  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1 7 17M17 7l2.1-2.1" /></svg>
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.01" /></svg>
 );
 
 export const DETAIL_COPY = {
@@ -122,8 +122,8 @@ export const TAB_ICONS: Record<TabId, ReactNode> = {
   liked: icon(<svg viewBox="0 0 24 24"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>),
   playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7M18 14v6m-3-3h6" /></svg>),
   top: icon(<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" /></svg>),
-  shows: icon(<svg viewBox="0 0 24 24"><path d="M6 3v18M18 3v18M6 7h12M6 17h12" /><path d="M10 11h4v2h-4z" /></svg>),
-  upgrades: icon(<svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 3 13 3-9 2 6h3" /><path d="m16 6 2-2 2 2M18 4v6" /></svg>),
+  shows: icon(<svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 0 0-4V4H4z" /><path d="M14 4v12" strokeDasharray="2 2" /></svg>),
+  upgrades: icon(<svg viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4" /><path d="M4 15v4h16v-4" /></svg>),
   cds: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><circle cx="12" cy="12" r="2.3" /><path d="M12 3.4a8.6 8.6 0 0 1 7.4 4.3" /></svg>),
   plays: icon(<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8" /><path d="M4 3v5h5" /><path d="m10 9 5 3-5 3z" /></svg>),
 };

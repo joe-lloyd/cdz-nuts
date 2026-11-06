@@ -20,9 +20,13 @@ const DownloadBadge = () => (
  * gets cut off. `removed` names what removed_at means where the row is shown:
  * un-liked on a liked list, taken out on a playlist.
  */
-function RowStatus({ track, archive, removed, note }: { track: Track; archive: string; removed: string; note?: string | undefined }) {
+function RowStatus({ track, archive, removed, note, reserve }: {
+  track: Track; archive: string; removed: string; note?: string | undefined; reserve: boolean;
+}) {
   const parts = [track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '', archive, note ?? ''].filter(Boolean);
-  return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
+  // A song the list did not know it had keeps the line while the check runs,
+  // so the row does not change height when the answer comes back.
+  return parts.length || reserve ? <div className="row-status">{parts.join(' · ') || '\u00a0'}</div> : null;
 }
 
 /**
@@ -55,7 +59,7 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </div>
-        <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} />
+        <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} reserve={archive.state !== 'held'} />
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />
@@ -153,7 +157,9 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
 }
 
 /** Column names over a song list, so a date says what it is. Desktop only. */
-export function TrackHeader({ rank, date, art = true }: { rank?: boolean | undefined; date?: string | undefined; art?: boolean | undefined }) {
+export function TrackHeader({ rank, date, art = true, quality = true, length = true }: {
+  rank?: boolean | undefined; date?: string | undefined; art?: boolean | undefined; quality?: boolean | undefined; length?: boolean | undefined;
+}) {
   const radio = use(RadioEnabled);
   return (
     <div className="row row-head" aria-hidden="true">
@@ -161,11 +167,11 @@ export function TrackHeader({ rank, date, art = true }: { rank?: boolean | undef
       <span className="head-lead" />
       {art ? <span className="head-art" /> : null}
       <div className="mid">Title</div>
-      <span className="head-badges">Quality</span>
+      {quality ? <span className="head-badges">Quality</span> : null}
       {radio ? <span className="head-radio" /> : null}
       {date ? <div className="row-date">{date}</div> : null}
       <span className="head-like" />
-      <div className="end">Length</div>
+      {length ? <div className="end">Length</div> : null}
     </div>
   );
 }
