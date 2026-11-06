@@ -120,6 +120,12 @@ test('the routes answer the same from node:sqlite files and from a Durable Objec
     const artistPage = JSON.parse(artistLine.slice(artistLine.indexOf('{'))) as { liked: Array<{ id: string; quality?: string }> };
     assert.equal(artistPage.liked.find((t) => t.id === 'al01t2')?.quality, 'high');
 
+    // A single on Latest downloads is one file, so it carries that file's quality.
+    const latestLine = onNode.find((l) => l.startsWith('GET /api/latest '))!;
+    const latest = JSON.parse(latestLine.slice(latestLine.indexOf('['))) as Array<{ kind?: string; quality?: string }>;
+    const singles = latest.filter((row) => row.kind === 'single');
+    assert.ok(singles.length > 0 && singles.every((row) => typeof row.quality === 'string'), 'every single has a quality');
+
     // A play carries its song's length, so the history lines up with every other list.
     const playsLine = onNode.find((l) => l.startsWith('GET /api/plays '))!;
     const plays = JSON.parse(playsLine.slice(playsLine.indexOf('['))) as Array<{ duration_ms?: number | null }>;

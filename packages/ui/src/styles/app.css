@@ -4015,9 +4015,11 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 .player-bar[data-state="idle"] .volume-control { filter: grayscale(1); opacity: .7; }
 
 /* Elapsed and remaining sit close to the ends of the bar they measure. */
-.scrubber-row { gap: 10px; }
-.scrubber-row > span:first-child { text-align: right; }
-.scrubber-row > span:last-child { text-align: left; }
+@media (min-width: 761px) {
+  .scrubber-row { gap: 10px; }
+  .scrubber-row > span:first-child { text-align: right; }
+  .scrubber-row > span:last-child { text-align: left; }
+}
 @media (max-width: 760px) {
   /* A phone history shows when, not how long, whatever the length cell holds. */
   .history .row > .end,
@@ -4036,3 +4038,24 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   /* Quality under the length reads at the size of the metadata beside it. */
   .end-quality { font-size: 12px; font-weight: 500; }
 }
+
+/* Date headers end where their dates end. */
+.row-head > .row-date { text-align: right; }
+
+@media (max-width: 760px) {
+  /* A lone secondary button fits its words, as on albums and artists. */
+  .hero-actions > .spbtn:only-child,
+  .hero-actions > .play-album + .spbtn:last-child { flex: 0 0 auto; }
+  /* Requests on a phone: a compact card, status beside the title, tries
+     as one line, Cancel small at the end of it. */
+  .upgrade-card { padding: 12px 14px; }
+  .upgrade-card .upgrade-head { margin-bottom: 4px; }
+  .upgrade-card .upgrade-dots { display: none; }
+  .upgrade-card .upgrade-actions { margin-top: 0; }
+}
+
+/* The Home summary's line breaks evenly, never leaving one word behind. */
+.overview-hero p { text-wrap: pretty; }
+
+/* The setup button is a button, so it carries no disclosure chevron. */
+.notice-details > summary.setup-summary::before { content: none; }

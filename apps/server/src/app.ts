@@ -1452,7 +1452,9 @@ function decorateBadges(value: unknown, depth = 0): unknown {
       // A row with no duration and no album of its own is a release, not a
       // track (the Albums grid and Latest downloads). Matching those against
       // the track index would be meaningless, so they get the album summary.
-      const isRelease = row.duration_ms == null && row.album == null;
+      // A single on Latest downloads is a release that is one file, so it
+      // takes that file's badge.
+      const isRelease = row.duration_ms == null && row.album == null && row.kind !== 'single';
       const badge = isRelease
         ? albums.get(albumMatchKey(artist, row.name))
         : badges.get(provenanceKey(artist, row.name));
