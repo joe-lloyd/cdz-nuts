@@ -328,7 +328,7 @@ async fn desktop_endpoint(
             // Spawned rather than awaited: a successful install restarts the
             // process, and the caller should get its answer before that
             // happens rather than seeing the connection die.
-            tauri::async_runtime::spawn(async move { update::install(handle).await });
+            tauri::async_runtime::spawn(async move { update::install(handle, false).await });
             json(202, &serde_json::json!({ "state": "installing" }))
         }
         _ => json(
@@ -416,7 +416,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
                 let handle = app.clone();
                 tauri::async_runtime::spawn(async move {
                     if handle.state::<update::PendingUpdate>().is_pending() {
-                        update::install(handle).await;
+                        update::install(handle, false).await;
                     } else {
                         update::check(handle, true, false).await;
                     }

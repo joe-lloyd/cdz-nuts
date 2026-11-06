@@ -39,7 +39,10 @@ Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $out -UseBasicParsin
 $oldUninstaller = Join-Path $env:LOCALAPPDATA 'Homelab Music\uninstall.exe'
 if (Test-Path $oldUninstaller) {
     Write-Host '==> Removing the install from before the rename (Homelab Music)'
-    Start-Process -FilePath $oldUninstaller -ArgumentList '/S' -Wait | Out-Null
+    $old = Start-Process -FilePath $oldUninstaller -ArgumentList '/S' -Wait -PassThru
+    if ($old.ExitCode -ne 0) {
+        Write-Error "The old uninstaller exited with code $($old.ExitCode); remove Homelab Music from Settings > Apps, then run this again."
+    }
 }
 
 Write-Host '==> Installing'

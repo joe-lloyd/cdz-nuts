@@ -60,8 +60,8 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
             app.state::<PendingUpdate>().set(Some(update));
 
             if auto_install {
-                log::info!("installing {version} at startup");
-                install(app).await;
+                log::info!("installing {version} while nothing is playing");
+                install(app, true).await;
                 return Found::Available { version };
             }
 
@@ -115,7 +115,7 @@ pub async fn watch(app: AppHandle) {
         let quiet = !app.state::<crate::panel::Panel>().is_playing();
         if app.state::<PendingUpdate>().is_pending() {
             if quiet {
-                install(app.clone()).await;
+                install(app.clone(), true).await;
             }
             continue;
         }
@@ -124,7 +124,12 @@ pub async fn watch(app: AppHandle) {
 }
 
 /// Install whatever the last check found, then relaunch.
-pub async fn install(app: AppHandle) {
+///
+/// `wait_for_quiet` is for the automatic paths: the check and the download
+/// both take time, and a song started meanwhile must not be cut off, so the
+/// relaunch waits until the player is quiet again. Asked from the tray or
+/// settings, it relaunches at once.
+pub async fn install(app: AppHandle, wait_for_quiet: bool) {
     let Some(update) = app.state::<PendingUpdate>().take() else {
         notify(&app, "Nothing to install", "Check for updates first.");
         return;
@@ -142,6 +147,11 @@ pub async fn install(app: AppHandle) {
         .await
     {
         Ok(()) => {
+            if wait_for_quiet {
+                while app.state::<crate::panel::Panel>().is_playing() {
+                    tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+                }
+            }
             log::info!("installed {version}, restarting");
             app.restart();
         }
