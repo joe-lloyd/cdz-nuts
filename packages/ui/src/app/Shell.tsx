@@ -2,12 +2,13 @@ import { GlobalSearch } from './GlobalSearch.tsx';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
-import { usePlayerStatus, useStats } from '../api/hooks.ts';
+import { useListenBrainz, usePlayerStatus, useStats } from '../api/hooks.ts';
+import { RadioEnabled } from '../components/primitives.tsx';
 import { ago } from '../lib/format.ts';
 import { PlayerBar } from '../player/PlayerBar.tsx';
 import { player, usePlayer } from '../player/usePlayer.ts';
-import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, PARENT_OF, type TabId } from './routes.tsx';
-import { useDesktop, useUiBuild } from '../api/hooks.ts';
+import { TABS, TAB_ICONS, PAGE_COPY, ASIDE_COPY, DETAIL_COPY, NOT_FOUND_COPY, PARENT_OF, SETTINGS_ICON, type TabId } from './routes.tsx';
+import { useDesktop } from '../api/hooks.ts';
 
 /**
  * The frame everything renders inside.
@@ -15,6 +16,9 @@ import { useDesktop, useUiBuild } from '../api/hooks.ts';
  * The player bar lives here, above the router outlet, and is never unmounted --
  * that is what lets audio survive navigation. Only <Outlet /> changes.
  */
+/** A detail page keeps its list's menu item lit, so you know where you are. */
+const parentTab = (path: string): string | undefined => PARENT_OF[path.split('/')[1] ?? ''];
+
 export function Shell() {
   const location = useLocation();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -28,10 +32,12 @@ export function Shell() {
     return () => document.body.classList.remove('nav-open');
   }, [drawerOpen]);
 
-  const { kicker, title, parent } = describe(location.pathname);
+  const { kicker, title, parent, detail } = describe(location.pathname);
+  // Unknown until it answers, so links show rather than flicker in.
+  const radio = useListenBrainz();
 
   return (
-    <>
+    <RadioEnabled value={radio.data?.enabled ?? true}>
       <div className="loader" aria-hidden="true" />
       <div className="ambient ambient-one" />
       <div className="ambient ambient-two" />
@@ -49,6 +55,15 @@ export function Shell() {
           <b>Music Taste</b>
         </Link>
         <BackButton parent={parent} className="page-back top-back" />
+        <button
+          className="search-toggle" type="button" aria-label="Search"
+          onClick={() => {
+            document.body.classList.add('search-open');
+            document.querySelector<HTMLInputElement>('input[aria-label="Search music"]')?.focus();
+          }}
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="m16 16 4.5 4.5" /></svg>
+        </button>
       </header>
 
       <div className="nav-backdrop" hidden={!drawerOpen} onClick={() => setDrawerOpen(false)} />
@@ -60,10 +75,13 @@ export function Shell() {
               <span className="brand-mark" aria-hidden="true"><span /></span>
               <span><b>Music Taste</b><small>Private archive</small></span>
             </Link>
+            <button className="drawer-close" type="button" aria-label="Close menu" onClick={() => setDrawerOpen(false)}>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18" /></svg>
+            </button>
           </header>
           <nav id="nav" aria-label="Library">
             {(Object.keys(TABS) as TabId[]).map((tab) => (
-              <NavLink key={tab} to={`/${tab}`} className={({ isActive }) => (isActive ? 'on' : undefined)}>
+              <NavLink key={tab} to={`/${tab}`} className={({ isActive }) => (isActive || parentTab(location.pathname) === tab ? 'on' : undefined)}>
                 {TAB_ICONS[tab]}
                 <span>{TABS[tab]}</span>
               </NavLink>
@@ -72,22 +90,25 @@ export function Shell() {
           <div className="sidebar-foot">
             <ArchiveState />
             <SyncLine />
-            <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
-              Settings
-            </NavLink>
+            <div className="foot-row">
+              <NavLink to="/settings" className={({ isActive }) => (isActive ? 'on' : undefined)}>
+                {SETTINGS_ICON}
+                <span>About</span>
+                <VersionChip />
+              </NavLink>
+            </div>
           </div>
         </aside>
 
         <section className="content-shell">
           <GlobalSearch>
-          <header className="page-head">
+          <header className={`page-head${detail ? ' is-detail' : ''}`}>
             <div>
               <BackButton parent={parent} className="page-back" />
-                <span className="page-kicker">{kicker}</span>
-              <h1>{title}</h1>
+              <span className="page-kicker">{kicker}</span>
+              {detail ? null : <h1>{title}</h1>}
             </div>
             <div className="page-head-tools">
-              <VersionChip />
               <ReconnectButton />
             </div>
           </header>
@@ -98,7 +119,7 @@ export function Shell() {
 
       <PlayerBar />
       <Toast />
-    </>
+    </RadioEnabled>
   );
 }
 
@@ -106,13 +127,11 @@ export function Shell() {
  * Which build you are looking at, in the one place you always see.
  *
  * The desktop app has a version number that can fall behind, so it gets one.
- * A browser is always on whatever the server just served, so a version number
- * there would be theatre; it shows the front-end build id instead, which is
- * the thing worth comparing against a desktop app that embeds its own copy.
+ * A browser is always on whatever the server just served, so it shows
+ * nothing here; its front-end build id is on the Settings page.
  */
 export function VersionChip() {
   const { data: desktop } = useDesktop();
-  const { data: build } = useUiBuild();
 
   if (desktop) {
     return (
@@ -126,30 +145,27 @@ export function VersionChip() {
       </span>
     );
   }
-  if (!build) return null;
-  return (
-    <span className="version-chip" title="The front end this server is serving">
-      {build.digest.slice(0, 7)}
-    </span>
-  );
+  return null;
 }
 
 /** What the page head says, derived from the path rather than set by each view. */
-function describe(pathname: string): { kicker: string; title: string; parent: string | null } {
+function describe(pathname: string): { kicker: string; title: string; parent: string | null; detail: boolean } {
   const [, head, ...rest] = pathname.split('/');
   if (head === 'radio' && rest.length >= 2) {
-    return { kicker: 'Something you have not heard yet', title: 'Radio', parent: 'radio' };
+    return { kicker: 'Something you have not heard yet', title: 'Radio', parent: 'radio', detail: false };
   }
+  // A detail page names its artist, album or playlist in its own hero, so the
+  // head carries only the kicker and the way back.
   if (head && head in DETAIL_COPY && rest.length) {
     const copy = DETAIL_COPY[head as keyof typeof DETAIL_COPY];
-    return { kicker: copy[0], title: copy[1], parent: PARENT_OF[head] ?? null };
+    return { kicker: copy[0], title: copy[1], parent: PARENT_OF[head] ?? null, detail: true };
   }
   const aside = head ? ASIDE_COPY[head] : undefined;
-  if (aside) return { kicker: aside[0], title: aside[1], parent: null };
-  // Overview is the fallback as well as a real path, because it is what the
-  // logo goes to and what an unknown head should land on.
-  const copy = (head ? PAGE_COPY[head] : undefined) ?? PAGE_COPY.overview!;
-  return { kicker: copy[0], title: copy[1], parent: null };
+  if (aside) return { kicker: aside[0], title: aside[1], parent: null, detail: false };
+  // The logo and the bare root land on the overview.
+  if (!head) return { kicker: PAGE_COPY.overview![0], title: PAGE_COPY.overview![1], parent: null, detail: false };
+  const copy = PAGE_COPY[head] ?? NOT_FOUND_COPY;
+  return { kicker: copy[0], title: copy[1], parent: null, detail: false };
 }
 
 /**
@@ -196,7 +212,7 @@ function ArchiveState() {
   return (
     <div className="archive-state" data-state={state}>
       <span className="state-dot" aria-hidden="true" />
-      <span><b>{label}</b><small>{data?.detail ?? 'Jellyfin connection'}</small></span>
+      <span><b>{label}</b><small>{(data?.detail ?? 'Jellyfin connection').replace(/ ready$/, '')}</small></span>
     </div>
   );
 }

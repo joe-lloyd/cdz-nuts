@@ -18,6 +18,7 @@ vi.mock('./usePlayer.ts', () => ({
 // anything to do with whether the bar's copy is linked.
 vi.mock('./QueuePanel.tsx', () => ({ QueuePanel: () => null }));
 vi.mock('./LyricsPanel.tsx', () => ({ LyricsPanel: () => null }));
+vi.mock('../components/LikeButton.tsx', () => ({ LikeButton: () => null }));
 
 const { PlayerBar } = await import('./PlayerBar.tsx');
 

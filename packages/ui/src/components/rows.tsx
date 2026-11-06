@@ -1,67 +1,79 @@
 import { LikeButton } from './LikeButton.tsx';
 import { Link } from 'react-router-dom';
 
-import { bareAlbumName, day, dur } from '../lib/format.ts';
+import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, SpotifyLink, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, describeQuality, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { use, type ReactNode } from 'react';
 
-const DownloadBadge = () => (
-  <span className="dl" title="already in the local library">
-    <svg viewBox="0 0 24 24" width="1em" height="1em" aria-hidden="true">
-      <path fill="currentColor" d="M11 3h2v8h3l-4 4-4-4h3z" /><path fill="currentColor" d="M5 19h14v2H5z" />
-    </svg>
-  </span>
-);
+/** Most of the shelf is in the archive, so the badge marks what is not. */
+const MissingBadge = () => <span className="dl missing" title="No copy in your archive yet">Not in archive</span>;
 
-export function TrackRow({ track, endText, rank }: { track: Track; endText?: string | undefined; rank?: number | null | undefined }) {
-  const state = useNowPlaying(track.id);
+/**
+ * A song's state, in words, on a line of its own so it is never the part that
+ * gets cut off. `removed` names what removed_at means where the row is shown:
+ * un-liked on a liked list, taken out on a playlist.
+ */
+function RowStatus({ track, archive, removed, note, action }: {
+  track: Track; archive: string; removed: string; note?: ReactNode; action?: ReactNode;
+}) {
+  const parts = [
+    track.removed_at ? <span key="r">{`${removed} ${shortDay(track.removed_at)}`}</span> : null,
+    archive ? <span key="a" className="archive-label">{archive}</span> : null,
+    action ? <span key="q" className="row-request">{action}</span> : null,
+    note ? <span key="n" className="row-note">{note}</span> : null,
+  ].filter(Boolean);
+  return parts.length ? <span className="row-status">{parts}</span> : null;
+}
+
+/**
+ * THE song row. Every song list renders through this, in the same slots:
+ * rank, play, art, title over artist and album with any status after it,
+ * then quality, radio, the date column, heart and length.
+ * `date` is already-formatted text for the date column; `note` joins the
+ * status; `current` says whether this row is the one playing, for a
+ * history that can list the same song twice.
+ */
+export function TrackRow({ track, endText, rank, date, note, current = true, removed = 'Removed on Spotify' }: {
+  track: Track; endText?: string | undefined; rank?: number | null | undefined; date?: string | undefined;
+  note?: ReactNode; current?: boolean | undefined; removed?: string | undefined;
+}) {
+  const playing = useNowPlaying(track.id);
+  const state = current ? playing : '';
+  const archive = useArchiveState(track);
   const albumHref = track.album_id ? `/album/${track.album_id}` : null;
   return (
     <div className={`row${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
       {rank != null ? <span className="rank">{rank}</span> : null}
-      <PlayControl track={track} />
+      {/* A song you do not hold has nothing to play; its request is on the status line. */}
+      {archive.state === 'missing' ? <span className="track-play-slot" aria-hidden="true" /> : <PlayControl track={track} current={current} />}
       {albumHref
-        ? <Link to={albumHref}><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
+        ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
       <div className="mid">
-        <div>{track.name} {track.removed_at ? <span className="chip bad">{`removed ${day(track.removed_at)}`}</span> : null}</div>
-        <div className="sub">
-          {track.artists ?? ''}
-          {track.album ? <> · {albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album}</> : null}
+        <div>{track.name}</div>
+        <div className="sub sub-line">
+          <span className="sub-text">
+            {track.artists ?? ''}
+            {track.artists && track.album ? ' · ' : ''}
+            {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
+          </span>
+          <RowStatus
+            track={track} archive={playing ? '' : archive.label} removed={removed} note={note}
+            action={archive.state === 'missing' ? <PlayControl track={track} words /> : null}
+          />
         </div>
       </div>
-      <LikeButton track={track} />
       <MediaBadges row={track} />
-      <div className="end">{endText ?? dur(track.duration_ms)}</div>
       <RadioControl track={track} />
+      {date !== undefined ? <div className="row-date">{date}</div> : null}
+      <LikeButton track={track} />
+      <div className="end">
+        {endText ?? dur(track.duration_ms)}
+        {/* The phone has no quality column, so the quality sits under the length there. */}
+        {track.quality_label ? <small className={`end-quality${isLossless(track.quality) ? ' lossless' : ''}`} title={describeQuality(track.quality, track.quality_label)}>{readableQuality(track.quality_label)}</small> : null}
+      </div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
-    </div>
-  );
-}
-
-/** Denser than a full row, so two fit side by side at desktop width. */
-export function SongCard({ track, meta }: { track: Track; meta?: string | undefined }) {
-  const state = useNowPlaying(track.id);
-  const albumHref = track.album_id ? `/album/${track.album_id}` : null;
-  return (
-    <div className={`song-card${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
-      <PlayControl track={track} />
-      {albumHref
-        ? <Link to={albumHref}><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
-        : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
-      <div className="song-main">
-        <b>{track.name}</b>
-        <span className="song-sub">{track.artists ?? track.artist_name ?? ''}</span>
-        {track.album ? (
-          <span className="song-album">{albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album}</span>
-        ) : null}
-      </div>
-      <MediaBadges row={track} />
-      <div className="song-end">
-        <div className="song-actions"><RadioControl track={track} /><LikeButton track={track} /></div>
-        <span className="song-dur">{dur(track.duration_ms)}</span>
-        {meta ? <small>{meta}</small> : null}
-      </div>
     </div>
   );
 }
@@ -79,13 +91,13 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
   const type = (album.album_group && album.album_group !== 'album') ? album.album_group
     : (album.album_type === 'single' || album.kind === 'single') ? 'single' : '';
   const editions = album.editions?.length ? `${album.editions.length + 1} editions` : '';
-  const line = [year, type, editions, album.is_saved ? 'saved ✓' : ''].filter(Boolean).join(' · ');
+  const line = [year, type, editions].filter(Boolean).join(' · ');
 
   const art = (
     <Pic
       kind="albums" id={id} cdn={album.image_url} name={name}
       overlay={<>
-        {album.downloaded ? <DownloadBadge /> : null}
+        {album.downloaded === 0 || album.downloaded === false ? <MissingBadge /> : null}
         {when ? <span className="al-when">{when}</span> : null}
       </>}
     />
@@ -93,12 +105,12 @@ export function AlbumCell({ album, when, extraClass }: { album: Album; when?: st
 
   return (
     <div className={`al-card${extraClass ? ` ${extraClass}` : ''}`}>
-      {href ? <Link className="al-art" to={href}>{art}</Link> : <span className="al-art">{art}</span>}
+      {href ? <Link className="al-art" to={href} tabIndex={-1} aria-hidden="true">{art}</Link> : <span className="al-art">{art}</span>}
       <div className="al-body">
         <b>{href ? <Link to={href}>{name}</Link> : name}</b>
         <span className="sub">{album.artists ?? ''}</span>
         {line ? <span className="sub dim">{line}</span> : null}
-        <Badges row={album} />
+        <Badges row={album} compact />
         <MediaBadges row={album} />
       </div>
     </div>
@@ -110,10 +122,15 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
   const days = when ? Math.ceil((when.getTime() - Date.now()) / 864e5) : null;
   const soon = days != null && days >= 0 && days <= 14;
   const countdown = days == null ? '' : days <= 0 ? 'tonight' : days === 1 ? 'tomorrow' : `in ${days} days`;
+  // The leaf already gives the date and the badge the countdown; the foot
+  // adds the weekday and, when one is announced, the time.
+  // A date-only value parses as UTC midnight, which is not a time anyone announced.
+  const timed = when && !/^\d{4}-\d{2}-\d{2}$/.test(event.datetime ?? '') && (when.getHours() || when.getMinutes());
   const dateLine = when
-    ? when.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })
+    ? when.toLocaleString('en-GB', { weekday: 'long', ...(timed ? { hour: 'numeric', minute: '2-digit' } : {}) })
     : 'date TBA';
-  const showTitle = event.name && (event.name ?? '').toLowerCase() !== (event.artist_name ?? '').toLowerCase()
+  // An event name that only repeats the artist adds nothing under the artist.
+  const showTitle = event.name && !(event.name ?? '').toLowerCase().startsWith((event.artist_name ?? '').toLowerCase())
     ? event.name : '';
 
   const art = (
@@ -144,6 +161,26 @@ export function GigCard({ event, index = 0 }: { event: GigEvent; index?: number 
           {event.url ? <a className="gig-tickets" href={event.url} target="_blank" rel="noopener">Tickets ↗</a> : null}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Column names over a song list, so a date says what it is. Desktop only. */
+export function TrackHeader({ rank, date, art = true, quality = true, length = true }: {
+  rank?: boolean | undefined; date?: string | undefined; art?: boolean | undefined; quality?: boolean | undefined; length?: boolean | undefined;
+}) {
+  const radio = use(RadioEnabled);
+  return (
+    <div className="row row-head" aria-hidden="true">
+      {rank ? <span className="rank">#</span> : null}
+      <span className="head-lead" />
+      {art ? <span className="head-art" /> : null}
+      <div className="mid">Title</div>
+      {quality ? <span className="head-badges">Quality</span> : null}
+      {radio ? <span className="head-radio" /> : null}
+      {date ? <div className="row-date">{date}</div> : null}
+      <span className="head-like" />
+      {length ? <div className="end">Length</div> : null}
     </div>
   );
 }

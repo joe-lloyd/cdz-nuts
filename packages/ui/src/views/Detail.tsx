@@ -1,33 +1,36 @@
-import { AlbumLikeButton, ArtistLikeButton } from '../components/LikeButton.tsx';
-import { useState } from 'react';
+import { AlbumLikeButton, ArtistLikeButton, LikeButton } from '../components/LikeButton.tsx';
+import { useState, type ReactNode } from 'react';
 import { post } from '../api/client.ts';
 import { Link, useParams } from 'react-router-dom';
 
 import { useAlbum, useArtist, useEvents } from '../api/hooks.ts';
-import { day, dur } from '../lib/format.ts';
-import { AlbumCell, GigCard, TrackRow } from '../components/rows.tsx';
+import { day, dur, shortDay } from '../lib/format.ts';
+import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
-  BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink,
+  BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, describeQuality, isLossless, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
-import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
+import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
+import type { Track } from '../api/types.ts';
 
 export function AlbumDetail() {
   const { id } = useParams();
   const { data, isPending, error } = useAlbum(id);
-  const playAll = usePlayAll();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading album…" hero rows={4} />;
   if (error) return <Empty>{error.message}</Empty>;
   const album = data?.album;
   if (!album) return <Empty>unknown album</Empty>;
   const tracks = data!.tracks;
 
   const meta = [
-    (album.release_date ?? '').slice(0, 10), album.album_type,
-    album.total_tracks ? `${album.total_tracks} tracks` : '',
-    album.label ?? '', album.popularity != null ? `popularity ${album.popularity}` : '',
-    album.is_saved ? `saved ${day(album.saved_at)} ✓` : '',
-  ].filter(Boolean).join(' · ');
+    (album.release_date ?? '').slice(0, 4), album.album_type,
+    album.total_tracks ? `${album.total_tracks} songs` : '',
+    album.downloaded ? 'in your archive' : '',
+  ];
+  const detail = [
+    album.label ?? '', album.popularity != null ? `Spotify popularity ${album.popularity}/100` : '',
+    album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
+  ].filter(Boolean);
 
   const discs = [...new Set(tracks.map((t) => t.disc_number ?? 1))].sort((a, b) => a - b);
   // The canonical is named separately, so it is not also "listed as".
@@ -39,27 +42,28 @@ export function AlbumDetail() {
         <Pic kind="albums" id={album.id} cdn={album.image_url} name={album.name} />
         <div>
           <h1>{album.name}</h1>
-          <div className="meta">
-            {data!.artists.map((x, i) => (
+          <Facts items={[
+            data!.artists.map((x, i) => (
               <span key={`${x.name}-${i}`}>
                 {i ? ', ' : ''}
                 {x.id ? <Link to={`/artist/${x.id}`}><b>{x.name}</b></Link> : <b>{x.name}</b>}
               </span>
-            ))}
-          </div>
-          <div className="meta">{meta}</div>
+            )),
+            ...meta,
+          ]} />
+          {detail.length ? <Facts items={detail} detail /> : null}
           <Badges row={album} />
           {editions.length || data!.canonical ? (
             <div className="meta editions">
-              {data!.canonical ? <>an edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link></> : null}
+              {data!.canonical ? <>An edition of <Link to={`/album/${data!.canonical.id}`}>{data!.canonical.name}</Link></> : null}
               {data!.canonical && editions.length ? ' · ' : ''}
-              {editions.length ? 'also listed as ' : ''}
-              {editions.map((e, i) => {
-                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} tracks` : ''].filter(Boolean).join(', ');
+              {editions.length ? 'Also listed as ' : ''}
+              {editions.map((e) => {
+                const detail = [(e.release_date ?? '').slice(0, 4), e.total_tracks ? `${e.total_tracks} songs` : '', e.is_saved ? 'saved' : ''].filter(Boolean).join(' · ');
                 return (
-                  <span key={e.id}>
-                    {i ? ', ' : ''}<Link to={`/album/${e.id}`}>{e.name}</Link>{detail ? ` (${detail})` : ''}{e.is_saved ? ' ✓' : ''}
-                  </span>
+                  <Link className="edition" to={`/album/${e.id}`} key={e.id}>
+                    <b>{e.name}</b>{detail ? <span>{detail}</span> : null}
+                  </Link>
                 );
               })}
             </div>
@@ -67,9 +71,7 @@ export function AlbumDetail() {
           <div className="hero-actions">
             <AlbumLikeButton album={album} />
             {album.downloaded && tracks.length ? (
-              <button className="primary-action play-album" type="button" onClick={() => playAll(tracks)}>
-                {PLAY_ICON} Play album
-              </button>
+              <CollectionPlay tracks={tracks} label="Play album" />
             ) : null}
             {album.local || !album.id ? null : <SpotifyButton type="album" id={album.id} />}
             <BandcampButton
@@ -80,30 +82,17 @@ export function AlbumDetail() {
         </div>
       </div>
 
-      {album.id && !album.local ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
-      <h2>Tracks{tracks.length ? ` (${tracks.length} in library)` : ''}</h2>
+      {album.id && !album.local && !(album.downloaded && album.total_tracks && tracks.length >= album.total_tracks) ? <AlbumImport id={album.id} artist={data!.artists.map(a => a.name).join(', ')} album={album.name} /> : null}
+      <h2>Songs {tracks.length ? <span className="count">{tracks.length} in your archive</span> : null}</h2>
       {tracks.length ? (
         <PlayScope tracks={tracks}>
           {discs.map((disc) => (
             <div key={disc}>
               {discs.length > 1 ? <h2>Disc {disc}</h2> : null}
               <div className="rows">
+                <TrackHeader rank art={false} />
                 {tracks.filter((t) => (t.disc_number ?? 1) === disc).map((t) => (
-                  // Badges per TRACK, not per album: one folder can mix a
-                  // 24-bit rip with a transcode, and this is where that shows.
-                  <div className="row" key={t.id}>
-                    <span className="rank">{t.track_number ?? ''}</span>
-                    <PlayControl track={t} />
-                    <span className="heart">{t.liked ? '♥' : ''}</span>
-                    <div className="mid">
-                      <div>{t.name}</div>
-                      <div className="sub">{t.artists ?? ''}</div>
-                    </div>
-                    <MediaBadges row={t} />
-                    <div className="end">{dur(t.duration_ms)}</div>
-                    <RadioControl track={t} />
-                    {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
-                  </div>
+                  <AlbumTrackRow key={t.id} track={t} />
                 ))}
               </div>
             </div>
@@ -114,7 +103,46 @@ export function AlbumDetail() {
   );
 }
 
-const RANK_LABEL: Record<string, string> = { short_term: '4w', medium_term: '6mo', long_term: 'yrs' };
+/**
+ * A track on its album's page. Badges per TRACK, not per album: one folder
+ * can mix a 24-bit rip with a transcode, and this is where that shows.
+ */
+function AlbumTrackRow({ track: t }: { track: Track }) {
+  const state = useNowPlaying(t.id);
+  return (
+    <div className={`row${state}`} data-track-id={t.id}>
+      <span className="rank">{t.track_number ?? ''}</span>
+      <PlayControl track={t} />
+      <div className="mid">
+        <div>{t.name}</div>
+        <div className="sub">{t.artists ?? ''}</div>
+      </div>
+      <MediaBadges row={t} />
+      <RadioControl track={t} />
+      <LikeButton track={t} />
+      <div className="end">
+        {dur(t.duration_ms)}
+        {t.quality_label ? <small className={`end-quality${isLossless(t.quality) ? ' lossless' : ''}`} title={describeQuality(t.quality, t.quality_label)}>{readableQuality(t.quality_label)}</small> : null}
+      </div>
+      {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
+    </div>
+  );
+}
+
+/**
+ * Facts in a row, dot-separated. Each one keeps to itself and a line only
+ * wraps between them; a fact that starts a line drops its dot.
+ */
+function Facts({ items, detail = false }: { items: ReactNode[]; detail?: boolean }) {
+  const kept = items.filter((item) => item !== '' && item != null && item !== false);
+  return (
+    <div className={`meta facts${detail ? ' meta-detail' : ''}`}>
+      {kept.map((item, i) => <span key={i}>{item}</span>)}
+    </div>
+  );
+}
+
+const RANK_LABEL: Record<string, string> = { short_term: 'this month', medium_term: 'this half-year', long_term: 'all time' };
 const GROUPS: Array<[string, string]> = [
   ['album', 'Albums'], ['single', 'Singles & EPs'], ['compilation', 'Compilations'],
 ];
@@ -122,7 +150,7 @@ const GROUPS: Array<[string, string]> = [
 export function ArtistDetail() {
   const { id } = useParams();
   const { data, isPending, error } = useArtist(id);
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading artist…" hero rows={4} />;
   if (error) return <Empty>{error.message}</Empty>;
   const artist = data?.artist;
   if (!artist) return <Empty>unknown artist</Empty>;
@@ -130,10 +158,12 @@ export function ArtistDetail() {
   const likedLive = data!.liked.filter((t) => !t.removed_at).length;
   const meta = [
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
-    artist.popularity != null ? `popularity ${artist.popularity}` : '',
-    likedLive ? `${likedLive} liked tracks` : '',
-    ...data!.topRanks.map((r) => `#${r.rank} (${RANK_LABEL[r.time_range] ?? r.time_range})`),
-  ].filter(Boolean).join(' · ');
+    artist.popularity != null ? `Spotify popularity ${artist.popularity}/100` : '',
+    likedLive ? `${likedLive} liked songs` : '',
+  ];
+  const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
+  const likedNow = data!.liked.filter((t) => !t.removed_at);
+  const likedOnce = data!.liked.filter((t) => t.removed_at);
 
   return (
     <>
@@ -143,23 +173,41 @@ export function ArtistDetail() {
           <h1>{artist.name}</h1>
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
-          <div className="meta">{meta}</div>
+          <Facts items={meta} />
+          {ranks.length ? <div className="meta meta-detail">Top artist {ranks.join(' · ')}</div> : null}
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
+            {likedNow.length ? (
+              <CollectionPlay tracks={likedNow} label="Play liked songs" />
+            ) : null}
             {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}
             <BandcampButton query={artist.name} type="b" />
           </div>
         </div>
       </div>
 
-      {data!.events?.length ? (
+
+      {/* Liked now, and liked once: one list under "Liked songs" would
+          contradict itself, so songs since unliked get their own heading. */}
+      {likedNow.length ? (
         <>
-          <h2>Upcoming shows</h2>
-          <div className="gig-carousel">
-            {data!.events!.map((e, i) => (
-              <GigCard key={i} index={i} event={{ ...e, artist_name: artist.name, image_url: artist.image_url ?? null }} />
-            ))}
-          </div>
+          <h2>Liked songs</h2>
+          <PlayScope tracks={likedNow}>
+            <div className="rows">
+              <TrackHeader date="Liked" />
+              {likedNow.map((t) => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
+            </div>
+          </PlayScope>
+        </>
+      ) : null}
+      {likedOnce.length ? (
+        <>
+          <h2>Liked once</h2>
+          <PlayScope tracks={likedOnce}>
+            <div className="rows">
+              {likedOnce.map((t) => <TrackRow key={t.id} track={t} date={day(t.added_at)} removed="Unliked on Spotify" />)}
+            </div>
+          </PlayScope>
         </>
       ) : null}
 
@@ -171,21 +219,22 @@ export function ArtistDetail() {
         const rows = data!.albums.filter((al) => (al.album_group ?? 'album') === group);
         return rows.length ? (
           <div key={group}>
-            <h2>{title} ({rows.length})</h2>
+            <h2>{title} <span className="count">{rows.length}</span></h2>
             <div className="al-grid">{rows.map((r) => <AlbumCell key={r.id ?? r.name} album={r} />)}</div>
           </div>
         ) : null;
       })}
       {data!.albums.length ? null : <Empty>no albums known yet</Empty>}
 
-      {data!.liked.length ? (
+
+      {data!.events?.length ? (
         <>
-          <h2>Liked tracks</h2>
-          <PlayScope tracks={data!.liked}>
-            <div className="rows">
-              {data!.liked.map((t) => <TrackRow key={t.id} track={t} endText={day(t.added_at)} />)}
-            </div>
-          </PlayScope>
+          <h2>Upcoming shows</h2>
+          <div className="gig-carousel">
+            {data!.events!.map((e, i) => (
+              <GigCard key={i} index={i} event={{ ...e, artist_name: artist.name, image_url: artist.image_url ?? null }} />
+            ))}
+          </div>
         </>
       ) : null}
     </>
@@ -194,7 +243,7 @@ export function ArtistDetail() {
 
 export function Shows() {
   const { data, isPending, error } = useEvents();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading shows…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const d = data!;
   if (!d.near.length && !d.elsewhere.length) {
@@ -202,13 +251,13 @@ export function Shows() {
   }
   return (
     <>
-      <h2>Near you ({d.countries.join(', ')})</h2>
+      <h2>Near you · {d.countries.join(', ')} <span className="count">{d.near.length}</span></h2>
       {d.near.length
         ? <div className="gig-grid">{d.near.map((e, i) => <GigCard key={i} event={e} index={i} />)}</div>
         : <Empty>nothing announced nearby</Empty>}
       {d.elsewhere.length ? (
         <>
-          <h2>Elsewhere ({d.elsewhere.length})</h2>
+          <h2>Elsewhere <span className="count">{d.elsewhere.length}</span></h2>
           <div className="gig-grid">{d.elsewhere.map((e, i) => <GigCard key={i} event={e} index={i} />)}</div>
         </>
       ) : null}
@@ -227,7 +276,7 @@ function AlbumImport({ id, artist, album }: { id: string; artist: string; album:
       await post(mode === 'tracks' ? '/api/albums/import-tracks' : '/api/upgrades', mode === 'tracks'
         ? { albumId: id }
         : { sourceUrl: url, sourceMode: mode, artist, album, title: album, downloader: 'yt-dlp' });
-      setMessage('Album queued. Follow progress in the FLAC queue.');
+      setMessage('Album queued. Follow progress under Requests.');
     } catch (error) { setMessage((error as Error).message); }
     finally { setBusy(false); }
   }

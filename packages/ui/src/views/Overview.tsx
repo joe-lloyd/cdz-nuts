@@ -1,11 +1,10 @@
 import { Link } from 'react-router-dom';
 
-import { useOverview, useProvenance, useReleases } from '../api/hooks.ts';
+import { useLatest, useOverview, useProvenance, useReleases } from '../api/hooks.ts';
 import { ago, releaseDay } from '../lib/format.ts';
 import { MonthChart, ProvBars, RhythmChart, StackChart, VIZ, VizLegend } from '../charts/charts.tsx';
 import { AlbumCell } from '../components/rows.tsx';
 import { Empty, Skeleton } from '../components/primitives.tsx';
-import { Latest } from './Library.tsx';
 import { Radio } from './Radio.tsx';
 import type { QualityTier, StackPoint } from '../api/types.ts';
 
@@ -42,8 +41,8 @@ export function Overview() {
     : `Down ${-delta}% on the month before — quieter days.`;
 
   const tiles: Array<[string, string | number]> = [
-    ['artists in your taste', c.tasteArtists], ['liked songs', c.liked],
-    ['saved albums', c.albums], ['playlists', c.playlists],
+    ['artists in your taste', c.tasteArtists], ['songs liked on Spotify', c.liked],
+    ['albums saved on Spotify', c.albums], [Number(c.playlists) === 1 ? 'playlist' : 'playlists', c.playlists],
     ['plays on record', Number(c.totalPlays).toLocaleString()],
     ['played right here', Number(c.appPlays).toLocaleString()],
     ...(o.history.rows ? [['lifetime hours', Number(o.history.hours).toLocaleString()] as [string, string]] : []),
@@ -62,23 +61,20 @@ export function Overview() {
 
   return (
     <>
+      <RecentlyAdded />
+
       <section className="overview-hero">
         <div>
           <span className="eyebrow">Last 30 days · Spotify + this player</span>
-          <h2>{Number(o.plays30).toLocaleString()} plays, <em>{o.hours30} hours.</em></h2>
+          <h2>{Number(o.plays30).toLocaleString()} plays,{' '}<em>{o.hours30} hours.</em></h2>
           <p>{trend}</p>
         </div>
-        <aside className="hero-signal">
-          <span>Downloaded now</span>
-          <b>{Number(c.downloaded ?? 0).toLocaleString()} albums</b>
-          <small>{o.downloadsSyncedAt ? `Library checked ${ago(o.downloadsSyncedAt)}` : 'Waiting for the first library snapshot'}</small>
-        </aside>
       </section>
 
       <div className="tiles">
-        <div className="tile download-tile">
+        <div className="tile">
           <b>{(c.downloaded ?? 0).toLocaleString()}</b>
-          <span>albums downloaded{o.downloadsSyncedAt ? ` · ${ago(o.downloadsSyncedAt)}` : ''}</span>
+          <span>albums in your archive{o.downloadsSyncedAt ? <small>checked {ago(o.downloadsSyncedAt)}</small> : null}</span>
         </div>
         {tiles.map(([k, v]) => <div className="tile" key={k}><b>{v}</b><span>{k}</span></div>)}
       </div>
@@ -148,12 +144,9 @@ export function Overview() {
 
       <ReleaseSection />
 
-      {/* Both were sidebar entries of their own until the list stopped fitting
-          a window. They are sections here because this is the page you land on
-          from the logo, so they cost a scroll rather than a click. */}
-      <h2 id="latest">Latest downloads</h2>
-      <Latest />
-
+      {/* Radio was a sidebar entry of its own until the list stopped fitting a
+          window. It is a section here because this is the page you land on
+          from the logo, so it costs a scroll rather than a click. */}
       <h2 id="radio">Radio</h2>
       <Radio />
     </>
@@ -182,4 +175,25 @@ export function Overview() {
       </>
     );
   }
+}
+
+/**
+ * Something to play before anything to read: the newest albums in the
+ * archive, one row, with the full list a click away.
+ */
+function RecentlyAdded() {
+  const { data } = useLatest();
+  const rows = (data ?? []).slice(0, 6);
+  if (!rows.length) return null;
+  return (
+    <section className="recent" aria-labelledby="recent-head">
+      <div className="section-head">
+        <h2 id="recent-head">Latest downloads</h2>
+        <Link to="/latest">See all</Link>
+      </div>
+      <div className="al-grid recent-row">
+        {rows.map((row, i) => <AlbumCell key={`${row.id ?? row.album_id ?? row.name}-${i}`} album={row} />)}
+      </div>
+    </section>
+  );
 }

@@ -1452,7 +1452,9 @@ function decorateBadges(value: unknown, depth = 0): unknown {
       // A row with no duration and no album of its own is a release, not a
       // track (the Albums grid and Latest downloads). Matching those against
       // the track index would be meaningless, so they get the album summary.
-      const isRelease = row.duration_ms == null && row.album == null;
+      // A single on Latest downloads is a release that is one file, so it
+      // takes that file's badge.
+      const isRelease = row.duration_ms == null && row.album == null && row.kind !== 'single';
       const badge = isRelease
         ? albums.get(albumMatchKey(artist, row.name))
         : badges.get(provenanceKey(artist, row.name));
@@ -1917,9 +1919,11 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       artist: artist ?? null,
       albums: [...spotifyAlbums, ...(typeof artist?.name === 'string' ? libraryOnlyAlbums(artist.name, spotifyAlbums) : [])]
         .sort((a, b) => String(b.release_date ?? '').localeCompare(String(a.release_date ?? ''))),
+      // artists is what the archive badges match on, as on every other list.
       liked: query(`
         SELECT t.id, t.name, t.duration_ms, lt.added_at, lt.removed_at,
-               al.name AS album, al.id AS album_id, al.image_url
+               al.name AS album, al.id AS album_id, al.image_url,
+               (SELECT group_concat(a.name, ', ' ORDER BY ta2.position) FROM track_artists ta2 JOIN artists a ON a.id = ta2.artist_id WHERE ta2.track_id = t.id) AS artists
         FROM track_artists ta
         JOIN tracks t ON t.id = ta.track_id
         JOIN liked_tracks lt ON lt.track_id = t.id
@@ -2340,7 +2344,13 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     const localArtists = [...new Set(libraryAlbums.map(a => a.artists))]
       .filter(name => name.toLocaleLowerCase().includes(needle) && !names.has(name.toLocaleLowerCase()))
       .map(name => ({ id: 'local-artist:' + name, name }));
-    return { songs: unique([...songs, ...localSongs], 100), artists: [...artists, ...localArtists].slice(0, 40), albums: unique([...albums, ...localAlbums], 40),
+    // The archive's copy of an album Spotify also lists is the same album: one
+    // result, marked as in the archive, rather than two cards to choose from.
+    const albumKey = (a: { name?: unknown; artists?: unknown }) => `${String(a.name ?? '').toLocaleLowerCase()}\u0000${String(a.artists ?? '').toLocaleLowerCase()}`;
+    const archived = new Set(localAlbums.map(albumKey));
+    const listed = new Set(albums.map(albumKey));
+    const mergedAlbums = [...albums.map(a => ({ ...a, downloaded: archived.has(albumKey(a)) ? 1 : 0 })), ...localAlbums.filter(a => !listed.has(albumKey(a)))];
+    return { songs: unique([...songs, ...localSongs], 100), artists: [...artists, ...localArtists].slice(0, 40), albums: unique(mergedAlbums, 40),
       playlists: unique([...localPlaylists.list().filter(matches), ...playlists], 40) };
   },
 
@@ -2570,7 +2580,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   // locally imported music, which has no row in the taste DB to join to.
   '/api/plays': () => {
     const rows = query(`
-      SELECT p.played_at, p.context_type, 'spotify' AS source, t.id, t.name,
+      SELECT p.played_at, p.context_type, 'spotify' AS source, t.id, t.name, t.duration_ms,
              al.image_url, al.id AS album_id,
              ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
@@ -2579,7 +2589,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       FROM plays p JOIN tracks t ON t.id = p.track_id
       LEFT JOIN albums al ON al.id = t.album_id
       UNION ALL
-      SELECT ap.played_at, NULL, 'app', t.id, t.name, al.image_url, al.id,
+      SELECT ap.played_at, NULL, 'app', t.id, t.name, t.duration_ms, al.image_url, al.id,
              ${FIRST_ARTIST_SQL},
              (SELECT group_concat(a.name, ', ' ORDER BY ta.position)
                 FROM track_artists ta JOIN artists a ON a.id = ta.artist_id
@@ -2603,6 +2613,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
             source: 'app',
             id: track.id,
             name: track.name,
+            duration_ms: track.duration_ms,
             image_url: null,
             album_id: track.album_id,
             artists: track.artists,

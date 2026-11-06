@@ -123,18 +123,18 @@ const EMPTY: PlayerSnapshot = {
   state: 'idle',
   overline: 'Local archive',
   title: 'Choose a track',
-  byline: 'Play from your downloaded collection',
+  byline: 'Pick something to play',
   artistId: '', albumId: '', albumName: '', artUrl: '', artFallbackUrl: '', initial: 'MT',
   radioSeedId: null,
   queue: [], queueIndex: -1, currentId: null,
-  positionText: '0:00', remainingText: '−0:00', progress: 0,
+  positionText: '0:00', remainingText: '0:00', progress: 0,
   canScrub: false, canPlay: false, canReconnect: false, volumePosition: 0.72,
   lyrics: null, lyricsTitle: 'Nothing playing', lyricsSource: 'Lyrics',
   activeLine: -1, activeWord: -1, lyricOffset: 0,
   toast: null,
 };
 
-const artUrlFor = (albumId: string | null | undefined): string => {
+export const artUrlFor = (albumId: string | null | undefined): string => {
   if (!albumId) return '';
   return /^(localalbum|libalbum)-/.test(albumId)
     ? `/img/local/${encodeURIComponent(albumId)}.jpg`
@@ -258,7 +258,9 @@ class PlayerEngine {
       queueIndex: this.queueIndex,
       currentId: this.current?.id ?? null,
       positionText: formatTime(this.audio.currentTime),
-      remainingText: `−${formatTime(Math.max(0, duration - this.audio.currentTime))}`,
+      // Whole seconds on both sides, from the length the lists show, so the
+      // two times always add up to it.
+      remainingText: `−${formatTime(Math.max(0, Math.round(duration) - Math.floor(this.audio.currentTime)))}`,
       progress: duration ? this.audio.currentTime / duration : 0,
       volumePosition: Math.sqrt(clamp(this.audio.volume, 0, 1)),
       lyrics: this.lyricsData,
@@ -524,7 +526,7 @@ class PlayerEngine {
     const albumId = track.album_id ?? '';
     this.patch({
       state: 'loading',
-      overline: 'Local archive · Jellyfin',
+      overline: 'Local archive',
       title: track.name,
       byline: track.artists ?? '',
       artistId: track.artist_id ?? '',
@@ -968,8 +970,8 @@ class PlayerEngine {
     this.patch({
       lyrics: d,
       lyricsSource: d.instrumental ? 'Instrumental'
-        : d.synced?.length ? `${d.source === 'jellyfin' ? 'Synced · local library' : 'Synced · LRCLIB'}${wordly ? ' · word timing' : ''}`
-        : d.plain ? (d.source === 'jellyfin' ? 'Unsynchronized · local library' : 'Unsynchronized · LRCLIB')
+        : d.synced?.length ? `${d.source === 'jellyfin' ? 'Synced lyrics · your library' : 'Synced lyrics · LRCLIB'}${wordly ? ' · word by word' : ''}`
+        : d.plain ? (d.source === 'jellyfin' ? 'Lyrics · your library' : 'Lyrics · LRCLIB')
         : 'Lyrics',
     });
     this.syncLyrics(true);

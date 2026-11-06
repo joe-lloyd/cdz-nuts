@@ -42,7 +42,7 @@ test('a download changes from queued through YouTube and indexing into a working
   draw();
   await waitFor(() => expect(requests.some(r => r.path === '/api/radio/resolve')).toBe(true));
   fireEvent.click(screen.getByRole('button', { name: 'Get a copy of Droplet' }));
-  await screen.findByText('Waiting for download…');
+  await screen.findByText('Queued for download');
   expect(screen.getByRole('button', { name: 'Get a copy of Droplet' })).toBeDisabled();
   await update({ ready: false, stage: 'downloading', status: 'working', phase: 'source' });
   await screen.findByText('Downloading from YouTube…');
@@ -69,7 +69,7 @@ test('an exhausted source job explains the failure and allows another request', 
   const button = screen.getByRole('button', { name: 'Get a copy of Droplet' });
   expect(button).toBeEnabled(); expect(button).toHaveAttribute('title', 'No source found');
   fireEvent.click(button);
-  await screen.findByText('Waiting for download…');
+  await screen.findByText('Queued for download');
 });
 
 test('duplicate rows share one lookup and unmount cancels polling', async () => {

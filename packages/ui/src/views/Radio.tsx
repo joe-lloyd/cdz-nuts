@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useListenBrainz, useStats, useStation, useTopArtists } from '../api/hooks.ts';
 import { post } from '../api/client.ts';
 import { dur } from '../lib/format.ts';
-import { Empty, MediaBadges, PLAY_ICON, PlayControl, RadioControl, Skeleton } from '../components/primitives.tsx';
+import { Empty, MediaBadges, Notice, PLAY_ICON, PlayControl, RadioControl, Skeleton } from '../components/primitives.tsx';
 import { PlayScope, toQueueItem, usePlayAll } from '../components/PlayScope.tsx';
 import { player } from '../player/usePlayer.ts';
 import type { Track } from '../api/types.ts';
@@ -20,9 +20,23 @@ export function Radio() {
   const lb = useListenBrainz();
   const top = useTopArtists();
   const stats = useStats();
-  if (lb.isPending) return <Skeleton />;
+  if (lb.isPending) return <Skeleton label="Checking radio…" />;
   if (!lb.data?.enabled) {
-    return <Empty>Radio is off — no ListenBrainz token is configured.</Empty>;
+    return (
+      <Notice
+        title="Radio needs ListenBrainz"
+        setup="Setup steps for the server owner"
+        steps={[
+          <>A token is a key that lets this server read what you listen to. Copy yours from your <a href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">ListenBrainz settings ↗</a>.</>,
+          <>Whoever runs this server adds it to <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code> and restarts the web container.</>,
+          <>Radio turns on here by itself after the restart.</>,
+        ]}
+      >
+        Radio is not set up yet. Ask whoever runs this server to connect
+        ListenBrainz; then Radio picks songs you have not heard from what you
+        already play.
+      </Notice>
+    );
   }
   const artists = [...new Map((top.data ?? []).filter((a) => a.name).map((a) => [a.name, a])).values()].slice(0, 12);
   const tags = (stats.data?.genres ?? []).slice(0, 12);
@@ -166,7 +180,7 @@ export function Station() {
   }, [pending.length, stationKey, states]);
 
   if (isPending) return <><div role="status"><h1>{kind === 'track' ? 'Song radio' : 'Radio'}</h1>
-    <p>Building your station… Finding related songs with ListenBrainz.</p></div><Skeleton /></>;
+    <p>Building your station… Finding related songs with ListenBrainz.</p></div><Skeleton label={null} /></>;
   if (error) return <div role="alert"><p>Could not build this station. {error.message}</p>
     <button type="button" onClick={() => void refetch()}>Try again</button></div>;
   if (data?.error || !tracks.length) {

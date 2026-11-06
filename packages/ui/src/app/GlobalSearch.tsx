@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { get, qs } from '../api/client.ts';
 import type { Album, Artist, Playlist, Track } from '../api/types.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
-import { AlbumCell, SongCard } from '../components/rows.tsx';
+import { AlbumCell, TrackRow } from '../components/rows.tsx';
 import { PlayScope } from '../components/PlayScope.tsx';
 
 interface Results { songs: Track[]; artists: Artist[]; albums: Album[]; playlists: Playlist[] }
@@ -23,12 +23,30 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
     enabled: open && debounced.length >= 2,
     staleTime: 60_000,
   });
-  function close() { setOpen(false); setQuery(''); input.current?.focus({ preventScroll: true }); requestAnimationFrame(() => window.scrollTo(0, pageScroll.current)); }
-  useEffect(() => { setOpen(false); setQuery(''); }, [location.key]);
+  function close() {
+    const hadResults = open;
+    setOpen(false); setQuery('');
+    // On a phone the field folds back into the top bar's search button, and
+    // focus goes back to that button.
+    if (document.body.classList.contains('search-open')) {
+      // Both classes hide the button; clear them before focus can land on it.
+      document.body.classList.remove('search-open', 'searching');
+      document.querySelector<HTMLButtonElement>('.search-toggle')?.focus({ preventScroll: true });
+    } else input.current?.focus({ preventScroll: true });
+    // Only results moved the page; an empty field left it where it was.
+    if (hadResults) requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
+  }
+  useEffect(() => { setOpen(false); setQuery(''); document.body.classList.remove('search-open'); }, [location.key]);
+  // The menu stops marking a page as current while results cover it.
+  useEffect(() => {
+    document.body.classList.toggle('searching', open);
+    return () => document.body.classList.remove('searching');
+  }, [open]);
   useEffect(() => {
     function shortcut(e: KeyboardEvent) {
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); input.current?.focus(); }
-      if (e.key === 'Escape' && open) { e.preventDefault(); close(); }
+      // A phone's opened search field closes on Escape even before anything is typed.
+      if (e.key === 'Escape' && (open || document.body.classList.contains('search-open'))) { e.preventDefault(); close(); }
     }
     window.addEventListener('keydown', shortcut);
     return () => window.removeEventListener('keydown', shortcut);
@@ -38,7 +56,7 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
   return <>
     <div className="global-search-bar" role="search">
       <input ref={input} type="search" aria-label="Search music" placeholder="Search artists, albums, songs, playlists"
-        maxLength={200} value={query} aria-controls="search-results" aria-expanded={open}
+        maxLength={200} value={query} aria-controls={open ? 'search-results' : undefined}
         onFocus={() => { if (term) setOpen(true); }}
         onChange={e => {
           if (!open) pageScroll.current = window.scrollY;
@@ -48,21 +66,31 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
           if (next && !open) window.scrollTo(0, 0);
           if (!next) requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
         }} />
-      {open && <button type="button" onClick={close}>Close search</button>}
+      {/* Shown while results are up, and on a phone whenever the field is open, empty or not. */}
+      <button type="button" className={`search-cancel${open ? ' is-open' : ''}`} onClick={close}>Cancel</button>
     </div>
     <div hidden={open}>{children}</div>
     {open && <section id="search-results" className="search-results" aria-label="Search results">
-      <h1>Search results</h1>
+      <header className="page-head search-head">
+        <div>
+          <span className="page-kicker">{data ? [
+            data.albums.length ? `${data.albums.length} ${data.albums.length === 1 ? 'album' : 'albums'}` : '',
+            data.songs.length ? `${data.songs.length === 100 ? '100+' : data.songs.length} ${data.songs.length === 1 ? 'song' : 'songs'}` : '',
+            data.artists.length ? `${data.artists.length} ${data.artists.length === 1 ? 'artist' : 'artists'}` : '',
+          ].filter(Boolean).join(' · ') || 'Search' : 'Search'}</span>
+          <h1>Results for “{term}”</h1>
+        </div>
+      </header>
       {term.length < 2 ? <p role="status">Type at least two characters.</p>
         : loading ? <p role="status">Searching...</p>
         : results.error ? <div role="alert">Could not search your library. <button onClick={() => void results.refetch()}>Retry</button></div>
         : data && !Object.values(data).some(rows => rows.length) ? <p role="status">No music found for "{term}".</p> : null}
       {data && <>
-        {!!data.artists.length && <section><h2>Artists</h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
-        {!!data.albums.length && <section><h2>Albums</h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
-        {!!data.songs.length && <section><h2>Songs{data.songs.length === 100 ? ' · first 100 matches' : ''}</h2>
-          <PlayScope tracks={data.songs}><div className="song-grid">{data.songs.map(track => <SongCard key={track.id} track={track} />)}</div></PlayScope></section>}
-        {!!data.playlists.length && <section><h2>Playlists</h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
+        {!!data.artists.length && <section><h2>Artists<span className="count">{data.artists.length}</span></h2><div className="search-links">{data.artists.map(a => <Link key={a.id} to={`/artist/${encodeURIComponent(a.id)}`}>{a.name}</Link>)}</div></section>}
+        {!!data.albums.length && <section><h2>Albums<span className="count">{data.albums.length}</span></h2><div className="al-grid">{data.albums.map(a => <AlbumCell key={a.id} album={a} />)}</div></section>}
+        {!!data.songs.length && <section><h2>Songs<span className="count">{data.songs.length === 100 ? 'first 100' : data.songs.length}</span></h2>
+          <PlayScope tracks={data.songs}><div className="rows">{data.songs.map(track => <TrackRow key={track.id} track={track} />)}</div></PlayScope></section>}
+        {!!data.playlists.length && <section><h2>Playlists<span className="count">{data.playlists.length}</span></h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
       </>}
     </section>}
   </>;

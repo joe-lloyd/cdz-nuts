@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+// The bar's heart reads the liked list from the server; it plays no part in the keyboard.
+vi.mock('../components/LikeButton.tsx', () => ({ LikeButton: () => null }));
+
 // jsdom has no media playback. Keep the real engine and emulate media events.
 const playing = new WeakSet<HTMLMediaElement>();
 vi.spyOn(HTMLMediaElement.prototype, 'paused', 'get').mockImplementation(function (this: HTMLMediaElement) {

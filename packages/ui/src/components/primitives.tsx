@@ -1,7 +1,7 @@
-import { useState, type ReactNode } from 'react';
+import { createContext, use, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import { artUrl, day, genres as parseGenres, initial } from '../lib/format.ts';
+import { artUrl, genres as parseGenres, cardDay, initial, shortDay } from '../lib/format.ts';
 import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
 import { post } from '../api/client.ts';
 import { player, usePlayer } from '../player/usePlayer.ts';
@@ -26,6 +26,20 @@ export function useNowPlaying(id: string): '' | ' playing' | ' paused' {
 /** A scanner badge or a confirmed playable installation is sufficient. */
 export const isHeld = (track: Badged): boolean => Boolean(track.quality || track.playable);
 
+/**
+ * Where a song stands against the archive. Known from the list's own data,
+ * so a row that needs a status line has it from the first paint; the
+ * download check can only turn "missing" into "ready", never add a line.
+ */
+export function useArchiveState(track: Track): { state: 'held' | 'missing' | 'ready'; label: string } {
+  const held = isHeld(track);
+  const progress = useDownloadProgress(track, held);
+  if (held) return { state: 'held', label: '' };
+  if (progress.status?.ready) return { state: 'ready', label: '' };
+  // A download under way says how far it has got; otherwise, plainly, missing.
+  return { state: 'missing', label: downloadLabel(progress.status) ?? 'Not in archive' };
+}
+
 export const PLAY_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
 );
@@ -48,7 +62,7 @@ export function Pic({ kind, id, cdn, name, overlay }: {
   const [failed, setFailed] = useState(!primary);
 
   return (
-    <div className="pic">
+    <div className={`pic pic-${kind}`}>
       {failed ? null : (
         <img
           src={src} alt="" loading="lazy"
@@ -64,8 +78,11 @@ export function Pic({ kind, id, cdn, name, overlay }: {
   );
 }
 
-export const Chip = ({ text, bad }: { text: string; bad?: boolean | undefined }) => (
-  <span className={`chip${bad ? ' bad' : ''}`}>{text}</span>
+export const Chip = ({ text }: { text: string }) => <span className="chip">{text}</span>;
+
+/** A state, not a tag: a dot and words, so it never reads as a genre. */
+export const Status = ({ text, title }: { text: string; title?: string | undefined }) => (
+  <span className="status" title={title}>{text.replace(/(\d+) (\w+) (\d{4})/, '$1\u00a0$2\u00a0$3')}</span>
 );
 
 export const Chips = ({ children }: { children: ReactNode[] }) => {
@@ -78,14 +95,19 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
   return list.length ? <div className="chips">{list.map((g) => <Chip key={g} text={g} />)}</div> : null;
 };
 
-/** Tombstones: history is kept, these say what changed and when. */
-export function Badges({ row }: { row: Tombstoned }) {
+/**
+ * Tombstones: history is kept, these say what changed and when. A card is
+ * narrow, so there each one keeps to a line and the date is a tooltip.
+ */
+export function Badges({ row, compact = false }: { row: Tombstoned; compact?: boolean | undefined }) {
+  // Spotify pulled it from its catalogue; the archive keeps what it had.
+  const removed = row.removed_at ? `No longer on Spotify · ${shortDay(row.removed_at)}` : '';
   const items = [
-    row.removed_at ? <Chip key="r" text={`removed from spotify ${day(row.removed_at)}`} bad /> : null,
-    row.unfollowed_at && !row.is_followed ? <Chip key="u" text={`unfollowed ${day(row.unfollowed_at)}`} /> : null,
-    row.unsaved_at && !row.is_saved ? <Chip key="s" text={`unsaved ${day(row.unsaved_at)}`} /> : null,
+    row.removed_at ? <Status key="r" text={compact ? 'No longer on Spotify' : removed} title={compact ? removed : undefined} /> : null,
+    row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${(compact ? cardDay : shortDay)(row.unfollowed_at)}`} /> : null,
+    row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${(compact ? cardDay : shortDay)(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
-  return items.length ? <div className="chips">{items}</div> : null;
+  return items.length ? <div className="statuses">{items}</div> : null;
 }
 
 const QUALITY_META: Record<QualityTier, { bars: number; cls: string; tip: string }> = {
@@ -114,6 +136,24 @@ const sourceKey = (k?: string | null) =>
  * figure — so it survives being read at 9px and does not depend on telling
  * magenta from gold.
  */
+/** Whether a copy is lossless, the tier that earns the green. */
+export const isLossless = (tier: string | null | undefined): boolean => tier === 'lossless' || tier === 'hires';
+
+/** A quality label in plain words, for a tooltip or a screen reader: "MP3 at 320 kbps, lossy". */
+export const describeQuality = (tier: string | null | undefined, label: string): string => {
+  const lossy = /^(\w+) (\d+)$/.exec(label) ?? /^()(\d+)k$/.exec(label);
+  if (lossy) return `${lossy[1] ? `${lossy[1]} at ` : ''}${lossy[2]} kbps, lossy`;
+  const hires = /^(\d+)\/([\d.?]+)$/.exec(label);
+  if (hires) return `${hires[1]}-bit ${hires[2]} kHz, hi-res lossless`;
+  return isLossless(tier) ? `${label}, lossless` : label;
+};
+
+/** "320k" reads as a bitrate once it says its unit; FLAC and 24/96 already do. */
+export const readableQuality = (label: string): string => {
+  const kbps = /^(\d+)k$/.exec(label);
+  return kbps ? `${kbps[1]} kbps` : label;
+};
+
 export function MediaBadges({ row }: { row: Badged }) {
   const quality = row.quality ? QUALITY_META[row.quality] : null;
   const key = sourceKey(row.source);
@@ -125,9 +165,9 @@ export function MediaBadges({ row }: { row: Badged }) {
   return (
     <div className="song-badges">
       {quality ? (
-        <span className={`q-badge ${quality.cls}`} title={`${quality.tip}${row.quality_label ? ` · ${row.quality_label}` : ''}`}>
+        <span className={`q-badge ${quality.cls}`} title={row.quality_label ? describeQuality(row.quality, row.quality_label) : quality.tip}>
           <span className="q-bars">{[1, 2, 3, 4].map((n) => <i key={n} className={n <= quality.bars ? 'on' : undefined} />)}</span>
-          {row.quality_label ? <b>{row.quality_label}</b> : null}
+          {row.quality_label ? <b>{readableQuality(row.quality_label)}</b> : null}
         </span>
       ) : null}
       {showSource ? (
@@ -139,9 +179,10 @@ export function MediaBadges({ row }: { row: Badged }) {
   );
 }
 
-const DOWNLOAD_ICON = (
+/** A request already made: a clock, not another arrow to press. */
+const WAITING_ICON = (
   <svg viewBox="0 0 24 24" aria-hidden="true">
-    <path d="M11 3h2v8h3l-4 4-4-4h3z" /><path d="M5 19h14v2H5z" />
+    <path d="M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18Zm0 2a7 7 0 1 1 0 14 7 7 0 0 1 0-14Zm-1 2v6l5 3 1-1.6-4-2.4V7z" />
   </svg>
 );
 
@@ -157,39 +198,61 @@ const DOWNLOAD_ICON = (
  * sends the same "get me this" the player used to send when you pressed play
  * on something missing; it just says so up front now instead of after.
  */
-export function PlayControl({ track }: { track: Track }) {
+export function PlayControl({ track, current = true, words = false }: {
+  track: Track; current?: boolean | undefined;
+  /** The request as a labelled button for a row's status line, and nothing for a song you hold. */
+  words?: boolean | undefined;
+}) {
   const play = usePlayFromScope();
-  const state = useNowPlaying(track.id);
+  // A history can list the playing song twice; only the row that is current shows it.
+  const playing = useNowPlaying(track.id);
+  const state = current ? playing : '';
   const [requested, setRequested] = useState(false);
   const progress = useDownloadProgress(track, isHeld(track));
-  const label = downloadLabel(progress.status) ?? (requested ? 'Waiting for download…' : null);
+  const label = downloadLabel(progress.status) ?? (requested ? 'Queued for download' : null);
   const stopped = progress.status && ['exhausted', 'cancelled'].includes(progress.status.status);
   const busy = !stopped && (requested || Boolean(label));
   if (!track.id) return null;
 
-  if (!isHeld(track) && !progress.status?.ready) {
+  const request = () => {
+    if (progress.failed) { progress.refresh?.(); return; }
+    setRequested(true);
+    post('/api/tracks/want', {
+      artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
+      title: track.name,
+      album: track.album ?? null,
+      durationMs: track.duration_ms ?? null,
+      recordingMbid: track.recording_mbid ?? null,
+      releaseMbid: track.release_mbid ?? null,
+    })
+      .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
+      .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
+  };
+  const missing = !isHeld(track) && !progress.status?.ready && !state;
+
+  if (words) {
+    if (!missing) return null;
+    // The status line already says how a download is going; until the
+    // first check answers, it says the request went in.
+    if (busy && !progress.failed) return downloadLabel(progress.status) ? null : <span className="row-action-note">Requested</span>;
+    return (
+      <button className="row-action" type="button" aria-label={`Request a download of ${track.name}`} onClick={request}>
+        {progress.failed ? 'Check again' : stopped ? 'Request again'
+          : <><span className="ra-long">Request download</span><span className="ra-short">Request</span></>}
+      </button>
+    );
+  }
+
+  if (missing) {
     return (
       <span className="download-control">
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
-        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Not in the library yet — get it'}
-        onClick={() => {
-          if (progress.failed) { progress.refresh?.(); return; }
-          setRequested(true);
-          post('/api/tracks/want', {
-            artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
-            title: track.name,
-            album: track.album ?? null,
-            durationMs: track.duration_ms ?? null,
-            recordingMbid: track.recording_mbid ?? null,
-            releaseMbid: track.release_mbid ?? null,
-          })
-            .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
-            .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
-        }}
+        title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request a download into your archive'}
+        onClick={request}
       >
-        {DOWNLOAD_ICON}
+        {busy ? WAITING_ICON : <span className="get-word" aria-hidden="true">Get</span>}
       </button>
       {progress.failed || label ? <span className="download-status" role="status">{progress.failed ? 'Progress unavailable · retry' : label}</span> : null}
       </span>
@@ -207,8 +270,16 @@ export function PlayControl({ track }: { track: Track }) {
 }
 
 /** Every song can seed radio; catalog metadata lets the server find its recording. */
+/**
+ * Whether radio can run. Radio needs ListenBrainz, and with it off a radio
+ * link would only lead to the page saying so. The shell provides the answer;
+ * anything rendered outside it assumes radio works.
+ */
+export const RadioEnabled = createContext(true);
+
 export function RadioControl({ track }: { track: Track }) {
-  if (!track.id) return null;
+  const enabled = use(RadioEnabled);
+  if (!track.id || !enabled) return null;
   const seed = new URLSearchParams({ artist: track.artists ?? track.artist_name ?? '', title: track.name });
   if (track.recording_mbid) seed.set('mbid', track.recording_mbid);
   return (
@@ -222,15 +293,15 @@ export function RadioControl({ track }: { track: Track }) {
 }
 
 export const SpotifyLink = ({ type, id }: { type: string; id: string }) => (
-  <a className="ext" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener" title="open in Spotify">↗</a>
+  <a className="ext" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener" title="Open in Spotify" aria-label="Open in Spotify">↗</a>
 );
 
 export const SpotifyButton = ({ type, id }: { type: string; id: string }) => (
-  <a className="spbtn" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener">Open in Spotify ↗</a>
+  <a className="spbtn" href={`https://open.spotify.com/${type}/${id}`} target="_blank" rel="noopener">Spotify ↗</a>
 );
 
 /** Legal lossless: a Bandcamp search deep-link. */
-export const BandcampButton = ({ query, type = 'a', label = 'Find on Bandcamp ↗' }: {
+export const BandcampButton = ({ query, type = 'a', label = 'Bandcamp ↗' }: {
   query: string; type?: string; label?: string;
 }) => (
   <a className="spbtn" href={`https://bandcamp.com/search?q=${encodeURIComponent(query)}&item_type=${type}`} target="_blank" rel="noopener">{label}</a>
@@ -238,11 +309,42 @@ export const BandcampButton = ({ query, type = 'a', label = 'Find on Bandcamp �
 
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
 
-/** Shown only when a view takes noticeably long, so cached views never flash. */
-export function Skeleton() {
+/**
+ * A page with nothing to show yet: what it means and who can fix it in plain
+ * words, then one button (`setup`) that opens the numbered steps, any outside
+ * links sitting inside the step that needs them.
+ */
+export function Notice({ title, children, steps, actions, details, setup = 'Setup instructions' }: {
+  title: string; children?: ReactNode; steps?: ReactNode[]; actions?: ReactNode; details?: ReactNode; setup?: string;
+}) {
+  return (
+    <section className="notice">
+      <h2>{title}</h2>
+      {children ? <p>{children}</p> : null}
+      {actions ? <div className="notice-actions">{actions}</div> : null}
+      {steps?.length || details ? (
+        <details className="notice-details">
+          <summary className={steps?.length ? 'setup-summary' : undefined}>{setup}</summary>
+          {details}
+          {steps?.length ? <ol className="notice-steps">{steps.map((step, i) => <li key={i}><span>{step}</span></li>)}</ol> : null}
+        </details>
+      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Shown only when a view takes noticeably long, so cached views never flash.
+ * It says what is coming, and a detail page keeps the shape of its header.
+ */
+export function Skeleton({ label = 'Loading…', hero = false, rows = 9 }: {
+  label?: string | null | undefined; hero?: boolean | undefined; rows?: number | undefined;
+}) {
   return (
     <div className="skeleton">
-      {Array.from({ length: 9 }, (_, i) => (
+      {label ? <p className="skeleton-label" role="status">{label}</p> : null}
+      {hero ? <div className="skeleton-hero"><span className="skeleton-art" /><div><span /><span /><span /></div></div> : null}
+      {Array.from({ length: rows }, (_, i) => (
         <div className="skeleton-row" key={i}><span /><span /></div>
       ))}
     </div>

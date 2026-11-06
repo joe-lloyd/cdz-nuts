@@ -9,9 +9,9 @@ import { player } from '../player/usePlayer.ts';
 import type { UpgradeJob, UpgradeStatus } from '../api/types.ts';
 
 const LABEL: Record<UpgradeStatus, string> = {
-  pending_source: 'downloading source', queued: 'ready for upgrade', working: 'working now',
-  retry_wait: 'retry scheduled', upgraded: 'upgraded', already_lossless: 'already lossless',
-  exhausted: 'retries exhausted', cancelled: 'cancelled',
+  pending_source: 'Waiting to download', queued: 'MP3 in, waiting for FLAC', working: 'Working on it now',
+  retry_wait: 'Will try again', upgraded: 'Lossless now', already_lossless: 'Already lossless',
+  exhausted: 'Gave up', cancelled: 'Cancelled',
 };
 const ACTIVE: UpgradeStatus[] = ['pending_source', 'queued', 'working', 'retry_wait'];
 
@@ -19,13 +19,17 @@ export function Upgrades() {
   const { data, isPending, isFetching } = useUpgrades();
   const client = useQueryClient();
   const [mode, setMode] = useState('single');
+  const [more, setMore] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [needle, setNeedle] = useState('');
+  const [show, setShow] = useState<'all' | 'active' | 'done' | 'stopped'>('all');
 
   const refresh = () => void client.invalidateQueries({ queryKey: ['upgrades'] });
 
   const submit = useMutation({
     mutationFn: (values: Record<string, unknown>) => post('/api/upgrades', values),
     onSuccess: (_d, values) => {
-      player.notify(values.sourceMode === 'single' ? 'Added to the archive and FLAC queue' : 'Album intake queued');
+      player.notify(values.sourceMode === 'single' ? 'Requested; it joins the archive soon' : 'Album requested');
       refresh();
     },
     onError: (e: Error) => player.notify(e.message, true),
@@ -42,11 +46,26 @@ export function Upgrades() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading requests…" />;
   const jobs = data?.jobs ?? [];
-  const active = ACTIVE.reduce((n, k) => n + Number(data?.counts?.[k] ?? 0), 0);
-  const finished = Number(data?.counts?.upgraded ?? 0) + Number(data?.counts?.already_lossless ?? 0);
+  const inFilter = (key: typeof show, job: UpgradeJob): boolean =>
+    key === 'all' || (key === 'active' ? ACTIVE.includes(job.status)
+      : key === 'done' ? job.status === 'upgraded' || job.status === 'already_lossless'
+      : job.status === 'exhausted' || job.status === 'cancelled');
+  // The counts live on the filters they describe, and count only the requests
+  // this page holds, so a filter never promises rows it cannot show.
+  const tally = {
+    all: jobs.length,
+    active: jobs.filter((job) => inFilter('active', job)).length,
+    done: jobs.filter((job) => inFilter('done', job)).length,
+    stopped: jobs.filter((job) => inFilter('stopped', job)).length,
+  } as const;
+  // The server sends the newest requests only; say so when there are more.
+  const total = Object.values(data?.counts ?? {}).reduce((n, v) => n + Number(v ?? 0), 0);
   const batch = mode !== 'single';
+  const term = needle.trim().toLowerCase();
+  const shown = jobs.filter((job) => inFilter(show, job)
+    && (!term || `${job.title} ${job.artist} ${job.album ?? ''}`.toLowerCase().includes(term)));
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -58,15 +77,14 @@ export function Upgrades() {
   return (
     <>
       <div className="upgrade-intro">
-        <div>
-          <span className="eyebrow">Lossy now, lossless later</span>
-          <h2>Feed the archive today. Let FLAC catch up.</h2>
-          <p>On the next worker sweep, a source link becomes an MP3; later sweeps replace it only after codec, duration, artist and title checks pass.</p>
-        </div>
-        <div className="upgrade-stats"><b>{active}</b><span>active</span><b>{finished}</b><span>finished</span></div>
+        <p>Paste a link and the song joins the archive as an MP3 within a few minutes. The server then keeps looking for a lossless copy and swaps it in when one matches.</p>
       </div>
 
-      <form className="upgrade-form" onSubmit={onSubmit}>
+      {/* On a phone the queue comes first; the form opens when asked for. */}
+      <button className="primary-action upgrade-add" type="button" aria-expanded={adding} onClick={() => setAdding(!adding)}>
+        {adding ? 'Close the form' : 'Request a song'}
+      </button>
+      <form className={`upgrade-form${adding ? ' open' : ''}`} onSubmit={onSubmit}>
         <label>
           <span>Spotify or YouTube URL</span>
           <input name="sourceUrl" type="url" required placeholder={batch
@@ -81,20 +99,35 @@ export function Upgrades() {
             <option value="chapters">Chaptered video</option>
           </select>
         </label>
-        <label><span>Artist <small>(needed for YouTube)</small></span><input name="artist" placeholder="Artist" required={batch} /></label>
-        <label><span>Title <small>(single track)</small></span><input name="title" placeholder="Song title" disabled={batch} /></label>
-        <label><span>Album <small>(required for album intake)</small></span><input name="album" placeholder="Album" required={batch} /></label>
-        <label><span>FLAC attempts</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /></label>
+        {/* The optional fields fold away until asked for, so the link and
+            its button lead. Album imports need them, so those open them. */}
+        <button className="upgrade-more" type="button" aria-expanded={more || batch} onClick={() => setMore(!more)} hidden={batch}>
+          {more ? 'Hide matching details' : 'Help it match (optional)'}
+        </button>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>{batch ? 'Required' : 'Optional; helps match a YouTube link'}</small></label>
+        {batch ? null : <label className={`upgrade-extra${more ? ' open' : ''}`}><span>Title</span><input name="title" placeholder="Song title" /><small>Optional</small></label>}
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Give up after</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} aria-describedby="give-up-unit" /><small id="give-up-unit">searches for a lossless copy</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
-          {batch ? 'Import album + queue every track for FLAC' : 'Add to archive + FLAC queue'}
+          {batch ? 'Import the album' : 'Request a song'}
         </button>
       </form>
 
-      <h2>Upgrade queue {isFetching ? <i className="spin" /> : null}</h2>
+      <h2>Request queue {isFetching ? <i className="spin" /> : null}</h2>
+      {/* A queue of a hundred or more is found by name or narrowed by state. */}
+      <div className="tools queue-tools">
+        <input type="search" aria-label="Find a request" placeholder="Find a request" value={needle} onChange={(e) => setNeedle(e.target.value)} />
+        <div className="seg" role="group" aria-label="Show">
+          {([['all', 'All'], ['active', 'Active'], ['done', 'Finished'], ['stopped', 'Stopped']] as const).map(([key, label]) => (
+            <button key={key} type="button" className={show === key ? 'on' : undefined} aria-pressed={show === key} onClick={() => setShow(key)}>{label}{tally[key] ? <span className="seg-count">{tally[key]}</span> : null}</button>
+          ))}
+        </div>
+      </div>
+      {total > jobs.length ? <p className="note">Showing the newest {jobs.length} of {total.toLocaleString()} requests; search and filters cover these.</p> : null}
       <div className="upgrade-list">
-        {jobs.length
-          ? jobs.map((job) => <Card key={job.id} job={job} onAct={(action) => act.mutate({ action, id: job.id })} />)
-          : <Empty>nothing queued yet</Empty>}
+        {shown.length
+          ? shown.map((job) => <Card key={job.id} job={job} onAct={(action) => act.mutate({ action, id: job.id })} />)
+          : <Empty>{jobs.length ? 'No request matches' : 'Nothing requested yet'}</Empty>}
       </div>
     </>
   );
@@ -104,7 +137,9 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
   const batch = job.source_mode && job.source_mode !== 'single';
   const label = batch && job.status === 'upgraded' ? 'album imported' : LABEL[job.status] ?? job.status;
   const due = job.next_attempt_at && (['retry_wait', 'queued', 'pending_source'] as string[]).includes(job.status)
-    ? `${job.status === 'retry_wait' ? 'retry ' : ''}${until(job.next_attempt_at)}` : '';
+    && !until(job.next_attempt_at).includes('due now')
+    // "Next attempt now" on every waiting card says nothing; only a later time does.
+    ? `next attempt ${until(job.next_attempt_at)}` : '';
   const attempts = job.phase === 'source'
     ? { used: job.source_attempts, max: 3, what: 'source' }
     : { used: job.upgrade_attempts, max: job.max_attempts, what: 'FLAC' };
@@ -123,11 +158,7 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
         <span className={`upgrade-state ${job.status}`}>
           {job.status === 'working' ? <i className="spin" /> : null}{label}
         </span>
-        {job.current_codec ? (
-          <span className={`q-badge ${job.current_codec === 'flac' ? 'q-lossless' : 'q-standard'}`}>
-            <b>{job.current_codec.toUpperCase()}</b>
-          </span>
-        ) : null}
+
       </div>
       <b className="upgrade-title">{job.title}</b>
       <span className="upgrade-sub">{job.artist}{job.album ? ` · ${job.album}` : ''}</span>
@@ -138,13 +169,13 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
             <i key={i} className={`${i < attempts.used ? 'used' : ''}${job.status === 'working' && i === attempts.used ? ' live' : ''}`.trim() || undefined} />
           ))}
         </span>
-        <small>{attempts.used}/{attempts.max} {attempts.what}{detail ? ` · ${detail}` : ''}</small>
+        <small>{attempts.used} of {attempts.max} {attempts.what === 'FLAC' ? 'lossless' : 'download'} tries used{detail ? ` · ${detail}` : ''}</small>
       </div>
       {job.last_error ? <em className="upgrade-error">{job.last_error}</em> : null}
       {canRetry || canCancel || canRemove ? (
         <div className="upgrade-actions">
           {canRetry ? <button type="button" onClick={() => onAct('retry')}>Retry now</button> : null}
-          {canCancel ? <button type="button" onClick={() => onAct('cancel')}>Cancel</button> : null}
+          {canCancel ? <button type="button" className="quiet" onClick={() => { if (confirm(`Stop looking for ${job.title}?`)) onAct('cancel'); }}>Cancel request</button> : null}
           {canRemove ? (
             <button type="button" className="danger" onClick={() => {
               // Removing forgets the queue entry; the audio files stay on disk.

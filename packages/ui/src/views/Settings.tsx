@@ -30,7 +30,7 @@ export function Settings() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Checking for updates…" rows={1} />;
 
   return (
     <>
@@ -44,7 +44,7 @@ export function Settings() {
               : 'The app installs updates for you when it starts. This button is for when you do not want to wait.'}
           </p>
           <div className="hero-actions">
-            <button type="button" disabled={check.isPending} onClick={() => check.mutate()}>
+            <button className="spbtn" type="button" disabled={check.isPending} onClick={() => check.mutate()}>
               {check.isPending ? 'Checking…' : 'Check for updates'}
             </button>
             {desktop.update_pending ? (
@@ -70,15 +70,12 @@ export function Settings() {
 function ServerVersion() {
   const { data, isPending } = useUiBuild();
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Checking the version…" rows={1} />;
   if (!data) return <Empty>Nothing to configure here yet.</Empty>;
   return (
     <>
-      <p className="lede">Web version, front end {data.digest.slice(0, 12)}</p>
-      <p className="note">
-        Updates apply to the desktop app. In a browser you always get whatever the server is
-        serving, so there is nothing to install.
-      </p>
+      <p className="lede">You are using the web version, which is always up to date. There is nothing to install.</p>
+      <p className="build-id">Web version · build {data.digest.slice(0, 7)}</p>
     </>
   );
 }

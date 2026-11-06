@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useCds } from '../api/hooks.ts';
 import { post } from '../api/client.ts';
 import { day, initial } from '../lib/format.ts';
-import { Empty, Skeleton } from '../components/primitives.tsx';
+import { Empty, Notice, Skeleton } from '../components/primitives.tsx';
 import { player } from '../player/usePlayer.ts';
 import type { CdItem } from '../api/types.ts';
 
@@ -43,7 +43,7 @@ export function Cds() {
     onError: (e: Error) => player.notify(e.message, true),
   });
 
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading your CDs…" />;
   const d = data!;
 
   if (!d.canSync && !d.items.length) {
@@ -52,19 +52,20 @@ export function Cds() {
     // needs a personal token — different credential, same settings page.
     const half = d.scope === 'catalogue';
     return (
-      <div className="empty cd-setup">
-        <p><b>{half ? 'Discogs can search, but not read your collection yet.' : 'Discogs is not connected yet.'}</b></p>
-        {half ? (
-          <p>The consumer key and secret are set, and those authenticate the <i>app</i> against
-            the public catalogue. Reading <i>your</i> collection identifies <i>you</i>, which needs
-            a personal access token instead.</p>
-        ) : null}
-        <p>
-          On <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">discogs.com/settings/developers</a>,
-          scroll past the OAuth app box to <b>Generate new token</b>. Add it to the Pi&apos;s <code>.env</code> as
-          <code>DISCOGS_TOKEN</code> and restart the web container.
-        </p>
-      </div>
+      <Notice
+        title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
+        setup="Setup steps for the server owner"
+        steps={[
+          <>On the <a href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Discogs developer settings ↗</a> page, skip the app box and choose <b>Generate new token</b>.</>,
+          <>Whoever runs this server adds it to <code>.env</code> as <code>DISCOGS_TOKEN</code> and restarts the web container.</>,
+          <>After the restart, choose <b>Sync from Discogs</b> on this page to bring the CDs in.</>,
+        ]}
+        details={half ? <p>The consumer key and secret only reach the public catalogue. Reading your own collection needs a personal access token.</p> : undefined}
+      >
+        {half
+          ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
+          : 'Your CD shelf is not set up yet. Ask whoever runs this server to connect Discogs; then every CD you own shows here with its cover and what is already ripped.'}
+      </Notice>
     );
   }
 

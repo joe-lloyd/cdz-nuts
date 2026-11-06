@@ -41,7 +41,8 @@ test('quality tiers put the real pipelines where you would expect them', () => {
 test('quality labels stay short enough for a badge', () => {
   assert.equal(qualityLabel('hires', { codec: 'flac', bitrate: null, sampleRate: 96_000, bitDepth: 24 }), '24/96');
   assert.equal(qualityLabel('lossless', { codec: 'flac', bitrate: null, sampleRate: 44_100, bitDepth: 16 }), 'FLAC');
-  assert.equal(qualityLabel('high', { codec: 'mp3', bitrate: 320, sampleRate: 44_100, bitDepth: null }), '320k');
+  assert.equal(qualityLabel('high', { codec: 'mp3', bitrate: 320, sampleRate: 44_100, bitDepth: null }), 'MP3 320');
+  assert.equal(qualityLabel('high', { codec: null, bitrate: 320, sampleRate: 44_100, bitDepth: null }), '320k');
 });
 
 test('match keys ignore the credit noise that differs between tags and Spotify', () => {
@@ -131,6 +132,22 @@ test('an album badge reports the modal tier, not the best or worst track', () =>
     const badge = store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss (1990) [Album]'));
     assert.equal(badge?.tier, 'lossless');
     assert.equal(badge?.source, 'usenet');
+  });
+});
+
+test("an album badge's label comes from a file of the tier it shows", () => {
+  withStore((store) => {
+    // The FLAC scans first, but three MP3s make this an MP3 record.
+    store.upsert([
+      row({ path: '/lib/0.flac', title: 'Bonus', album: 'Seasons in the Abyss' }),
+      ...[1, 2, 3].map((i) => row({
+        path: `/lib/${i}.mp3`, title: `Track ${i}`, album: 'Seasons in the Abyss',
+        codec: 'mp3', bitrate: 320, bit_depth: null,
+      })),
+    ]);
+    const badge = store.albumBadges().get(albumMatchKey('Slayer', 'Seasons in the Abyss'));
+    assert.equal(badge?.tier, 'high');
+    assert.equal(badge?.quality, 'MP3 320');
   });
 });
 

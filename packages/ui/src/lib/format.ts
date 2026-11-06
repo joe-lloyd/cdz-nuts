@@ -2,7 +2,9 @@
 
 /** "3:07" from milliseconds. */
 export const dur = (ms: number | null | undefined): string => {
-  const s = Math.round((ms ?? 0) / 1000);
+  // An unknown length says nothing rather than claiming 0:00.
+  if (!ms) return '';
+  const s = Math.round(ms / 1000);
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
 };
 
@@ -13,7 +15,16 @@ export const formatTime = (seconds: number): string => {
   return `${Math.floor(rounded / 60)}:${String(rounded % 60).padStart(2, '0')}`;
 };
 
-export const day = (iso: string | null | undefined): string => (iso ?? '').slice(0, 10);
+/** "1 Sep 2026". A bare date is read in UTC so it never slips a day. */
+export const day = (iso: string | null | undefined): string => {
+  if (!iso) return '';
+  const when = new Date(iso);
+  if (Number.isNaN(when.getTime())) return iso;
+  return threeLetters(when.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', ...(/^\d{4}-\d{2}-\d{2}$/.test(iso) ? { timeZone: 'UTC' } : {}) }));
+};
+
+/** British English writes "Sept"; every other month has three letters. */
+export const threeLetters = (date: string): string => date.replace('Sept', 'Sep');
 
 export const ago = (iso: string): string => {
   const m = (Date.now() - new Date(iso).getTime()) / 60000;
@@ -86,3 +97,18 @@ export const gainFor = (position: number): number => Math.max(0, Math.min(1, Num
 export const positionFor = (gain: number): number => Math.sqrt(Math.max(0, Math.min(1, Number(gain))));
 
 export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo, Math.min(hi, n));
+
+/** A date for a status line, kept on one line. */
+export const shortDay = (iso: string | null | undefined): string => day(iso).replace(/ /g, '\u00a0');
+
+/** "22 Sep" this year, "22 Sep 2025" before it: a date for a narrow card. */
+export const cardDay = (iso: string | null | undefined): string => {
+  const full = shortDay(iso);
+  return iso && new Date(iso).getFullYear() === new Date().getFullYear() ? full.replace(/\u00a0\d{4}$/, '') : full;
+};
+
+/** "Sep 2026" from "2026-09". */
+export const monthName = (ym: string): string => {
+  const [y, m] = ym.split('-').map(Number);
+  return y && m ? threeLetters(new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' })) : ym;
+};

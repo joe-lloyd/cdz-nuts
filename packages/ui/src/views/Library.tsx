@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { Link, useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -7,17 +7,17 @@ import {
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
-import { ago, day, dur, initial } from '../lib/format.ts';
+import { ago, day, dur, initial, shortDay, threeLetters } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
-import { AlbumCell, SongCard, TrackRow } from '../components/rows.tsx';
-import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
-import { PlayScope } from '../components/PlayScope.tsx';
+import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
+import { Badges, Empty, GenreChips, Pic, Skeleton, SpotifyButton } from '../components/primitives.tsx';
+import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
 export function Artists() {
   const { data, isPending, error } = useArtists();
   const [followedOnly, setFollowedOnly] = useState(false);
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading artists…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
   // A heart pressed here counts the same as a Spotify follow.
@@ -26,23 +26,27 @@ export function Artists() {
   return (
     <>
       <div className="tools">
-        <label className="chk">
-          <input type="checkbox" checked={followedOnly} onChange={(e) => setFollowedOnly(e.target.checked)} /> followed only
-        </label>
+        <div className="seg">
+          <button type="button" className={followedOnly ? undefined : 'on'} aria-pressed={!followedOnly} onClick={() => setFollowedOnly(false)}>All artists</button>
+          <button type="button" className={followedOnly ? 'on' : undefined} aria-pressed={followedOnly} onClick={() => setFollowedOnly(true)}>Followed</button>
+        </div>
       </div>
       <div className="grid">
         {rows.length ? rows.map((a) => (
           <div className="cell" key={a.id}>
             <Link to={`/artist/${a.id}`}>
               <Pic kind="artists" id={a.id} cdn={a.image_url} name={a.name} />
-              <div className="nm">{(a.liked ?? a.is_followed) ? '★ ' : ''}{a.name}</div>
+              <div className="nm">{a.name}</div>
             </Link>
             <div className="sub">
-              {a.liked_count ? `${a.liked_count} liked` : ''}
-              {a.top_rank ? `${a.liked_count ? ' · ' : ''}#${a.top_rank}` : ''}
+              {[
+                (a.liked ?? a.is_followed) ? 'Followed' : '',
+                a.liked_count ? `${a.liked_count} liked` : '',
+                a.top_rank ? `Spotify #${a.top_rank} · 6 months` : '',
+              ].filter(Boolean).join('\u00a0· ')}
             </div>
-            <Badges row={a} />
             <GenreChips json={a.genres} />
+            <Badges row={a} compact />
           </div>
         )) : <Empty>no matches</Empty>}
       </div>
@@ -52,13 +56,15 @@ export function Artists() {
 
 export function Songs() {
   const { data, isPending, error } = useLikedTracks();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading liked songs…" />;
   if (error) return <Empty>{error.message}</Empty>;
-  const rows = (data ?? []).filter(t => !t.removed_at);
+  // A song liked here and on Spotify is one song, listed once.
+  const rows = [...new Map((data ?? []).filter(t => !t.removed_at).map(t => [t.id, t])).values()];
   return <>
-    <h2>{rows.length.toLocaleString()} liked songs</h2>
-    {rows.length ? <PlayScope tracks={rows}><div className="song-grid">
-      {rows.map(t => <SongCard key={t.id} track={t} meta={t.added_at ? day(t.added_at) : undefined} />)}
+    <h2>All liked songs <span className="count">{rows.length.toLocaleString()}</span></h2>
+    {rows.length ? <PlayScope tracks={rows}><div className="rows liked-page">
+      <TrackHeader date="Liked" />
+      {rows.map(t => <TrackRow key={t.id} track={t} date={day(t.added_at)} />)}
     </div></PlayScope> : <Empty>Like a song to save it here alongside your Spotify likes.</Empty>}
   </>;
 }
@@ -66,7 +72,7 @@ export function Songs() {
 export function Albums() {
   const saved = useSavedAlbums();
   const library = useLibraryAlbums();
-  if (saved.isPending && library.isPending) return <Skeleton />;
+  if (saved.isPending && library.isPending) return <Skeleton label="Loading albums…" />;
   const savedRows = saved.data ?? [];
   const libRows = library.data ?? [];
 
@@ -74,7 +80,7 @@ export function Albums() {
     <>
       {savedRows.length ? (
         <>
-          <h2>Saved ({savedRows.length})</h2>
+          <h2>Saved <span className="count">{savedRows.length}</span></h2>
           <div className="al-grid">{savedRows.map((a) => <AlbumCell key={a.id ?? a.name} album={a} />)}</div>
         </>
       ) : null}
@@ -104,20 +110,18 @@ export function Playlists() {
     finally { setSaving(false); }
   }
   const { data, isPending, error } = usePlaylists();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading playlists…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const all = data ?? [];
   // Spotify refuses to enumerate some playlists, so they sync with zero tracks.
   // A card that opens to an empty page is worse than no card.
   const pls = all.filter((p) => p.source === 'local' || Number(p.synced_tracks ?? 0) > 0);
+  // Playlists gone from Spotify go last; they still play from the archive.
+  pls.sort((x, y) => Number(Boolean(x.removed_at)) - Number(Boolean(y.removed_at)));
   const hidden = all.length - pls.length;
 
   return (
     <>
-      <form className="tools" onSubmit={e => { e.preventDefault(); void create(); }}>
-        <input aria-label="New playlist name" placeholder="New playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
-        <button disabled={saving || !name.trim()}>Create playlist</button>
-      </form>
       {message && <p role="alert">{message}</p>}
       {hidden ? <p className="note">{hidden} playlist{hidden === 1 ? '' : 's'} hidden — Spotify returned no tracks for {hidden === 1 ? 'it' : 'them'}.</p> : null}
       <div className="al-grid pl-grid">
@@ -125,7 +129,7 @@ export function Playlists() {
           const art = (p.images ?? []).slice(0, 4);
           return (
             <div className={`al-card pl-card${p.removed_at ? ' gone' : ''}`} key={p.id}>
-              <Link className="al-art" to={`/playlist/${p.id}`}>
+              <Link className="al-art" to={`/playlist/${p.id}`} tabIndex={-1} aria-hidden="true">
                 {art.length ? (
                   <span className={`pl-collage n${art.length}`}>
                     {art.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)}
@@ -136,13 +140,19 @@ export function Playlists() {
               </Link>
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
-                <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs{p.owner_name ? ` · ${p.owner_name}` : ''}</span>
-                {p.removed_at ? <span className="sub dim">removed {day(p.removed_at)}</span>
+                <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs · {p.source === 'local' ? 'made here' : 'from Spotify'}</span>
+                {p.removed_at ? <span className="status" title={`Removed from Spotify · ${shortDay(p.removed_at)}`}>Removed from Spotify</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>
           );
         })}
+        <form className="al-card new-pl" onSubmit={e => { e.preventDefault(); void create(); }}>
+          <span className="new-pl-mark">New playlist</span>
+          <input aria-label="New playlist name" placeholder="Playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
+          <button disabled={saving || !name.trim()} aria-describedby="new-pl-hint">Create playlist</button>
+          <small id="new-pl-hint" className="new-pl-hint">{name.trim() ? 'Starts empty; add songs from any list.' : 'Type a name to create it.'}</small>
+        </form>
       </div>
     </>
   );
@@ -152,27 +162,43 @@ export function PlaylistDetail() {
   const { id } = useParams();
   const playlists = usePlaylists();
   const tracks = usePlaylistTracks(id);
-  if (tracks.isPending) return <Skeleton />;
+  if (tracks.isPending) return <Skeleton label="Loading playlist…" hero rows={4} />;
   const rows = tracks.data ?? [];
   const meta = playlists.data?.find((p) => p.id === id);
   return (
     <>
       {meta ? (
-        <div className="pl-head">
+        <div className="hero pl-hero">
+          {(meta.images ?? []).length ? (
+            <span className={`pl-collage n${Math.min(4, (meta.images ?? []).length)}`}>
+              {(meta.images ?? []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" />)}
+            </span>
+          ) : (
+            <span className="pl-collage empty-collage"><span className="ph">{initial(meta.name)}</span></span>
+          )}
+          <div className="pl-head">
           <h1>{meta.name}</h1>
           <div className="meta">
             {rows.length} songs{meta.owner_name ? ` · by ${meta.owner_name}` : ''}
             {meta.removed_at ? ` · removed ${day(meta.removed_at)}` : ''}
           </div>
-          {meta.description ? <p className="note">{meta.description}</p> : null}
+          {meta.description ? <p className="pl-desc">{meta.description}</p> : null}
+          {rows.length || meta.source !== 'local' ? (
+            <div className="hero-actions">
+              {rows.length ? <CollectionPlay tracks={rows} label="Play playlist" /> : null}
+              {meta.source !== 'local' && id ? <SpotifyButton type="playlist" id={id} /> : null}
+            </div>
+          ) : null}
+          </div>
         </div>
       ) : null}
       {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
+      {rows.length ? <h2>Songs <span className="count">{rows.length}</span></h2> : null}
       <PlayScope tracks={rows}>
         <div className="rows">
+          {rows.length ? <TrackHeader rank date="Added" /> : null}
           {rows.length ? rows.map((t) => (
-            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position}
-              endText={`${day(t.added_at)} · ${dur(t.duration_ms)}`} />
+            <TrackRow key={`${t.id}-${t.position ?? 0}`} track={t} rank={t.position} removed="Taken off this playlist" date={day(t.added_at)} />
           )) : <Empty>empty (or blocked by the API)</Empty>}
         </div>
       </PlayScope>
@@ -182,7 +208,7 @@ export function PlaylistDetail() {
 
 export function Latest() {
   const { data, isPending, error } = useLatest();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading downloads…" />;
   if (error) return <Empty>{error.message}</Empty>;
   const rows = data ?? [];
   if (!rows.length) return <Empty>nothing downloaded yet — or the archive is asleep</Empty>;
@@ -194,8 +220,10 @@ export function Latest() {
   const dayAgo = Date.now() - 864e5;
   const today = rows.filter((r) => r.added_at && Date.parse(r.added_at) >= dayAgo).length;
   const scope = today >= rows.length
-    ? `All ${rows.length} arrivals from the last 24 hours.`
-    : `${today} in the last 24 hours, plus enough older ones to make ${rows.length}.`;
+    ? `All ${rows.length} arrived in the last 24 hours.`
+    : today === 0
+      ? `Nothing new today. These are the ${rows.length} most recent downloads.`
+      : `${today} new today, and the ${rows.length - today} before them.`;
 
   return (
     <>
@@ -218,19 +246,31 @@ export function Latest() {
 
 export function Plays() {
   const { data, isPending } = usePlays();
-  if (isPending) return <Skeleton />;
+  if (isPending) return <Skeleton label="Loading plays…" />;
   const all = data ?? [];
   if (!all.length) return <Empty>no plays captured yet</Empty>;
   const here = all.filter((p) => p.source === 'app').length;
   return (
     <>
-      <p className="note">{all.length.toLocaleString()} recent plays · {here.toLocaleString()} played right here</p>
+      <p className="note">{all.length.toLocaleString()} recent plays, {here.toLocaleString()} of them played here</p>
       <PlayScope tracks={all}>
-        <div className="song-grid">
-          {all.map((p, i) => (
-            <SongCard key={`${p.id}-${i}`} track={p}
-              meta={p.played_at ? (p.source === 'app' ? `here · ${ago(p.played_at)}` : ago(p.played_at)) : undefined} />
-          ))}
+        {/* History reads top to bottom, so one column; only the newest play of
+            the current song is marked as playing. */}
+        <div className="rows history">
+          <TrackHeader date="Played" quality={false} />
+          {/* Grouped by day, with the clock time on each row, so a history
+              reads in order instead of as a column of "25d ago". */}
+          {all.map((p, i) => {
+            const dayLabel = playDay(p.played_at);
+            const first = i === 0 || playDay(all[i - 1]!.played_at) !== dayLabel;
+            return (
+              <Fragment key={`${p.id}-${i}`}>
+                {first ? <div className="day-head">{dayLabel}</div> : null}
+                <TrackRow track={p} current={all.findIndex((x) => x.id === p.id) === i}
+                  date={clock(p.played_at)} note={p.source === 'app' ? 'Played here' : 'Played on Spotify'} />
+              </Fragment>
+            );
+          })}
         </div>
       </PlayScope>
     </>
@@ -284,3 +324,18 @@ function PlaylistEditor({ id, name, description, tracks }: { id: string; name: s
     <p role="status">{message}</p>
   </details>;
 }
+
+/** "Today", "Yesterday", or "Mon 12 Oct" for a play's local day. */
+function playDay(iso: string | null | undefined): string {
+  if (!iso) return 'Undated';
+  const when = new Date(iso);
+  const start = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((start(new Date()) - start(when)) / 864e5);
+  if (days === 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  return threeLetters(when.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }) }));
+}
+
+/** "21:40", or "02:05" after midnight: a time of day, never a length. */
+const clock = (iso: string | null | undefined): string =>
+  iso ? new Date(iso).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';

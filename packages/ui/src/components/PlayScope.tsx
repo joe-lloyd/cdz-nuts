@@ -1,6 +1,7 @@
 import { createContext, use, type ReactNode } from 'react';
 
 import { player, type QueueItem } from '../player/engine.ts';
+import { usePlayer } from '../player/usePlayer.ts';
 import type { Track } from '../api/types.ts';
 
 /**
@@ -62,3 +63,25 @@ export function usePlayAll(): (tracks: Track[], continueAfter?: boolean) => void
     void player.playAt(0);
   };
 }
+
+/**
+ * A collection's Play button, which knows when that collection is the one
+ * playing: then it pauses and resumes instead of starting over.
+ */
+export function CollectionPlay({ tracks, label }: { tracks: Track[]; label: string }) {
+  const playAll = usePlayAll();
+  const p = usePlayer();
+  const here = tracks.some((t) => t.id === p.currentId);
+  const playing = here && p.state === 'playing';
+  return (
+    <button
+      className="primary-action play-album" type="button"
+      onClick={() => (here ? player.toggle() : playAll(tracks))}
+    >
+      {playing ? PAUSE_GLYPH : PLAY_GLYPH} {playing ? 'Pause' : here ? 'Resume' : label}
+    </button>
+  );
+}
+
+const PLAY_GLYPH = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>;
+const PAUSE_GLYPH = <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" /></svg>;

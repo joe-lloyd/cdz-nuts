@@ -21,13 +21,15 @@ import type { ReactNode } from 'react';
  * Their paths still work; see PAGE_COPY.
  */
 export const TABS = {
+  overview: 'Home',
   artists: 'Artists',
+  albums: 'Albums',
   liked: 'Liked songs',
   playlists: 'Playlists',
   top: 'Top',
   shows: 'Shows',
   cds: 'CDs',
-  upgrades: 'FLAC queue',
+  upgrades: 'Requests',
   plays: 'Plays',
 } as const;
 
@@ -75,12 +77,12 @@ export const PAGE_COPY: Record<string, [string, string]> = {
   artists: ['Everyone in your orbit', 'Artists'],
   liked: ['Saved here and on Spotify', 'Liked songs'],
   albums: ['The record shelf', 'Albums'],
-  playlists: ['Your hand-built paths', 'Playlists'],
-  top: ['Listening, counted honestly', 'Your top music'],
-  shows: ['Artists leaving the speakers', 'Upcoming shows'],
-  cds: ['The discs on the shelf', 'CD collection'],
-  upgrades: ['Lossless, eventually', 'FLAC upgrade queue'],
-  plays: ['The latest signals', 'Recently played'],
+  playlists: ['Made here and from Spotify', 'Playlists'],
+  top: ['Your most played, counted honestly', 'Top'],
+  shows: ['Artists leaving the speakers', 'Shows'],
+  cds: ['The discs on the shelf', 'CDs'],
+  upgrades: ['Downloads, then lossless (FLAC) copies', 'Requests'],
+  plays: ['Recently played', 'Plays'],
 };
 
 /**
@@ -91,13 +93,19 @@ export const PAGE_COPY: Record<string, [string, string]> = {
  * once-a-month page in front of the twelve you use daily.
  */
 export const ASIDE_COPY: Record<string, [string, string]> = {
-  settings: ['This app and this machine', 'Settings'],
+  settings: ['Version and updates', 'About'],
 };
+
+export const NOT_FOUND_COPY: [string, string] = ['Nothing at this address', 'Page not found'];
+
+export const SETTINGS_ICON: ReactNode = (
+  <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" /><path d="M12 11v6M12 7.5v.01" /></svg>
+);
 
 export const DETAIL_COPY = {
   artist: ['Artist in your archive', 'Artist'],
   album: ['Release in your archive', 'Album'],
-  playlist: ['A hand-built path', 'Playlist'],
+  playlist: ['Playlist', 'Playlist'],
 } as const;
 
 /** Where a sub page goes back to when there is no history of ours behind us. */
@@ -108,12 +116,14 @@ export const PARENT_OF: Record<string, string> = {
 const icon = (path: ReactNode): ReactNode => path;
 
 export const TAB_ICONS: Record<TabId, ReactNode> = {
+  overview: icon(<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /></svg>),
+  albums: icon(<svg viewBox="0 0 24 24"><rect x="3" y="7" width="14" height="14" rx="1.5" /><path d="M7 3h14v14" /></svg>),
   artists: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>),
-  liked: icon(<svg viewBox="0 0 24 24"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>),
-  playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7M18 14v6m-3-3h6" /></svg>),
+  liked: icon(<svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg>),
+  playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h12M4 11h12M4 16h7M19 8v9" /><circle cx="16.5" cy="17" r="2.5" /></svg>),
   top: icon(<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" /></svg>),
-  shows: icon(<svg viewBox="0 0 24 24"><path d="M6 3v18M18 3v18M6 7h12M6 17h12" /><path d="M10 11h4v2h-4z" /></svg>),
-  upgrades: icon(<svg viewBox="0 0 24 24"><path d="M4 17h3l2-10 3 13 3-9 2 6h3" /><path d="m16 6 2-2 2 2M18 4v6" /></svg>),
+  shows: icon(<svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 0 0-4V4H4z" /><path d="M14 4v12" strokeDasharray="2 2" /></svg>),
+  upgrades: icon(<svg viewBox="0 0 24 24"><path d="M12 4v10M8 10l4 4 4-4" /><path d="M4 15v4h16v-4" /></svg>),
   cds: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6" /><circle cx="12" cy="12" r="2.3" /><path d="M12 3.4a8.6 8.6 0 0 1 7.4 4.3" /></svg>),
   plays: icon(<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.3-5.7L4 8" /><path d="M4 3v5h5" /><path d="m10 9 5 3-5 3z" /></svg>),
 };

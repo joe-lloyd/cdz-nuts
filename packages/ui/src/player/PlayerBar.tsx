@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useState, type ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 
 import { formatTime } from '../lib/format.ts';
 import { LyricsPanel } from './LyricsPanel.tsx';
 import { QueuePanel } from './QueuePanel.tsx';
 import { player, usePlayer } from './usePlayer.ts';
 import { RadioControl } from '../components/primitives.tsx';
+import { LikeButton } from '../components/LikeButton.tsx';
 import { Slider } from './Slider.tsx';
 
 /**
@@ -17,7 +18,19 @@ import { Slider } from './Slider.tsx';
  */
 export function PlayerBar() {
   const p = usePlayer();
-  const [panel, setPanel] = useState<'queue' | 'lyrics' | null>(null);
+  const [panel, setPanelState] = useState<'queue' | 'lyrics' | null>(null);
+  // On a phone the bar rests compact and opens into a full now-playing view.
+  const [expanded, setExpanded] = useState(false);
+  const location = useLocation();
+  useEffect(() => { setExpanded(false); }, [location.pathname]);
+  useEffect(() => {
+    if (!expanded) return;
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, [expanded]);
+  // A panel opens over the page, so the full view steps back for it.
+  const setPanel = (next: 'queue' | 'lyrics' | null) => { setExpanded(false); setPanelState(next); };
 
   useEffect(() => {
     function shortcut(event: KeyboardEvent) {
@@ -42,15 +55,26 @@ export function PlayerBar() {
 
   return (
     <>
-      <section className="player-bar" id="player-bar" data-state={p.state} aria-label="Music player">
+      <section className={`player-bar${expanded ? ' expanded' : ''}`} id="player-bar" data-state={p.state} aria-label="Music player">
+        <div className="player-sheet-head">
+          <button className="player-collapse" type="button" aria-label="Close now playing" onClick={() => setExpanded(false)}>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
+          </button>
+          <span>Now playing</span>
+        </div>
         <div className="player-track">
           {artHref ? (
-            <Link className="player-art linked" to={artHref}>
-              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.initial} />
+            // The album link in the byline covers keyboards and screen readers;
+            // with no album name to show there, the art is the way in.
+            <Link
+              className="player-art linked" to={artHref}
+              {...(p.albumName ? { tabIndex: -1, 'aria-hidden': true } : { 'aria-label': 'Open the album' })}
+            >
+              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.currentId ? p.initial : IDLE_MARK} />
             </Link>
           ) : (
             <span className="player-art">
-              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.initial} />
+              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.currentId ? p.initial : IDLE_MARK} />
             </span>
           )}
           <div className="player-copy">
@@ -68,13 +92,23 @@ export function PlayerBar() {
               ) : null}
             </span>
           </div>
+          {/* Liking what is playing is one click from the bar; the phone's
+              full view has its own heart among the actions. */}
+          {p.currentId ? <span className="player-like"><LikeButton track={{ id: p.currentId, name: p.title }} /></span> : null}
           {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
             ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
+          <button
+            className="player-expand" type="button" aria-label="Open now playing" aria-expanded={expanded}
+            disabled={!p.canPlay} onClick={() => setExpanded(true)}
+          >
+            {/* The visible sign that the bar opens. */}
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6" /></svg>
+          </button>
         </div>
 
         <div className="player-transport">
           <div className="player-controls">
-            <button className="player-icon" type="button" aria-label="Previous track" onClick={() => player.previous()}>
+            <button className="player-icon" type="button" aria-label="Previous track" disabled={!p.queue.length} onClick={() => player.previous()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 5h2v14H6zm3 7 9-7v14z" /></svg>
             </button>
             <button
@@ -85,7 +119,7 @@ export function PlayerBar() {
               <svg className="play-shape" viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7z" /></svg>
               <svg className="pause-shape" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zm6 0h4v14h-4z" /></svg>
             </button>
-            <button className="player-icon" type="button" aria-label="Next track" onClick={() => void player.next()}>
+            <button className="player-icon" type="button" aria-label="Next track" disabled={!p.queue.length} onClick={() => void player.next()}>
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 5h2v14h-2zM6 5l9 7-9 7z" /></svg>
             </button>
           </div>
@@ -102,21 +136,26 @@ export function PlayerBar() {
         </div>
 
         <div className="player-actions">
+          {/* The full view is where a phone likes the song it is playing. */}
+          {expanded && p.currentId ? <LikeButton track={{ id: p.currentId, name: p.title }} /> : null}
           <button
-            className="queue-button lyrics-button" type="button" aria-label="Lyrics"
+            className="queue-button lyrics-button" type="button" aria-label="Lyrics" title="Lyrics"
             aria-expanded={panel === 'lyrics'} disabled={!p.lyrics}
             onClick={() => setPanel(panel === 'lyrics' ? null : 'lyrics')}
           >
             <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M9 18V6l10-2v11" /><circle cx="6.5" cy="18" r="2.5" /><circle cx="16.5" cy="15" r="2.5" />
+              <rect x="9" y="3" width="6" height="11" rx="3" /><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
             </svg>
+            <span className="button-label">Lyrics</span>
           </button>
           <button
             className="queue-button" type="button" aria-expanded={panel === 'queue'}
+            aria-label={`Queue, ${p.queue.length} ${p.queue.length === 1 ? 'song' : 'songs'}`} title="Queue"
             onClick={() => setPanel(panel === 'queue' ? null : 'queue')}
           >
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h12M4 11h12M4 16h8M18 14v6m-3-3h6" /></svg>
-            <span>{p.queue.length}</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12" /><path d="M4 6h.01M4 12h.01M4 18h.01" /></svg>
+            {p.queue.length ? <span className="count-badge" aria-hidden="true">{p.queue.length}</span> : null}
+            <span className="button-label">Queue</span>
           </button>
           <label className="volume-control">
             <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -139,8 +178,11 @@ export function PlayerBar() {
   );
 }
 
+/** With nothing playing, the art slot shows the app's disc mark, not initials. */
+const IDLE_MARK = <span className="brand-mark idle-mark" aria-hidden="true"><span /></span>;
+
 /** Art with the same two-step fallback the pages use: local, CDN, then letter. */
-function PlayerArt({ src, fallback, initial }: { src: string; fallback: string; initial: string }) {
+function PlayerArt({ src, fallback, initial }: { src: string; fallback: string; initial: ReactNode }) {
   const [stage, setStage] = useState<'primary' | 'cdn' | 'letter'>('primary');
   const url = stage === 'primary' ? src : stage === 'cdn' ? fallback : '';
   return (

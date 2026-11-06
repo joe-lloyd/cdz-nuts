@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Link, Navigate, Route, Routes } from 'react-router-dom';
 
 import { pathFromLegacyHash } from './routes.tsx';
 import { Shell } from './Shell.tsx';
@@ -12,7 +12,7 @@ import { Cds } from '../views/Cds.tsx';
 import { Upgrades } from '../views/Upgrades.tsx';
 import { Settings } from '../views/Settings.tsx';
 import { DownloadProgressProvider } from '../components/DownloadProgress.tsx';
-import { Empty } from '../components/primitives.tsx';
+import { Notice } from '../components/primitives.tsx';
 
 // Real paths, not hashes. That needs a catch-all on both consumers --
 // apps/server serves the document for any unknown non-API path, and the Tauri
@@ -63,7 +63,7 @@ export function App() {
             <Route path="/album/:id" element={<AlbumDetail />} />
             <Route path="/playlist/:id" element={<PlaylistDetail />} />
             <Route path="/settings" element={<Settings />} />
-            <Route path="*" element={<Empty>That page does not exist.</Empty>} />
+            <Route path="*" element={<Notice title="There is nothing at this address" actions={<Link className="primary-action" to="/overview">Go to Home</Link>}>The link may be old, or the page may have moved.</Notice>} />
           </Route>
         </Routes>
       </BrowserRouter>
