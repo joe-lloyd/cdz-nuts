@@ -3899,3 +3899,13 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   .page-head { margin-bottom: 20px; padding-bottom: 16px; }
   .page-head:not(.is-detail) h1 { font-size: 40px; }
 }
+
+@media (max-width: 760px) {
+  /* A history starts right under its summary. */
+  .history .row-head + .day-head { margin-top: 4px; }
+  /* Requests on a phone: one sentence, the counts beside the action, the queue close behind. */
+  .upgrade-intro .intro-more { display: none; }
+  .upgrade-intro { margin-bottom: 8px; }
+  .upgrade-intro + .upgrade-add { margin-bottom: 0; }
+  .upgrade-form + h2 { margin-top: 24px; }
+}

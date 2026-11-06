@@ -64,7 +64,7 @@ export function Cds() {
       >
         {half
           ? 'This server can look records up, but it needs your personal token to list the CDs you own.'
-          : 'Once this server is linked to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
+          : 'Your CD shelf is not connected yet. Once whoever runs this server links it to your Discogs account, every CD you own shows here with its cover and what is already ripped.'}
       </Notice>
     );
   }

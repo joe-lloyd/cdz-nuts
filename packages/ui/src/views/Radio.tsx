@@ -32,8 +32,9 @@ export function Radio() {
           <>Radio turns on here by itself after the restart.</>,
         ]}
       >
-        Radio picks songs you have not heard yet from what you already play. It
-        needs this server linked to a ListenBrainz account.
+        Radio is not connected yet. It picks songs you have not heard from what
+        you already play, once whoever runs this server links it to a
+        ListenBrainz account.
       </Notice>
     );
   }

@@ -68,7 +68,7 @@ export function Upgrades() {
   return (
     <>
       <div className="upgrade-intro">
-        <p>Paste a link and the song joins the archive as an MP3 within a few minutes. The server then keeps looking for a lossless copy, and swaps it in once its length, artist and title match.</p>
+        <p>Paste a link and the song joins the archive as an MP3 within a few minutes.<span className="intro-more"> The server then keeps looking for a lossless copy, and swaps it in once its length, artist and title match.</span></p>
         <div className="upgrade-stats"><span><b>{active}</b> in progress</span><span><b>{finished}</b> finished</span></div>
       </div>
 
