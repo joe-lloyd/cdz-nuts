@@ -50,6 +50,9 @@ export function Upgrades() {
   const jobs = data?.jobs ?? [];
   const active = ACTIVE.reduce((n, k) => n + Number(data?.counts?.[k] ?? 0), 0);
   const finished = Number(data?.counts?.upgraded ?? 0) + Number(data?.counts?.already_lossless ?? 0);
+  const stopped = Number(data?.counts?.exhausted ?? 0) + Number(data?.counts?.cancelled ?? 0);
+  // The counts live on the filters they describe, not in a summary of their own.
+  const tally = { all: jobs.length, active, done: finished, stopped } as const;
   const batch = mode !== 'single';
   const term = needle.trim().toLowerCase();
   const shown = jobs.filter((job) =>
@@ -69,7 +72,6 @@ export function Upgrades() {
     <>
       <div className="upgrade-intro">
         <p>Paste a link and the song joins the archive as an MP3 within a few minutes. The server then keeps looking for a lossless copy and swaps it in when one matches.</p>
-        <div className="upgrade-stats"><span><b>{active}</b> in progress</span><span><b>{finished}</b> finished</span></div>
       </div>
 
       {/* On a phone the queue comes first; the form opens when asked for. */}
@@ -105,13 +107,13 @@ export function Upgrades() {
         </button>
       </form>
 
-      <h2>Request queue <span className="count">{jobs.length}</span> {isFetching ? <i className="spin" /> : null}</h2>
+      <h2>Request queue {isFetching ? <i className="spin" /> : null}</h2>
       {/* A queue of a hundred or more is found by name or narrowed by state. */}
       <div className="tools queue-tools">
         <input type="search" aria-label="Find a request" placeholder="Find a request" value={needle} onChange={(e) => setNeedle(e.target.value)} />
         <div className="seg" role="group" aria-label="Show">
           {([['all', 'All'], ['active', 'In progress'], ['done', 'Finished'], ['stopped', 'Stopped']] as const).map(([key, label]) => (
-            <button key={key} type="button" className={show === key ? 'on' : undefined} aria-pressed={show === key} onClick={() => setShow(key)}>{label}</button>
+            <button key={key} type="button" className={show === key ? 'on' : undefined} aria-pressed={show === key} onClick={() => setShow(key)}>{label}<span className="seg-count">{tally[key]}</span></button>
           ))}
         </div>
       </div>

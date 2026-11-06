@@ -25,7 +25,7 @@ export function Radio() {
     return (
       <Notice
         title="Radio needs ListenBrainz"
-        setup="Show setup steps"
+        setup="Setup steps for the server owner"
         steps={[
           <>Copy the user token from your <a href="https://listenbrainz.org/settings/" target="_blank" rel="noreferrer">ListenBrainz settings ↗</a>.</>,
           <>Whoever runs this server adds it to <code>.env</code> as <code>LISTENBRAINZ_TOKEN</code> and restarts the web container.</>,
