@@ -4032,3 +4032,7 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 .notice-steps a { color: var(--accent); font-weight: 600; text-decoration: none; }
 .notice-steps a:hover { text-decoration: underline; text-underline-offset: 3px; }
 @media (max-width: 760px) { .notice-details > summary.setup-summary { min-height: 44px; } }
+@media (max-width: 760px) {
+  /* Quality under the length reads at the size of the metadata beside it. */
+  .end-quality { font-size: 12px; font-weight: 500; }
+}
