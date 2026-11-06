@@ -24,11 +24,16 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
     staleTime: 60_000,
   });
   function close() {
+    const hadResults = open;
     setOpen(false); setQuery('');
-    // On a phone the field folds back into the top bar's search button.
-    if (document.body.classList.contains('search-open')) document.body.classList.remove('search-open');
-    else input.current?.focus({ preventScroll: true });
-    requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
+    // On a phone the field folds back into the top bar's search button, and
+    // focus goes back to that button.
+    if (document.body.classList.contains('search-open')) {
+      document.body.classList.remove('search-open');
+      document.querySelector<HTMLButtonElement>('.search-toggle')?.focus({ preventScroll: true });
+    } else input.current?.focus({ preventScroll: true });
+    // Only results moved the page; an empty field left it where it was.
+    if (hadResults) requestAnimationFrame(() => window.scrollTo(0, pageScroll.current));
   }
   useEffect(() => { setOpen(false); setQuery(''); document.body.classList.remove('search-open'); }, [location.key]);
   // The menu stops marking a page as current while results cover it.
