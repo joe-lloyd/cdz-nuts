@@ -1,7 +1,7 @@
 import { createContext, use, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
-import { artUrl, genres as parseGenres, initial, shortDay } from '../lib/format.ts';
+import { artUrl, genres as parseGenres, cardDay, initial, shortDay } from '../lib/format.ts';
 import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
 import { post } from '../api/client.ts';
 import { player, usePlayer } from '../player/usePlayer.ts';
@@ -100,9 +100,10 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
  * narrow, so there each one keeps to a line and the full words are a tooltip.
  */
 export function Badges({ row, compact = false }: { row: Tombstoned; compact?: boolean | undefined }) {
-  const removed = row.removed_at ? `Removed from Spotify · ${shortDay(row.removed_at)}` : '';
+  // Spotify pulled it from its catalogue; the archive keeps what it had.
+  const removed = row.removed_at ? `No longer on Spotify · ${shortDay(row.removed_at)}` : '';
   const items = [
-    row.removed_at ? <Status key="r" text={compact ? `Removed ${shortDay(row.removed_at)}` : removed} title={compact ? removed : undefined} /> : null,
+    row.removed_at ? <Status key="r" text={compact ? `Off Spotify · ${cardDay(row.removed_at)}` : removed} title={compact ? removed : undefined} /> : null,
     row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${shortDay(row.unfollowed_at)}`} /> : null,
     row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${shortDay(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
@@ -185,7 +186,11 @@ const WAITING_ICON = (
  * sends the same "get me this" the player used to send when you pressed play
  * on something missing; it just says so up front now instead of after.
  */
-export function PlayControl({ track, current = true }: { track: Track; current?: boolean | undefined }) {
+export function PlayControl({ track, current = true, words = false }: {
+  track: Track; current?: boolean | undefined;
+  /** The request as a labelled button for a row's status line, and nothing for a song you hold. */
+  words?: boolean | undefined;
+}) {
   const play = usePlayFromScope();
   // A history can list the playing song twice; only the row that is current shows it.
   const playing = useNowPlaying(track.id);
@@ -197,27 +202,43 @@ export function PlayControl({ track, current = true }: { track: Track; current?:
   const busy = !stopped && (requested || Boolean(label));
   if (!track.id) return null;
 
-  if (!isHeld(track) && !progress.status?.ready && !state) {
+  const request = () => {
+    if (progress.failed) { progress.refresh?.(); return; }
+    setRequested(true);
+    post('/api/tracks/want', {
+      artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
+      title: track.name,
+      album: track.album ?? null,
+      durationMs: track.duration_ms ?? null,
+      recordingMbid: track.recording_mbid ?? null,
+      releaseMbid: track.release_mbid ?? null,
+    })
+      .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
+      .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
+  };
+  const missing = !isHeld(track) && !progress.status?.ready && !state;
+
+  if (words) {
+    if (!missing) return null;
+    // The status line already says how a download is going; until the
+    // first check answers, it says the request went in.
+    if (busy && !progress.failed) return downloadLabel(progress.status) ? null : <span className="row-action-note">Requested</span>;
+    return (
+      <button className="row-action" type="button" aria-label={`Request a download of ${track.name}`} onClick={request}>
+        {progress.failed ? 'Check again' : stopped ? 'Request again'
+          : <><span className="ra-long">Request download</span><span className="ra-short">Request</span></>}
+      </button>
+    );
+  }
+
+  if (missing) {
     return (
       <span className="download-control">
       <button
         className={`radio-get${busy ? ' queued' : ''}`} type="button" disabled={busy && !progress.failed}
         aria-label={`Get a copy of ${track.name}`}
         title={progress.failed ? 'Check download progress again' : progress.status?.error ?? label ?? 'Request a download into your archive'}
-        onClick={() => {
-          if (progress.failed) { progress.refresh?.(); return; }
-          setRequested(true);
-          post('/api/tracks/want', {
-            artist: (track.artists ?? track.artist_name ?? '').split(',')[0]?.trim() ?? '',
-            title: track.name,
-            album: track.album ?? null,
-            durationMs: track.duration_ms ?? null,
-            recordingMbid: track.recording_mbid ?? null,
-            releaseMbid: track.release_mbid ?? null,
-          })
-            .then((d) => { player.notify((d as { detail?: string }).detail ?? 'Queued'); progress.refresh?.(); })
-            .catch((e: Error) => { player.notify(e.message, true); setRequested(false); });
-        }}
+        onClick={request}
       >
         {busy ? WAITING_ICON : <span className="get-word" aria-hidden="true">Get</span>}
       </button>

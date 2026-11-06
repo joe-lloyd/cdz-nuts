@@ -91,16 +91,15 @@ export function Upgrades() {
             <option value="chapters">Chaptered video</option>
           </select>
         </label>
-        {/* On a phone the optional fields fold away until asked for, so the
-            link and its button stay together. Album imports need them, so
-            those open them. */}
+        {/* The optional fields fold away until asked for, so the link and
+            its button lead. Album imports need them, so those open them. */}
         <button className="upgrade-more" type="button" aria-expanded={more || batch} onClick={() => setMore(!more)} hidden={batch}>
-          {more ? 'Fewer details' : 'Add artist, title or album'}
+          {more ? 'Hide matching details' : 'Help it match (optional)'}
         </button>
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Artist</span><input name="artist" placeholder="Artist" required={batch} /><small>{batch ? 'Required' : 'Optional; helps match a YouTube link'}</small></label>
         {batch ? null : <label className={`upgrade-extra${more ? ' open' : ''}`}><span>Title</span><input name="title" placeholder="Song title" /><small>Optional</small></label>}
         <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Album</span><input name="album" placeholder="Album" required={batch} /><small>{batch ? 'Required' : 'Optional'}</small></label>
-        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Lossless tries</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} /><small>Searches before giving up</small></label>
+        <label className={`upgrade-extra${more || batch ? ' open' : ''}`}><span>Give up after</span><input name="maxAttempts" type="number" min={1} max={20} defaultValue={6} aria-describedby="give-up-unit" /><small id="give-up-unit">searches for a lossless copy</small></label>
         <button className="primary-action" type="submit" disabled={submit.isPending}>
           {batch ? 'Import the album' : 'Add the song'}
         </button>

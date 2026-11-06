@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
 import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, useArchiveState, useNowPlaying } from './primitives.tsx';
-import { use } from 'react';
+import { use, type ReactNode } from 'react';
 
 /** Most of the shelf is in the archive, so the badge marks what is not. */
 const MissingBadge = () => <span className="dl missing" title="No copy in your archive yet">Not in archive</span>;
@@ -14,11 +14,16 @@ const MissingBadge = () => <span className="dl missing" title="No copy in your a
  * gets cut off. `removed` names what removed_at means where the row is shown:
  * un-liked on a liked list, taken out on a playlist.
  */
-function RowStatus({ track, archive, removed, note }: {
-  track: Track; archive: string; removed: string; note?: string | undefined;
+function RowStatus({ track, archive, removed, note, action }: {
+  track: Track; archive: string; removed: string; note?: string | undefined; action?: ReactNode;
 }) {
-  const parts = [track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '', archive, note ?? ''].filter(Boolean);
-  return parts.length ? <span className="row-status">{parts.join(' · ')}</span> : null;
+  const parts = [
+    track.removed_at ? <span key="r">{`${removed} ${shortDay(track.removed_at)}`}</span> : null,
+    archive ? <span key="a" className="archive-label">{archive}</span> : null,
+    action ? <span key="q" className="row-request">{action}</span> : null,
+    note ? <span key="n" className="row-note">{note}</span> : null,
+  ].filter(Boolean);
+  return parts.length ? <span className="row-status">{parts}</span> : null;
 }
 
 /**
@@ -40,7 +45,8 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
   return (
     <div className={`row${track.removed_at ? ' gone' : ''}${state}`} data-track-id={track.id}>
       {rank != null ? <span className="rank">{rank}</span> : null}
-      <PlayControl track={track} current={current} />
+      {/* A song you do not hold has nothing to play; its request is on the status line. */}
+      {archive.state === 'missing' ? <span className="track-play-slot" aria-hidden="true" /> : <PlayControl track={track} current={current} />}
       {albumHref
         ? <Link to={albumHref} tabIndex={-1} aria-hidden="true"><Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} /></Link>
         : <Pic kind="albums" id={track.album_id} cdn={track.image_url} name={track.album ?? track.name} />}
@@ -52,7 +58,10 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
             {track.artists && track.album ? ' · ' : ''}
             {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
           </span>
-          <RowStatus track={track} archive={playing ? '' : archive.label} removed={removed} note={note} />
+          <RowStatus
+            track={track} archive={playing ? '' : archive.label} removed={removed} note={note}
+            action={archive.state === 'missing' ? <PlayControl track={track} words /> : null}
+          />
         </div>
       </div>
       <MediaBadges row={track} />

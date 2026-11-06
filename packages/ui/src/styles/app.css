@@ -3664,11 +3664,9 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .player-actions > * { flex: none; }
 
 @media (max-width: 1280px) and (min-width: 761px) {
-  /* Lyrics keeps its word; Queue says enough with its icon and count. */
+  /* Both keep their words; the volume slider gives up the room. */
   .player-actions { gap: 12px; }
-  .queue-button:not(.lyrics-button) .button-label { display: none; }
-  .queue-button:not(.lyrics-button) { padding: 0 6px; }
-  .volume-control input { width: 84px; }
+  .volume-control input { width: 80px; }
 }
 
 @media (min-width: 761px) {
@@ -3705,7 +3703,6 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
    tall; the artist gives way first. */
 .row .mid .sub-line { display: flex; min-width: 0; }
 .sub-line .sub-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sub-line .row-status { flex: none; max-width: 60%; white-space: nowrap; }
 .sub-line .row-status::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
 
 /* Create waits for a name, and looks like it. */
@@ -3757,7 +3754,10 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 }
 
 /* A play's time says "at", so it never reads as a length beside one. */
-.history .row:not(.row-head) > .row-date::before { content: 'at '; color: var(--ink-3); }
+@media (max-width: 760px) {
+  /* A phone has no column header, so a play's time says "at". */
+  .history .row:not(.row-head) > .row-date::before { content: 'at '; color: var(--ink-3); }
+}
 
 /* A request in flight is a state, not a button: a clock with no ring. On a
    phone it sits on a dark scrim so it shows on any cover. */
@@ -3778,9 +3778,14 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 /* On a phone the lyrics title gets the row; Adjust sync is an icon by close. */
 /* The header's kicker style is for its label, not the button's word. */
 .queue-head .timing-toggle .timing-word { display: inline; color: inherit; font: inherit; letter-spacing: normal; text-transform: none; }
+/* On a phone the title gets the row and the button says just "Sync", beside close. */
+.queue-head .timing-toggle .timing-word-short { display: none; }
 @media (max-width: 760px) {
   .queue-head .timing-toggle .timing-word { display: none; }
-  .lyrics-panel .timing-toggle { width: 44px; min-width: 44px; height: 44px; padding: 0; justify-content: center; }
+  .queue-head .timing-toggle .timing-word-short { display: inline; color: inherit; font: inherit; letter-spacing: normal; text-transform: none; }
+  .lyrics-panel .timing-toggle { min-height: 44px; padding: 0 14px; gap: 6px; }
+  .lyrics-panel .queue-head > div:first-child { flex: 1 1 0; min-width: 0; }
+  .lyrics-panel .queue-head > .timing-toggle + .lyrics-tools:not(.open) { flex: 0 0 auto; }
 }
 
 /* Dot-separated facts: the dot sits before each fact, and the first 14px of
@@ -3797,8 +3802,6 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
   .history .row > .end { display: none; }
 }
 /* Status and artist share the line; the status gives way last. */
-.sub-line .sub-text { flex: 0 1 auto; min-width: 3em; }
-.sub-line .row-status { flex: 0 0 auto; max-width: 70%; overflow: hidden; text-overflow: ellipsis; }
 
 /* Two text weights below display size, and one monospace stack. */
 b, strong { font-weight: 600; }
@@ -3806,3 +3809,45 @@ code, kbd, samp { font-family: var(--mono); font-size: .92em; }
 .skip-link { font-weight: 600; }
 .q-badge b { font-size: 11px; }
 .tile small { font-weight: 400; }
+
+/* The status line: facts, then the request as a labelled button. A fact
+   gives way before the artist does; the button never does. */
+.sub-line .sub-text { flex: 0 1 auto; min-width: 0; }
+.ra-short { display: none; }
+.sub-line .row-status { display: flex; flex: 0 1 auto; min-width: 0; white-space: nowrap; }
+.row-status > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.row-status > span + span::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+.row-status > .row-request { flex: none; overflow: visible; }
+.row-request:empty { display: none; }
+.row-action { min-height: 24px; padding: 0; color: var(--accent); background: none; border: 0; font: 600 13px/1 Inter, ui-sans-serif, system-ui, sans-serif; cursor: pointer; }
+.row-action:hover { text-decoration: underline; text-underline-offset: 3px; }
+.row-action-note { color: var(--ink-2); }
+.track-play-slot { flex: 0 0 44px; width: 44px; height: 44px; }
+@media (max-width: 760px) {
+  .row:has(> a > .pic, > .pic) > .track-play-slot { display: none; }
+  /* On a phone the button says it all, and where a play happened can wait. */
+  .row-status > .archive-label:has(+ .row-request:not(:empty)) { display: none; }
+  .row-status > .archive-label:has(+ .row-request:not(:empty)) + .row-request::before { content: none; }
+  .row-status > .row-note { display: none; }
+  .sub-line:has(.row-status > .row-note:only-child) .row-status { display: none; }
+  .row-action { min-height: 44px; margin: -14px 0; }
+  .ra-long { display: none; }
+  .ra-short { display: inline; }
+}
+
+/* The request form leads with the link: link, type and Add on one row,
+   the matching details folded behind one link on every screen. */
+@media (min-width: 761px) {
+  .upgrade-form { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto; align-items: end; }
+  .upgrade-form label:first-child::after,
+  .upgrade-form label:nth-child(2)::after { content: none; }
+  .upgrade-form .primary-action { grid-column: auto; grid-row: 1; grid-column-start: 3; align-self: end; min-height: 42px; margin: 0; }
+  .upgrade-extra:not(.open) { display: none; }
+  .upgrade-more:not([hidden]) { display: inline-flex; grid-column: 1 / -1; justify-self: start; align-items: center; min-height: 32px; padding: 0; color: var(--ink-2); background: none; border: 0; cursor: pointer; font-size: 13px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+  .upgrade-more:hover { color: var(--ink); }
+}
+
+/* The lyrics view ends above the player bar, so the bar's divider runs whole. */
+@media (min-width: 761px) { .lyrics-panel { bottom: calc(var(--player) + 1px); } }
+@media (max-width: 760px) { .queue-tools input[type="search"] { flex: 1 1 100%; width: 100%; } }
+.sub-line .row-status:has(.row-action) { flex-shrink: 0; }

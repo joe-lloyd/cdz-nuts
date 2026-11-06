@@ -101,6 +101,12 @@ export const clamp = (n: number, lo: number, hi: number): number => Math.max(lo,
 /** A date for a status line, kept on one line. */
 export const shortDay = (iso: string | null | undefined): string => day(iso).replace(/ /g, '\u00a0');
 
+/** "22 Sep" this year, "22 Sep 2025" before it: a date for a narrow card. */
+export const cardDay = (iso: string | null | undefined): string => {
+  const full = shortDay(iso);
+  return iso && new Date(iso).getFullYear() === new Date().getFullYear() ? full.replace(/\u00a0\d{4}$/, '') : full;
+};
+
 /** "Sep 2026" from "2026-09". */
 export const monthName = (ym: string): string => {
   const [y, m] = ym.split('-').map(Number);
