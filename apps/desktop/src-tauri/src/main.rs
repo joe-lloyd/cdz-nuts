@@ -1,4 +1,4 @@
-// Homelab Music -- a tray-resident player for the home music library.
+// cdz-nutz -- a tray-resident player for the home music library.
 //
 // The window is a thin thing. Everything interesting is that the WebView never
 // touches the network: it talks to the `homelab://` scheme, which this process
@@ -118,7 +118,7 @@ fn main() {
             )
             .initialization_script(audio_output::initialization_script())
             .initialization_script(panel::HOST_SCRIPT)
-            .title("Homelab Music")
+            .title("cdz-nutz")
             .inner_size(1180.0, 820.0)
             .min_inner_size(420.0, 520.0)
             // WKWebView otherwise suspends the document after a hidden window
@@ -138,7 +138,9 @@ fn main() {
             tauri::async_runtime::spawn(async move {
                 // auto_install: the window has just opened and nothing is
                 // playing, so a relaunch here costs the listener nothing.
-                update::check(handle, false, true).await;
+                update::check(handle.clone(), false, true).await;
+                // Then keep looking while the app sits in the tray.
+                update::watch(handle).await;
             });
 
             // Same reasoning, same moment: ask home whether the UI we embedded
@@ -384,7 +386,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id("main")
         .icon(app.default_window_icon().expect("bundled icon").clone())
-        .tooltip("Homelab Music")
+        .tooltip("cdz-nutz")
         .menu(&menu)
         // Left click opens the now-playing panel; the menu is on right click.
         .show_menu_on_left_click(false)

@@ -90,7 +90,7 @@ jobs:
         with:
           projectPath: apps/desktop
           tagName: ${{ inputs.tag || github.ref_name }}
-          releaseName: 'Homelab Music __VERSION__'
+          releaseName: 'cdz-nutz __VERSION__'
           releaseBody: |
             Install with one line — see the README for what each script does.
 

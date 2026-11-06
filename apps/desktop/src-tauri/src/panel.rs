@@ -40,6 +40,31 @@ impl Panel {
     pub fn latest(&self) -> Option<String> {
         self.latest.lock().unwrap().clone()
     }
+
+    /// Whether the player last said it was playing. Paused, stopped and
+    /// "nothing yet" all count as quiet, which is when an update may relaunch.
+    pub fn is_playing(&self) -> bool {
+        self.latest().is_some_and(|message| says_playing(&message))
+    }
+}
+
+fn says_playing(message: &str) -> bool {
+    serde_json::from_str::<serde_json::Value>(message).is_ok_and(|value| {
+        value["kind"] == "nowplaying" && value["playing"] == serde_json::Value::Bool(true)
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::says_playing;
+
+    #[test]
+    fn only_a_playing_now_playing_message_counts_as_playing() {
+        assert!(says_playing(r#"{"kind":"nowplaying","playing":true,"title":"x"}"#));
+        assert!(!says_playing(r#"{"kind":"nowplaying","playing":false}"#));
+        assert!(!says_playing(r#"{"kind":"gone"}"#));
+        assert!(!says_playing("not json"));
+    }
 }
 
 pub fn build(app: &tauri::App) -> tauri::Result<()> {

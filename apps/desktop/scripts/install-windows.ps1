@@ -1,4 +1,4 @@
-# Install Homelab Music on Windows, from the latest GitHub release.
+# Install cdz-nutz on Windows, from the latest GitHub release.
 #
 #   irm https://raw.githubusercontent.com/joe-lloyd/cdz-nuts/main/apps/desktop/scripts/install-windows.ps1 | iex
 #
@@ -10,7 +10,10 @@
 # just downloaded from your own repository. Uninstall through Settings > Apps
 # like anything else.
 #
-# After this, the app updates itself from the tray.
+# After this, the app updates itself: at launch, and every hour while it runs.
+#
+# Before 0.7.1 the app was called Homelab Music, and NSIS installs per product
+# name, so an install under the old name is uninstalled first.
 
 $ErrorActionPreference = 'Stop'
 
@@ -18,7 +21,7 @@ $repo = 'joe-lloyd/cdz-nuts'
 
 Write-Host '==> Looking up the latest release'
 $release = Invoke-RestMethod "https://api.github.com/repos/$repo/releases/latest" -Headers @{
-    'User-Agent' = 'homelab-music-installer'
+    'User-Agent' = 'cdz-nutz-installer'
 }
 
 # The NSIS .exe is the installer; the .zip alongside it is the updater artifact
@@ -33,6 +36,12 @@ $out = Join-Path $env:TEMP $asset.name
 Write-Host "==> Downloading $($asset.name)"
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $out -UseBasicParsing
 
+$oldUninstaller = Join-Path $env:LOCALAPPDATA 'Homelab Music\uninstall.exe'
+if (Test-Path $oldUninstaller) {
+    Write-Host '==> Removing the install from before the rename (Homelab Music)'
+    Start-Process -FilePath $oldUninstaller -ArgumentList '/S' -Wait | Out-Null
+}
+
 Write-Host '==> Installing'
 # /S is NSIS silent mode. Waiting matters: without it the script reports success
 # while the installer is still running, and a following launch would race it.
@@ -45,5 +54,5 @@ if ($process.ExitCode -ne 0) {
 Remove-Item $out -Force -ErrorAction SilentlyContinue
 
 Write-Host ''
-Write-Host "Installed Homelab Music $($release.tag_name)."
+Write-Host "Installed cdz-nutz $($release.tag_name)."
 Write-Host 'Find it in the Start menu. It lives in the tray once running.'

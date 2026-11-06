@@ -1,6 +1,6 @@
 {
-  "name": "Music Taste",
-  "short_name": "Music",
+  "name": "cdz-nutz",
+  "short_name": "cdz-nutz",
   "description": "Your private listening history, local music archive, and player.",
   "start_url": "/",
   "scope": "/",

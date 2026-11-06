@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Make an unsigned Homelab Music build launchable on macOS.
+# Make an unsigned cdz-nutz build launchable on macOS.
 #
 # There is no Apple Developer ID behind this app and there is not going to be
 # one -- it is a personal tray app for one person's music library. macOS
 # therefore refuses it twice, for two different reasons, and both have to be
 # answered:
 #
-#   1. "Homelab Music is damaged and can't be opened."
+#   1. "cdz-nutz is damaged and can't be opened."
 #      Not damage. The download carried com.apple.quarantine, and Gatekeeper
 #      will not evaluate an unsigned app that has it.
 #
@@ -22,13 +22,13 @@
 # system-wide policy. Undo is simply deleting the app.
 #
 # Usage:
-#   ./scripts/macos-allow-unsigned.sh                       # /Applications/Homelab Music.app
+#   ./scripts/macos-allow-unsigned.sh                       # /Applications/cdz-nutz.app
 #   ./scripts/macos-allow-unsigned.sh path/to/Some.app
 #   ./scripts/macos-allow-unsigned.sh ~/Downloads/*.dmg     # a mounted dmg's app
 
 set -euo pipefail
 
-APP="${1:-/Applications/Homelab Music.app}"
+APP="${1:-/Applications/cdz-nutz.app}"
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
   echo "This script is macOS-only; you are on $(uname -s)." >&2
@@ -39,7 +39,7 @@ if [[ ! -d "$APP" ]]; then
   echo "No app bundle at: $APP" >&2
   echo >&2
   echo "Pass the path explicitly, e.g.:" >&2
-  echo "  $0 ~/Downloads/Homelab\\ Music.app" >&2
+  echo "  $0 ~/Downloads/cdz-nutz.app" >&2
   exit 1
 fi
 

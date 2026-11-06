@@ -37,7 +37,7 @@ export function Settings() {
       <h2>Version</h2>
       {desktop ? (
         <>
-          <p className="lede">Homelab Music {desktop.version}</p>
+          <p className="lede">cdz-nutz {desktop.version}</p>
           <p className="note">
             {desktop.update_pending
               ? 'An update is downloaded and waiting. Installing restarts the app.'

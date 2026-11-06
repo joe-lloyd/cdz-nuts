@@ -44,7 +44,7 @@ pipelines:
           mkdir -p dist
           for target in x86_64-apple-darwin aarch64-apple-darwin; do
             (cd apps/desktop && cargo tauri build --target "$target" --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}')
-            app="$CARGO_TARGET_DIR/$target/release/bundle/macos/Homelab Music.app"
+            app="$CARGO_TARGET_DIR/$target/release/bundle/macos/cdz-nutz.app"
             test -x "$app/Contents/MacOS/homelab-music"
             ditto -c -k --sequesterRsrc --keepParent "$app" "dist/Homelab-Music-$target.zip"
           done

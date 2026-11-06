@@ -7,12 +7,13 @@
 // When it installs is the whole design. Installing means relaunching, and
 // relaunching mid-album to save someone thirty seconds is a bad trade. So the
 // startup check installs -- nothing is playing yet, the window has just
-// opened, and a relaunch there costs nothing. A check that finds an update
-// later notifies instead and waits to be told, from the tray or from settings.
+// opened, and a relaunch there costs nothing. After that the app looks again
+// every hour while it sits in the tray, and installs as soon as a check finds
+// the player quiet; an update found mid-song waits for the next quiet check.
 //
-// The effect is that the app updates itself without being asked, on the next
-// launch after a release, which is what "auto-update" has to mean for
-// something that lives in the tray for weeks at a time.
+// The effect is that the app keeps itself current without being asked, which
+// is what "auto-update" has to mean for something that lives in the tray for
+// weeks at a time.
 
 use tauri::{AppHandle, Manager};
 use tauri_plugin_notification::NotificationExt;
@@ -66,8 +67,8 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
 
             notify(
                 &app,
-                &format!("Homelab Music {version} is available"),
-                "Install it from settings or the tray when you are not listening to something.",
+                &format!("cdz-nutz {version} is available"),
+                "It installs by itself once nothing is playing, or now from settings or the tray.",
             );
             Found::Available { version }
         }
@@ -76,7 +77,7 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
             if announce_when_current {
                 notify(
                     &app,
-                    "Homelab Music is up to date",
+                    "cdz-nutz is up to date",
                     env!("CARGO_PKG_VERSION"),
                 );
             }
@@ -96,6 +97,29 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
                 error: e.to_string(),
             }
         }
+    }
+}
+
+/// How often a running app looks again. It lives in the tray for weeks, so
+/// the startup check alone would leave it behind every release.
+const RECHECK: std::time::Duration = std::time::Duration::from_secs(60 * 60);
+
+/// Keep up to date while running. An update found while music plays waits,
+/// silently, and installs at the first check that finds the player quiet, so
+/// the relaunch never cuts a song off.
+pub async fn watch(app: AppHandle) {
+    let mut ticker = tokio::time::interval(RECHECK);
+    ticker.tick().await; // the first tick is immediate, and startup has just checked
+    loop {
+        ticker.tick().await;
+        let quiet = !app.state::<crate::panel::Panel>().is_playing();
+        if app.state::<PendingUpdate>().is_pending() {
+            if quiet {
+                install(app.clone()).await;
+            }
+            continue;
+        }
+        check(app.clone(), false, quiet).await;
     }
 }
 
