@@ -3903,8 +3903,7 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 @media (max-width: 760px) {
   /* A history starts right under its summary. */
   .history .row-head + .day-head { margin-top: 4px; }
-  /* Requests on a phone: one sentence, the counts beside the action, the queue close behind. */
-  .upgrade-intro .intro-more { display: none; }
+  /* Requests on a phone: the counts beside the action, the queue close behind. */
   .upgrade-intro { margin-bottom: 8px; }
   .upgrade-intro + .upgrade-add { margin-bottom: 0; }
   .upgrade-form + h2 { margin-top: 24px; }
@@ -3942,3 +3941,12 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 /* Every time on screen is Inter with tabular figures, so digits line up. */
 .scrubber-row, .scrubber-row span { font-family: inherit; font-variant-numeric: tabular-nums; }
 .scrubber-row { font-size: 12px; }
+
+/* A song's first meta line: artist and album, then on a phone its quality,
+   which never gives way. On desktop the pair is just part of the line. */
+.sub-first { display: contents; }
+@media (max-width: 760px) {
+  .sub-line .sub-first { display: flex; min-width: 0; }
+  .sub-first > .sub-quality { flex: none; }
+  .sub-first > .sub-text:not(:empty) + .sub-quality::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+}

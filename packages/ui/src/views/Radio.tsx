@@ -34,7 +34,8 @@ export function Radio() {
       >
         Radio is not connected yet. It picks songs you have not heard from what
         you already play, once whoever runs this server links it to a
-        ListenBrainz account.
+        ListenBrainz account. The link is a token: a key from your ListenBrainz
+        settings that lets this server read what you listen to.
       </Notice>
     );
   }
