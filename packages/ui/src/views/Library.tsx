@@ -45,8 +45,8 @@ export function Artists() {
                 a.top_rank ? `top #${a.top_rank}` : '',
               ].filter(Boolean).join(' · ')}
             </div>
-            <Badges row={a} />
             <GenreChips json={a.genres} />
+            <Badges row={a} />
           </div>
         )) : <Empty>no matches</Empty>}
       </div>

@@ -27,7 +27,7 @@ export function AlbumDetail() {
     (album.release_date ?? '').slice(0, 4), album.album_type,
     album.total_tracks ? `${album.total_tracks} tracks` : '',
     album.downloaded ? 'in your archive' : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).map(nb).join(' · ');
   const detail = [
     album.label ?? '', album.popularity != null ? `popularity ${album.popularity}` : '',
     album.is_saved ? `saved on Spotify ${shortDay(album.saved_at)}` : '',
@@ -112,7 +112,7 @@ export function AlbumDetail() {
 function AlbumTrackRow({ track: t }: { track: Track }) {
   const state = useNowPlaying(t.id);
   return (
-    <div className={`row${state}`}>
+    <div className={`row${state}`} data-track-id={t.id}>
       <span className="rank">{t.track_number ?? ''}</span>
       <PlayControl track={t} />
       <div className="mid">
@@ -127,6 +127,9 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
     </div>
   );
 }
+
+/** Spaces inside one fact do not break, so a line only wraps at a separator. */
+const nb = (item: string | null | undefined): string => String(item ?? '').replace(/ /g, '\u00a0');
 
 const RANK_LABEL: Record<string, string> = { short_term: 'this month', medium_term: 'this half-year', long_term: 'all time' };
 const GROUPS: Array<[string, string]> = [
@@ -147,7 +150,7 @@ export function ArtistDetail() {
     artist.followers ? `${Number(artist.followers).toLocaleString()} followers` : '',
     artist.popularity != null ? `popularity ${artist.popularity}` : '',
     likedLive ? `${likedLive} liked songs` : '',
-  ].filter(Boolean).join(' · ');
+  ].filter(Boolean).map(nb).join(' · ');
   const ranks = data!.topRanks.map((r) => `#${r.rank} ${RANK_LABEL[r.time_range] ?? r.time_range}`);
   const likedNow = data!.liked.filter((t) => !t.removed_at);
   const likedOnce = data!.liked.filter((t) => t.removed_at);
@@ -161,7 +164,7 @@ export function ArtistDetail() {
           <Badges row={artist} />
           <GenreChips json={artist.genres} n={8} />
           <div className="meta">{meta}</div>
-          {ranks.length ? <div className="chips rank-chips">{ranks.map((r) => <span className="chip" key={r}>{r}</span>)}</div> : null}
+          {ranks.length ? <div className="meta meta-detail">Top artist {ranks.join(' · ')}</div> : null}
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
             {likedNow.length ? (

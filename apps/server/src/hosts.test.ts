@@ -114,6 +114,11 @@ test('the routes answer the same from node:sqlite files and from a Durable Objec
     const nightDrive = found.albums.filter((a) => a.name === 'Night Drive' && a.artists === 'Local Signals');
     assert.equal(nightDrive.length, 1);
     assert.equal(nightDrive[0]!.downloaded, 1);
+
+    // An artist's liked songs carry the same archive badge as the album's tracklist.
+    const artistLine = onNode.find((l) => l.startsWith('GET /api/artist?id=ar01 '))!;
+    const artistPage = JSON.parse(artistLine.slice(artistLine.indexOf('{'))) as { liked: Array<{ id: string; quality?: string }> };
+    assert.equal(artistPage.liked.find((t) => t.id === 'al01t2')?.quality, 'high');
   } finally {
     globalThis.fetch = realFetch;
     rmSync(dir, { recursive: true, force: true });

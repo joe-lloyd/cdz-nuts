@@ -19,11 +19,8 @@ const DownloadBadge = () => (
  * gets cut off. `removed` names what removed_at means where the row is shown:
  * un-liked on a liked list, taken out on a playlist.
  */
-function RowStatus({ track, archive, removed }: { track: Track; archive: 'held' | 'missing' | 'ready' | 'playing'; removed: string }) {
-  const parts = [
-    track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '',
-    archive === 'missing' ? 'Not in your archive' : archive === 'ready' ? 'Ready to play' : '',
-  ].filter(Boolean);
+function RowStatus({ track, archive, removed }: { track: Track; archive: string; removed: string }) {
+  const parts = [track.removed_at ? `${removed} ${shortDay(track.removed_at)}` : '', archive].filter(Boolean);
   return parts.length ? <div className="row-status">{parts.join(' · ')}</div> : null;
 }
 
@@ -47,7 +44,7 @@ export function TrackRow({ track, endText, rank, added, removed = 'Removed on Sp
           {track.artists && track.album ? ' · ' : ''}
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </div>
-        <RowStatus track={track} archive={state ? 'playing' : archive} removed={removed} />
+        <RowStatus track={track} archive={state ? '' : archive.label} removed={removed} />
       </div>
       <MediaBadges row={track} />
       <RadioControl track={track} />
@@ -79,10 +76,10 @@ export function SongCard({ track, meta, current = true }: { track: Track; meta?:
           {track.album ? (albumHref ? <Link to={albumHref}>{track.album}</Link> : track.album) : null}
         </span>
         {/* The state leads the last line, so a date is what gives way, not it. */}
-        {meta || (archive !== 'held' && !playing) ? (
+        {meta || (archive.label && !playing) ? (
           <span className="song-album">
-            {archive !== 'held' && !playing ? <span className="not-held">{archive === 'ready' ? 'Ready to play' : 'Not in your archive'}</span> : null}
-            {archive !== 'held' && !playing && meta ? ' · ' : ''}
+            {archive.label && !playing ? <span className="not-held">{archive.label}</span> : null}
+            {archive.label && !playing && meta ? ' · ' : ''}
             {meta ? <span className="song-meta">{meta}</span> : null}
           </span>
         ) : null}

@@ -31,11 +31,13 @@ export const isHeld = (track: Badged): boolean => Boolean(track.quality || track
  * so a row that needs a status line has it from the first paint; the
  * download check can only turn "missing" into "ready", never add a line.
  */
-export function useArchiveState(track: Track): 'held' | 'missing' | 'ready' {
+export function useArchiveState(track: Track): { state: 'held' | 'missing' | 'ready'; label: string } {
   const held = isHeld(track);
   const progress = useDownloadProgress(track, held);
-  if (held) return 'held';
-  return progress.status?.ready ? 'ready' : 'missing';
+  if (held) return { state: 'held', label: '' };
+  if (progress.status?.ready) return { state: 'ready', label: 'Ready to play' };
+  // A download under way says how far it has got; otherwise, plainly, missing.
+  return { state: 'missing', label: downloadLabel(progress.status) ?? 'Not in your archive' };
 }
 
 export const PLAY_ICON = (

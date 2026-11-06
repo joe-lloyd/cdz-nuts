@@ -1917,9 +1917,11 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
       artist: artist ?? null,
       albums: [...spotifyAlbums, ...(typeof artist?.name === 'string' ? libraryOnlyAlbums(artist.name, spotifyAlbums) : [])]
         .sort((a, b) => String(b.release_date ?? '').localeCompare(String(a.release_date ?? ''))),
+      // artists is what the archive badges match on, as on every other list.
       liked: query(`
         SELECT t.id, t.name, t.duration_ms, lt.added_at, lt.removed_at,
-               al.name AS album, al.id AS album_id, al.image_url
+               al.name AS album, al.id AS album_id, al.image_url,
+               (SELECT group_concat(a.name, ', ') FROM track_artists ta2 JOIN artists a ON a.id = ta2.artist_id WHERE ta2.track_id = t.id) AS artists
         FROM track_artists ta
         JOIN tracks t ON t.id = ta.track_id
         JOIN liked_tracks lt ON lt.track_id = t.id

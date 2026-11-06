@@ -968,8 +968,8 @@ class PlayerEngine {
     this.patch({
       lyrics: d,
       lyricsSource: d.instrumental ? 'Instrumental'
-        : d.synced?.length ? `${d.source === 'jellyfin' ? 'Synced · local library' : 'Synced · LRCLIB'}${wordly ? ' · word timing' : ''}`
-        : d.plain ? (d.source === 'jellyfin' ? 'Unsynchronized · local library' : 'Unsynchronized · LRCLIB')
+        : d.synced?.length ? `${d.source === 'jellyfin' ? 'Synced lyrics · your library' : 'Synced lyrics · LRCLIB'}${wordly ? ' · word by word' : ''}`
+        : d.plain ? (d.source === 'jellyfin' ? 'Lyrics · your library' : 'Lyrics · LRCLIB')
         : 'Lyrics',
     });
     this.syncLyrics(true);
