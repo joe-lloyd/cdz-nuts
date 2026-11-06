@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 
 import { bareAlbumName, dur, shortDay } from '../lib/format.ts';
 import type { Album, GigEvent, Track } from '../api/types.ts';
-import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
+import { Badges, MediaBadges, Pic, PlayControl, RadioControl, RadioEnabled, SpotifyLink, isLossless, readableQuality, useArchiveState, useNowPlaying } from './primitives.tsx';
 import { use, type ReactNode } from 'react';
 
 /** Most of the shelf is in the archive, so the badge marks what is not. */
@@ -15,7 +15,7 @@ const MissingBadge = () => <span className="dl missing" title="No copy in your a
  * un-liked on a liked list, taken out on a playlist.
  */
 function RowStatus({ track, archive, removed, note, action }: {
-  track: Track; archive: string; removed: string; note?: string | undefined; action?: ReactNode;
+  track: Track; archive: string; removed: string; note?: ReactNode; action?: ReactNode;
 }) {
   const parts = [
     track.removed_at ? <span key="r">{`${removed} ${shortDay(track.removed_at)}`}</span> : null,
@@ -36,7 +36,7 @@ function RowStatus({ track, archive, removed, note, action }: {
  */
 export function TrackRow({ track, endText, rank, date, note, current = true, removed = 'Removed on Spotify' }: {
   track: Track; endText?: string | undefined; rank?: number | null | undefined; date?: string | undefined;
-  note?: string | undefined; current?: boolean | undefined; removed?: string | undefined;
+  note?: ReactNode; current?: boolean | undefined; removed?: string | undefined;
 }) {
   const playing = useNowPlaying(track.id);
   const state = current ? playing : '';
@@ -71,7 +71,7 @@ export function TrackRow({ track, endText, rank, date, note, current = true, rem
       <div className="end">
         {endText ?? dur(track.duration_ms)}
         {/* The phone has no quality column, so the quality sits under the length there. */}
-        {track.quality_label ? <small className="end-quality">{readableQuality(track.quality_label)}</small> : null}
+        {track.quality_label ? <small className={`end-quality${isLossless(track.quality) ? ' lossless' : ''}`}>{readableQuality(track.quality_label)}</small> : null}
       </div>
       {track.id && !track.id.startsWith('lib') ? <SpotifyLink type="track" id={track.id} /> : null}
     </div>

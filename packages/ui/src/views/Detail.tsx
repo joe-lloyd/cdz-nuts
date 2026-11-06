@@ -8,7 +8,7 @@ import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
   BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
-  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, readableQuality, useNowPlaying,
+  PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, isLossless, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
@@ -122,7 +122,7 @@ function AlbumTrackRow({ track: t }: { track: Track }) {
       <LikeButton track={t} />
       <div className="end">
         {dur(t.duration_ms)}
-        {t.quality_label ? <small className="end-quality">{readableQuality(t.quality_label)}</small> : null}
+        {t.quality_label ? <small className={`end-quality${isLossless(t.quality) ? ' lossless' : ''}`}>{readableQuality(t.quality_label)}</small> : null}
       </div>
       {t.id && !t.id.startsWith('lib') ? <SpotifyLink type="track" id={t.id} /> : null}
     </div>

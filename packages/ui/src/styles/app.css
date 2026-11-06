@@ -3997,6 +3997,29 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 @media (max-width: 760px) {
   .queue-head > button[aria-label^="Close"],
   .lyrics-tools #lyrics-close { width: 44px; height: 44px; }
-  /* The mini player's open control is a clear ringed button. */
-  .player-bar:not(.expanded) .player-expand { border: 1px solid var(--line); border-radius: 50%; color: var(--ink-2); }
+}
+
+@media (max-width: 760px) {
+  /* Phone rows keep their trailing columns at fixed widths, filled or not,
+     so hearts and times line up down the list. */
+  .row > .end { flex: 0 0 52px; min-width: 52px; text-align: right; }
+  .end-quality.lossless { color: #6fd0b4; }
+  .row > .end:empty { display: block; }
+  /* A history's time is a narrow fixed column under its day heading, so the
+     title keeps the row. */
+  .history .row > .row-date { flex: 0 0 44px; min-width: 44px; text-align: right; }
+  .history .row:not(.row-head) > .row-date::before { content: none; }
+}
+
+/* With nothing loaded, the volume is as quiet as the controls around it. */
+.player-bar[data-state="idle"] .volume-control { filter: grayscale(1); opacity: .7; }
+
+/* Elapsed and remaining sit close to the ends of the bar they measure. */
+.scrubber-row { gap: 10px; }
+.scrubber-row > span:first-child { text-align: right; }
+.scrubber-row > span:last-child { text-align: left; }
+@media (max-width: 760px) {
+  /* A phone history shows when, not how long, whatever the length cell holds. */
+  .history .row > .end,
+  .history .row > .end:has(.end-quality) { display: none; }
 }
