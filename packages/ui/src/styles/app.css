@@ -3831,8 +3831,6 @@ code, kbd, samp { font-family: var(--mono); font-size: .92em; }
   .sub-line .row-status::before { content: none; }
   .ra-long { display: none; }
   .ra-short { display: inline; }
-  .row-status > .row-note { display: none; }
-  .sub-line:has(.row-status > .row-note:only-child) .row-status { display: none; }
   .row-action { min-height: 44px; margin: -14px 0; }
 }
 
@@ -3949,4 +3947,36 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   .sub-line .sub-first { display: flex; min-width: 0; }
   .sub-first > .sub-quality { flex: none; }
   .sub-first > .sub-text:not(:empty) + .sub-quality::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+}
+
+/* The bar's heart for the playing song, beside its title. */
+.player-like { display: flex; flex: none; align-items: center; }
+.player-like .like-button { min-width: 36px; min-height: 36px; font-size: 20px; }
+@media (max-width: 760px) { .player-like { display: none; } }
+/* The idle art slot shows the disc mark at a quiet size. */
+.player-art .idle-mark { width: 28px; height: 28px; opacity: .7; }
+
+/* Request states each have a tone: waiting stays grey, an MP3 that is in and
+   waiting for its lossless copy is green, a retry is amber. */
+.upgrade-state.queued { color: #6fd0b4; border-color: rgba(39, 156, 126, .55); background: rgba(39, 156, 126, .12); }
+.upgrade-state.retry_wait { color: #e8c07a; border-color: rgba(232, 192, 122, .45); }
+/* Tries: 8px dots, filled when spent, a clear ring when still to come. */
+.upgrade-dots i:not(.used) { border-color: var(--ink-2); }
+
+/* Lyrics fade in from a clear band under the header, so no line looks cut. */
+.lyrics-body {
+  -webkit-mask-image: linear-gradient(transparent 0 20px, #000 100px, #000 calc(100% - 120px), transparent);
+  mask-image: linear-gradient(transparent 0 20px, #000 100px, #000 calc(100% - 120px), transparent);
+}
+
+/* Album card titles hold two lines, so years and badges line up across a row. */
+@media (min-width: 761px) {
+  .al-grid .al-body b { display: -webkit-box; min-height: calc(2 * 1.4em); white-space: normal; line-height: 1.4; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+
+/* The stat card's ring is decoration: a faint outline, not a dark disc. */
+.overview-hero::before { border-width: 1px; border-color: rgba(255, 255, 255, .08); }
+@media (max-width: 760px) {
+  /* With a request to make, the phone line keeps the reason and the button. */
+  .row-status:has(.row-action) > .row-note { display: none; }
 }

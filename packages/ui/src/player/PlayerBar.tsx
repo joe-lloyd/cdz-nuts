@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 
 import { formatTime } from '../lib/format.ts';
@@ -65,11 +65,11 @@ export function PlayerBar() {
         <div className="player-track">
           {artHref ? (
             <Link className="player-art linked" to={artHref} tabIndex={-1} aria-hidden="true">
-              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.initial} />
+              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.currentId ? p.initial : IDLE_MARK} />
             </Link>
           ) : (
             <span className="player-art">
-              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.initial} />
+              <PlayerArt src={p.artUrl} fallback={p.artFallbackUrl} initial={p.currentId ? p.initial : IDLE_MARK} />
             </span>
           )}
           <div className="player-copy">
@@ -87,6 +87,9 @@ export function PlayerBar() {
               ) : null}
             </span>
           </div>
+          {/* Liking what is playing is one click from the bar; the phone's
+              full view has its own heart among the actions. */}
+          {p.currentId ? <span className="player-like"><LikeButton track={{ id: p.currentId, name: p.title }} /></span> : null}
           {p.radioSeedId && p.currentId === p.radioSeedId && current?.id === p.currentId
             ? <RadioControl track={{ id: p.radioSeedId, name: p.title, artists: current.artists, recording_mbid: current.recordingMbid ?? null }} /> : null}
           <button
@@ -170,8 +173,11 @@ export function PlayerBar() {
   );
 }
 
+/** With nothing playing, the art slot shows the app's disc mark, not initials. */
+const IDLE_MARK = <span className="brand-mark idle-mark" aria-hidden="true"><span /></span>;
+
 /** Art with the same two-step fallback the pages use: local, CDN, then letter. */
-function PlayerArt({ src, fallback, initial }: { src: string; fallback: string; initial: string }) {
+function PlayerArt({ src, fallback, initial }: { src: string; fallback: string; initial: ReactNode }) {
   const [stage, setStage] = useState<'primary' | 'cdn' | 'letter'>('primary');
   const url = stage === 'primary' ? src : stage === 'cdn' ? fallback : '';
   return (

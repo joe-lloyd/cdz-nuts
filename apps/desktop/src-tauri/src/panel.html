@@ -71,6 +71,12 @@
   .empty button { border-radius: 999px; padding: 6px 14px; color: #150611; background: var(--accent); font: inherit; font-weight: 600; }
   body.idle .art, body.idle .side { display: none; }
   body.idle .empty { display: flex; }
+  /* Paused says so: a grey bar, and the word before the time. */
+  body.paused input[type=range]::-webkit-slider-runnable-track {
+    background: linear-gradient(var(--ink-3), var(--ink-3)) 0 / var(--done, 0%) 100% no-repeat, var(--line);
+  }
+  .paused-word { display: none; margin-right: 6px; color: var(--ink); font-weight: 600; }
+  body.paused .paused-word { display: inline; }
 </style>
 </head>
 <body class="idle">
@@ -88,7 +94,7 @@
       <button id="next" aria-label="Next"><svg viewBox="0 0 24 24"><path d="M16 5h2v14h-2zM4 5v14l11-7z"/></svg></button>
     </div>
     <input id="seek" type="range" min="0" max="1" step="any" value="0" aria-label="Position">
-    <div class="times"><span id="elapsed">0:00</span><span id="remaining">−0:00</span></div>
+    <div class="times"><span><span class="paused-word">Paused</span><span id="elapsed">0:00</span></span><span id="remaining">−0:00</span></div>
   </div>
   <div class="empty">
     Nothing playing
@@ -141,6 +147,7 @@
     $('art').style.backgroundImage = state.artworkUrl ? `url("${state.artworkUrl}")` : '';
     $('title').textContent = state.title;
     $('sub').textContent = [state.artist, state.album].filter(Boolean).join(' · ');
+    document.body.classList.toggle('paused', !state.playing);
     $('playIcon').setAttribute('d', state.playing ? PAUSE : PLAY);
     $('play').setAttribute('aria-label', state.playing ? 'Pause' : 'Play');
     $('prev').disabled = !state.canPrevious;

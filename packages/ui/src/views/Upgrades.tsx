@@ -128,7 +128,9 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
   const batch = job.source_mode && job.source_mode !== 'single';
   const label = batch && job.status === 'upgraded' ? 'album imported' : LABEL[job.status] ?? job.status;
   const due = job.next_attempt_at && (['retry_wait', 'queued', 'pending_source'] as string[]).includes(job.status)
-    ? `next attempt ${until(job.next_attempt_at).replace('due now', 'now')}` : '';
+    && !until(job.next_attempt_at).includes('due now')
+    // "Next attempt now" on every waiting card says nothing; only a later time does.
+    ? `next attempt ${until(job.next_attempt_at)}` : '';
   const attempts = job.phase === 'source'
     ? { used: job.source_attempts, max: 3, what: 'source' }
     : { used: job.upgrade_attempts, max: job.max_attempts, what: 'FLAC' };

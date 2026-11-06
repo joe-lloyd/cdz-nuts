@@ -54,7 +54,7 @@ export function Cds() {
     return (
       <Notice
         title={half ? 'Discogs can search, but cannot read your shelf yet' : 'Your CD shelf lives on Discogs'}
-        actions={<a className="primary-action" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Open Discogs settings ↗</a>}
+        actions={<a className="primary-action" href="https://www.discogs.com/settings/developers" target="_blank" rel="noreferrer">Discogs developer settings ↗</a>}
         steps={[
           <>On the Discogs developer settings page, skip the app box and choose <b>Generate new token</b>.</>,
           <>Whoever runs this server adds it to <code>.env</code> as <code>DISCOGS_TOKEN</code> and restarts the web container.</>,

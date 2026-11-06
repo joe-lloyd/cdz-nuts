@@ -193,6 +193,7 @@ export function PlaylistDetail() {
         </div>
       ) : null}
       {meta?.source === 'local' && id ? <PlaylistEditor id={id} name={meta.name} description={meta.description ?? ''} tracks={rows} /> : null}
+      {rows.length ? <h2>Songs <span className="count">{rows.length}</span></h2> : null}
       <PlayScope tracks={rows}>
         <div className="rows">
           {rows.length ? <TrackHeader rank date="Added" /> : null}
@@ -266,7 +267,7 @@ export function Plays() {
               <Fragment key={`${p.id}-${i}`}>
                 {first ? <div className="day-head">{dayLabel}</div> : null}
                 <TrackRow track={p} current={all.findIndex((x) => x.id === p.id) === i}
-                  date={clock(p.played_at)} note={p.source === 'app' ? 'On this player' : undefined} />
+                  date={clock(p.played_at)} note={p.source === 'app' ? 'Played here' : 'Played on Spotify'} />
               </Fragment>
             );
           })}
