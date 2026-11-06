@@ -75,11 +75,7 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
         Ok(None) => {
             log::info!("already on the latest version");
             if announce_when_current {
-                notify(
-                    &app,
-                    "cdz-nutz is up to date",
-                    env!("CARGO_PKG_VERSION"),
-                );
+                notify(&app, "cdz-nutz is up to date", env!("CARGO_PKG_VERSION"));
             }
             Found::Current {
                 version: env!("CARGO_PKG_VERSION").to_string(),

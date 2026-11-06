@@ -60,7 +60,9 @@ mod tests {
 
     #[test]
     fn only_a_playing_now_playing_message_counts_as_playing() {
-        assert!(says_playing(r#"{"kind":"nowplaying","playing":true,"title":"x"}"#));
+        assert!(says_playing(
+            r#"{"kind":"nowplaying","playing":true,"title":"x"}"#
+        ));
         assert!(!says_playing(r#"{"kind":"nowplaying","playing":false}"#));
         assert!(!says_playing(r#"{"kind":"gone"}"#));
         assert!(!says_playing("not json"));
