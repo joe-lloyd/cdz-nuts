@@ -3909,3 +3909,36 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
   .upgrade-intro + .upgrade-add { margin-bottom: 0; }
   .upgrade-form + h2 { margin-top: 24px; }
 }
+
+/* One now-playing mark everywhere: a magenta circle with the level bars, laid
+   over the art on a phone and filling the number slot in the queue. */
+@media (max-width: 760px) {
+  .row:has(> a > .pic, > .pic) > .track-play.playing,
+  .row:has(> a > .pic, > .pic) > .track-play.paused { padding: 6px; color: var(--accent-ink); background: var(--accent); background-clip: content-box; border-radius: 50%; }
+}
+.queue-index.now { width: 24px; height: 24px; color: var(--accent-ink); background: var(--accent); border-radius: 50%; }
+.queue-index.now svg { width: 12px; height: 12px; }
+
+/* Outlined buttons share one near-white label; Create says why it waits. */
+.upgrade-actions button.quiet { color: var(--ink); }
+.new-pl button:disabled { opacity: 1; color: var(--ink-2); }
+.new-pl-hint { color: var(--ink-3); font-size: 12px; }
+@media (max-width: 760px) { .new-pl .new-pl-hint { flex: 1 1 100%; } }
+
+/* Home has one lead: the listening stat is big, but it fits above the
+   player bar in the app window, and its label is a quiet grey. */
+.overview-hero h2 { font-size: clamp(36px, 4.2vw, 60px); }
+.overview-hero .eyebrow { color: var(--ink-3); }
+
+/* A library grid fits six covers at a laptop width, like Home's row. */
+@media (min-width: 1280px) {
+  .al-grid:not(.recent-row) { grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); }
+  .al-grid:not(.recent-row) > .al-card { padding: 8px; }
+}
+
+/* A show's art is a band, not the card; the date and place carry it. */
+.gig-card .pic { max-height: 112px; aspect-ratio: auto; }
+
+/* Every time on screen is Inter with tabular figures, so digits line up. */
+.scrubber-row, .scrubber-row span { font-family: inherit; font-variant-numeric: tabular-nums; }
+.scrubber-row { font-size: 12px; }

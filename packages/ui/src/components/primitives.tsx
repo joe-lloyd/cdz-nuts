@@ -197,7 +197,7 @@ export function PlayControl({ track, current = true, words = false }: {
   const state = current ? playing : '';
   const [requested, setRequested] = useState(false);
   const progress = useDownloadProgress(track, isHeld(track));
-  const label = downloadLabel(progress.status) ?? (requested ? 'Waiting for download…' : null);
+  const label = downloadLabel(progress.status) ?? (requested ? 'Queued for download' : null);
   const stopped = progress.status && ['exhausted', 'cancelled'].includes(progress.status.status);
   const busy = !stopped && (requested || Boolean(label));
   if (!track.id) return null;

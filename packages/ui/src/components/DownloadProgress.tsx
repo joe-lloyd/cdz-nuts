@@ -74,5 +74,5 @@ export function downloadLabel(status?: DownloadStatus): string | null {
   if (status.status === 'retry_wait') return 'Download failed · retry scheduled';
   if (status.phase === 'source' && status.status === 'working') return 'Downloading from YouTube…';
   if (status.phase === 'upgrade') return 'Downloaded · preparing playback';
-  return 'Waiting for download…';
+  return 'Queued for download';
 }

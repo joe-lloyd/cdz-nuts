@@ -10,7 +10,7 @@ import { get, post, qs } from '../api/client.ts';
 import { ago, day, dur, initial, shortDay, threeLetters } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
-import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
+import { Badges, Empty, GenreChips, Pic, Skeleton, SpotifyButton } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
@@ -150,7 +150,8 @@ export function Playlists() {
         <form className="al-card new-pl" onSubmit={e => { e.preventDefault(); void create(); }}>
           <span className="new-pl-mark">New playlist</span>
           <input aria-label="New playlist name" placeholder="Playlist name" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
-          <button disabled={saving || !name.trim()}>Create playlist</button>
+          <button disabled={saving || !name.trim()} aria-describedby="new-pl-hint">Create playlist</button>
+          <small id="new-pl-hint" className="new-pl-hint">{name.trim() ? 'Starts empty; add songs from any list.' : 'Type a name to create it.'}</small>
         </form>
       </div>
     </>
@@ -182,9 +183,10 @@ export function PlaylistDetail() {
             {meta.removed_at ? ` · removed ${day(meta.removed_at)}` : ''}
           </div>
           {meta.description ? <p className="pl-desc">{meta.description}</p> : null}
-          {rows.length ? (
+          {rows.length || meta.source !== 'local' ? (
             <div className="hero-actions">
-              <CollectionPlay tracks={rows} label="Play playlist" />
+              {rows.length ? <CollectionPlay tracks={rows} label="Play playlist" /> : null}
+              {meta.source !== 'local' && id ? <SpotifyButton type="playlist" id={id} /> : null}
             </div>
           ) : null}
           </div>
