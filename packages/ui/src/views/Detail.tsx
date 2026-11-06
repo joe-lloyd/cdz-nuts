@@ -7,16 +7,15 @@ import { useAlbum, useArtist, useEvents } from '../api/hooks.ts';
 import { day, dur, shortDay } from '../lib/format.ts';
 import { AlbumCell, GigCard, TrackHeader, TrackRow } from '../components/rows.tsx';
 import {
-  BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic, PLAY_ICON,
+  BandcampButton, Badges, Empty, GenreChips, MediaBadges, Pic,
   PlayControl, RadioControl, Skeleton, SpotifyButton, SpotifyLink, readableQuality, useNowPlaying,
 } from '../components/primitives.tsx';
-import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
+import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
 export function AlbumDetail() {
   const { id } = useParams();
   const { data, isPending, error } = useAlbum(id);
-  const playAll = usePlayAll();
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
   const album = data?.album;
@@ -72,9 +71,7 @@ export function AlbumDetail() {
           <div className="hero-actions">
             <AlbumLikeButton album={album} />
             {album.downloaded && tracks.length ? (
-              <button className="primary-action play-album" type="button" onClick={() => playAll(tracks)}>
-                {PLAY_ICON} Play album
-              </button>
+              <CollectionPlay tracks={tracks} label="Play album" />
             ) : null}
             {album.local || !album.id ? null : <SpotifyButton type="album" id={album.id} />}
             <BandcampButton
@@ -142,7 +139,6 @@ const GROUPS: Array<[string, string]> = [
 
 export function ArtistDetail() {
   const { id } = useParams();
-  const playAll = usePlayAll();
   const { data, isPending, error } = useArtist(id);
   if (isPending) return <Skeleton />;
   if (error) return <Empty>{error.message}</Empty>;
@@ -172,9 +168,7 @@ export function ArtistDetail() {
           <div className="hero-actions">
             <ArtistLikeButton artist={artist} />
             {likedNow.length ? (
-              <button className="primary-action play-album" type="button" onClick={() => playAll(likedNow)}>
-                {PLAY_ICON} Play liked songs
-              </button>
+              <CollectionPlay tracks={likedNow} label="Play liked songs" />
             ) : null}
             {!artist.id.startsWith('local-artist:') && <SpotifyButton type="artist" id={artist.id} />}
             <BandcampButton query={artist.name} type="b" />

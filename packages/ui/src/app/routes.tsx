@@ -119,7 +119,7 @@ export const TAB_ICONS: Record<TabId, ReactNode> = {
   overview: icon(<svg viewBox="0 0 24 24"><path d="M4 11 12 4l8 7" /><path d="M6 10v10h12V10" /></svg>),
   albums: icon(<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2" /><circle cx="12" cy="12" r="3.5" /></svg>),
   artists: icon(<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4" /><path d="M4 21a8 8 0 0 1 16 0" /></svg>),
-  liked: icon(<svg viewBox="0 0 24 24"><path d="M9 18V5l10-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="16" cy="16" r="3" /></svg>),
+  liked: icon(<svg viewBox="0 0 24 24"><path d="M12 20s-7.5-4.6-9.3-9.2C1.4 7.4 3.6 4 7 4c2.1 0 3.6 1.1 5 3 1.4-1.9 2.9-3 5-3 3.4 0 5.6 3.4 4.3 6.8C19.5 15.4 12 20 12 20Z" /></svg>),
   playlists: icon(<svg viewBox="0 0 24 24"><path d="M4 6h11M4 11h11M4 16h7M18 14v6m-3-3h6" /></svg>),
   top: icon(<svg viewBox="0 0 24 24"><path d="m12 3 2.7 5.5 6.1.9-4.4 4.3 1 6.1-5.4-2.9-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z" /></svg>),
   shows: icon(<svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 0 0 4v4h16v-4a2 2 0 0 0 0-4V4H4z" /><path d="M14 4v12" strokeDasharray="2 2" /></svg>),

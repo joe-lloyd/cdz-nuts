@@ -66,7 +66,7 @@ export function Overview() {
       <section className="overview-hero">
         <div>
           <span className="eyebrow">Last 30 days · Spotify + this player</span>
-          <h2>{Number(o.plays30).toLocaleString()} plays, <em>{o.hours30} hours.</em></h2>
+          <h2>{Number(o.plays30).toLocaleString()} plays,{' '}<em>{o.hours30} hours.</em></h2>
           <p>{trend}</p>
         </div>
       </section>

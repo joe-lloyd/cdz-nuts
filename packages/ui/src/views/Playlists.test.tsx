@@ -12,7 +12,7 @@ vi.mock('../api/hooks.ts', () => ({
   usePlaylistTracks: () => ({ data: [{ id: 'one', name: 'Even Less' }, { id: 'two', name: 'Dark Matter' }], isPending: false }),
 }));
 vi.mock('../components/rows.tsx', () => ({ TrackRow: () => null, TrackHeader: () => null }));
-vi.mock('../components/PlayScope.tsx', () => ({ PlayScope: ({ children }: { children: ReactNode }) => children, usePlayAll: () => () => {} }));
+vi.mock('../components/PlayScope.tsx', () => ({ PlayScope: ({ children }: { children: ReactNode }) => children, usePlayAll: () => () => {}, CollectionPlay: () => null }));
 const { Playlists, PlaylistDetail } = await import('./Library.tsx');
 
 function draw(detail = false) {

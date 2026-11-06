@@ -21,6 +21,8 @@ export function Upgrades() {
   const [mode, setMode] = useState('single');
   const [more, setMore] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [needle, setNeedle] = useState('');
+  const [show, setShow] = useState<'all' | 'active' | 'done' | 'stopped'>('all');
 
   const refresh = () => void client.invalidateQueries({ queryKey: ['upgrades'] });
 
@@ -49,6 +51,12 @@ export function Upgrades() {
   const active = ACTIVE.reduce((n, k) => n + Number(data?.counts?.[k] ?? 0), 0);
   const finished = Number(data?.counts?.upgraded ?? 0) + Number(data?.counts?.already_lossless ?? 0);
   const batch = mode !== 'single';
+  const term = needle.trim().toLowerCase();
+  const shown = jobs.filter((job) =>
+    (show === 'all' || (show === 'active' ? ACTIVE.includes(job.status)
+      : show === 'done' ? job.status === 'upgraded' || job.status === 'already_lossless'
+      : job.status === 'exhausted' || job.status === 'cancelled'))
+    && (!term || `${job.title} ${job.artist} ${job.album ?? ''}`.toLowerCase().includes(term)));
 
   const onSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -98,11 +106,20 @@ export function Upgrades() {
         </button>
       </form>
 
-      <h2>Upgrade queue {isFetching ? <i className="spin" /> : null}</h2>
+      <h2>Request queue <span className="count">{jobs.length}</span> {isFetching ? <i className="spin" /> : null}</h2>
+      {/* A queue of a hundred or more is found by name or narrowed by state. */}
+      <div className="tools queue-tools">
+        <input type="search" aria-label="Find a request" placeholder="Find a request" value={needle} onChange={(e) => setNeedle(e.target.value)} />
+        <div className="seg" role="group" aria-label="Show">
+          {([['all', 'All'], ['active', 'In progress'], ['done', 'Finished'], ['stopped', 'Stopped']] as const).map(([key, label]) => (
+            <button key={key} type="button" className={show === key ? 'on' : undefined} aria-pressed={show === key} onClick={() => setShow(key)}>{label}</button>
+          ))}
+        </div>
+      </div>
       <div className="upgrade-list">
-        {jobs.length
-          ? jobs.map((job) => <Card key={job.id} job={job} onAct={(action) => act.mutate({ action, id: job.id })} />)
-          : <Empty>nothing queued yet</Empty>}
+        {shown.length
+          ? shown.map((job) => <Card key={job.id} job={job} onAct={(action) => act.mutate({ action, id: job.id })} />)
+          : <Empty>{jobs.length ? 'No request matches' : 'Nothing requested yet'}</Empty>}
       </div>
     </>
   );
@@ -148,7 +165,7 @@ function Card({ job, onAct }: { job: UpgradeJob; onAct: (action: string) => void
       {canRetry || canCancel || canRemove ? (
         <div className="upgrade-actions">
           {canRetry ? <button type="button" onClick={() => onAct('retry')}>Retry now</button> : null}
-          {canCancel ? <button type="button" onClick={() => onAct('cancel')}>Cancel</button> : null}
+          {canCancel ? <button type="button" className="quiet" onClick={() => { if (confirm(`Stop looking for ${job.title}?`)) onAct('cancel'); }}>Cancel request</button> : null}
           {canRemove ? (
             <button type="button" className="danger" onClick={() => {
               // Removing forgets the queue entry; the audio files stay on disk.

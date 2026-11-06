@@ -2347,7 +2347,7 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
     const albumKey = (a: { name?: unknown; artists?: unknown }) => `${String(a.name ?? '').toLocaleLowerCase()}\u0000${String(a.artists ?? '').toLocaleLowerCase()}`;
     const archived = new Set(localAlbums.map(albumKey));
     const listed = new Set(albums.map(albumKey));
-    const mergedAlbums = [...albums.map(a => (archived.has(albumKey(a)) ? { ...a, downloaded: 1 } : a)), ...localAlbums.filter(a => !listed.has(albumKey(a)))];
+    const mergedAlbums = [...albums.map(a => ({ ...a, downloaded: archived.has(albumKey(a)) ? 1 : 0 })), ...localAlbums.filter(a => !listed.has(albumKey(a)))];
     return { songs: unique([...songs, ...localSongs], 100), artists: [...artists, ...localArtists].slice(0, 40), albums: unique(mergedAlbums, 40),
       playlists: unique([...localPlaylists.list().filter(matches), ...playlists], 40) };
   },

@@ -10,8 +10,8 @@ import { get, post, qs } from '../api/client.ts';
 import { ago, day, dur, initial, shortDay } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
-import { Badges, Empty, GenreChips, PLAY_ICON, Pic, Skeleton } from '../components/primitives.tsx';
-import { PlayScope, usePlayAll } from '../components/PlayScope.tsx';
+import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
+import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
 export function Artists() {
@@ -148,7 +148,7 @@ export function Playlists() {
           );
         })}
         <form className="al-card new-pl" onSubmit={e => { e.preventDefault(); void create(); }}>
-          <span className="new-pl-mark" aria-hidden="true">+</span>
+          <span className="new-pl-mark">New playlist</span>
           <input aria-label="New playlist name" placeholder="New playlist" value={name} onChange={e => setName(e.target.value)} required maxLength={200} />
           <button disabled={saving || !name.trim()}>Create playlist</button>
         </form>
@@ -161,7 +161,6 @@ export function PlaylistDetail() {
   const { id } = useParams();
   const playlists = usePlaylists();
   const tracks = usePlaylistTracks(id);
-  const playAll = usePlayAll();
   if (tracks.isPending) return <Skeleton />;
   const rows = tracks.data ?? [];
   const meta = playlists.data?.find((p) => p.id === id);
@@ -185,9 +184,7 @@ export function PlaylistDetail() {
           {meta.description ? <p className="pl-desc">{meta.description}</p> : null}
           {rows.length ? (
             <div className="hero-actions">
-              <button className="primary-action play-album" type="button" onClick={() => playAll(rows)}>
-                {PLAY_ICON} Play playlist
-              </button>
+              <CollectionPlay tracks={rows} label="Play playlist" />
             </div>
           ) : null}
           </div>
