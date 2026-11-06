@@ -7,7 +7,7 @@ import {
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
-import { ago, day, dur, initial, cardDay, shortDay, threeLetters } from '../lib/format.ts';
+import { ago, day, dur, initial, shortDay, threeLetters } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
 import { Badges, Empty, GenreChips, Pic, Skeleton } from '../components/primitives.tsx';
@@ -141,7 +141,7 @@ export function Playlists() {
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
                 <span className="sub">{p.synced_tracks ?? p.total_tracks ?? 0} songs · {p.source === 'local' ? 'made here' : 'from Spotify'}</span>
-                {p.removed_at ? <span className="status" title={`Removed from Spotify · ${shortDay(p.removed_at)}`}>Off Spotify · {cardDay(p.removed_at)}</span>
+                {p.removed_at ? <span className="status" title={`Removed from Spotify · ${shortDay(p.removed_at)}`}>Removed from Spotify</span>
                   : p.description ? <span className="sub dim">{p.description}</span> : null}
               </div>
             </div>

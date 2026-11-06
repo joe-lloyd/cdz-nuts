@@ -97,13 +97,13 @@ export const GenreChips = ({ json, n = 3 }: { json?: string | null | undefined; 
 
 /**
  * Tombstones: history is kept, these say what changed and when. A card is
- * narrow, so there each one keeps to a line and the full words are a tooltip.
+ * narrow, so there each one keeps to a line and the date is a tooltip.
  */
 export function Badges({ row, compact = false }: { row: Tombstoned; compact?: boolean | undefined }) {
   // Spotify pulled it from its catalogue; the archive keeps what it had.
   const removed = row.removed_at ? `No longer on Spotify · ${shortDay(row.removed_at)}` : '';
   const items = [
-    row.removed_at ? <Status key="r" text={compact ? `Off Spotify · ${cardDay(row.removed_at)}` : removed} title={compact ? removed : undefined} /> : null,
+    row.removed_at ? <Status key="r" text={compact ? 'No longer on Spotify' : removed} title={compact ? removed : undefined} /> : null,
     row.unfollowed_at && !row.is_followed ? <Status key="u" text={`Unfollowed ${(compact ? cardDay : shortDay)(row.unfollowed_at)}`} /> : null,
     row.unsaved_at && !row.is_saved ? <Status key="s" text={`Unsaved ${(compact ? cardDay : shortDay)(row.unsaved_at)}`} /> : null,
   ].filter(Boolean);
