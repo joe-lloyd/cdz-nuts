@@ -122,9 +122,10 @@ pub async fn watch(app: AppHandle) {
 /// Install whatever the last check found, then relaunch.
 ///
 /// `wait_for_quiet` is for the automatic paths: the check and the download
-/// both take time, and a song started meanwhile must not be cut off, so the
-/// relaunch waits until the player is quiet again. Asked from the tray or
-/// settings, it relaunches at once.
+/// both take time, and a song started meanwhile must not be cut off. So the
+/// download comes first and the install waits until the player is quiet;
+/// installing is what ends playback (Windows quits the app to run the
+/// installer). Asked from the tray or settings, it goes straight through.
 pub async fn install(app: AppHandle, wait_for_quiet: bool) {
     let Some(update) = app.state::<PendingUpdate>().take() else {
         notify(&app, "Nothing to install", "Check for updates first.");
@@ -138,16 +139,20 @@ pub async fn install(app: AppHandle, wait_for_quiet: bool) {
         "The app will restart when it is done.",
     );
 
-    match update
-        .download_and_install(|_chunk, _total| {}, || {})
-        .await
-    {
-        Ok(()) => {
+    let installed = match update.download(|_chunk, _total| {}, || {}).await {
+        Ok(bytes) => {
             if wait_for_quiet {
                 while app.state::<crate::panel::Panel>().is_playing() {
                     tokio::time::sleep(std::time::Duration::from_secs(30)).await;
                 }
             }
+            update.install(bytes)
+        }
+        Err(e) => Err(e),
+    };
+
+    match installed {
+        Ok(()) => {
             log::info!("installed {version}, restarting");
             app.restart();
         }

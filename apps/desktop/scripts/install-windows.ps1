@@ -36,13 +36,22 @@ $out = Join-Path $env:TEMP $asset.name
 Write-Host "==> Downloading $($asset.name)"
 Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $out -UseBasicParsing
 
-$oldUninstaller = Join-Path $env:LOCALAPPDATA 'Homelab Music\uninstall.exe'
+$oldDir = Join-Path $env:LOCALAPPDATA 'Homelab Music'
+$oldUninstaller = Join-Path $oldDir 'uninstall.exe'
 if (Test-Path $oldUninstaller) {
     Write-Host '==> Removing the install from before the rename (Homelab Music)'
-    $old = Start-Process -FilePath $oldUninstaller -ArgumentList '/S' -Wait -PassThru
+    # An NSIS uninstaller hands off to a copy of itself and exits at once, so
+    # its exit code says nothing. Run a copy with _?= instead: it uninstalls
+    # the folder in place, waits, and reports the real result. _?= goes last.
+    $copy = Join-Path $env:TEMP 'homelab-music-uninstall.exe'
+    Copy-Item $oldUninstaller $copy -Force
+    $old = Start-Process -FilePath $copy -ArgumentList '/S', "_?=$oldDir" -Wait -PassThru
+    Remove-Item $copy -Force -ErrorAction SilentlyContinue
     if ($old.ExitCode -ne 0) {
         Write-Error "The old uninstaller exited with code $($old.ExitCode); remove Homelab Music from Settings > Apps, then run this again."
     }
+    # In-place mode leaves the uninstaller itself behind.
+    Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
 }
 
 Write-Host '==> Installing'
