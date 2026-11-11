@@ -215,6 +215,8 @@ class PlayerEngine {
   private swapWatchdog: ReturnType<typeof setTimeout> | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
+  /** A seek made while the stream was broken. See rememberSeek. */
+  private seekTarget: number | null = null;
   private resumeTimer: ReturnType<typeof setTimeout> | undefined;
   private resumeCleanup: (() => void) | undefined;
   private arrivalTimer: ReturnType<typeof setTimeout> | undefined;
@@ -519,6 +521,8 @@ class PlayerEngine {
     // A fresh start plays from the top, even if a pause or a saved session
     // left a place to pick up from. Play on the bar is the recovering path.
     if (!recovering) this.pendingResume = null;
+    // Any held seek has been read into pendingResume by now.
+    this.seekTarget = null;
     const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
@@ -861,11 +865,19 @@ class PlayerEngine {
   private rememberSeek(target: number) {
     if (this.resumeAttempts > 0) this.resumeFrom = target;
     if (this.networkWait) this.networkWait.at = target;
+    // A broken element may ignore the seek and go on reporting where it
+    // died, so its currentTime cannot be trusted to carry the seek. Hold the
+    // target itself until a replay uses it. A live element honours the seek
+    // on its own, so nothing is held for one.
+    const broken = Boolean(this.networkWait) || this.snapshot.state === 'error'
+      || (this.snapshot.state === 'loading' && this.resumeAttempts > 0);
+    if (broken) this.seekTarget = target;
   }
 
   private resetRetries() {
     this.resumeAttempts = 0;
     this.resumeFrom = 0;
+    this.seekTarget = null;
   }
 
   /**
@@ -874,6 +886,7 @@ class PlayerEngine {
    * point reached wins; otherwise a second failure would restart the song.
    */
   private breakPoint(): number {
+    if (this.seekTarget !== null) return this.seekTarget;
     const now = this.audio.currentTime;
     return this.resumeAttempts > 0 ? Math.max(now, this.resumeFrom) : now;
   }
@@ -883,6 +896,7 @@ class PlayerEngine {
     if (this.intentionallyPaused || !src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
 
     const at = this.breakPoint();
+    this.seekTarget = null; // now carried by resumeFrom
     const element = this.audio;
     this.resumeAttempts += 1;
     this.resumeFrom = at;

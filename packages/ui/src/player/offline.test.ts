@@ -296,7 +296,10 @@ for (const [how, seek, expected] of [
     await vi.advanceTimersByTimeAsync(0);
     expect(player.getSnapshot().state).toBe('error');
 
+    // A failed element can ignore the seek and keep reporting where it died.
+    Object.defineProperty(el, 'currentTime', { configurable: true, get: () => 120, set: () => {} });
     seek();
+    Object.defineProperty(el, 'currentTime', { configurable: true, writable: true, value: 120 });
     el.error = { code: 2 };
     player.toggle();
     await vi.advanceTimersByTimeAsync(0);
