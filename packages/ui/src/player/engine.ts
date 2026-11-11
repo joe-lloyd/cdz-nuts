@@ -814,13 +814,17 @@ class PlayerEngine {
     const duration = this.durationSeconds();
     if (!duration) return;
     this.pendingResume = null;
-    this.audio.currentTime = clamp(fraction, 0, 1) * duration;
+    const target = clamp(fraction, 0, 1) * duration;
+    this.rememberSeek(target);
+    this.audio.currentTime = target;
     this.emit();
   }
 
   seekTo(seconds: number) {
     this.pendingResume = null;
-    this.audio.currentTime = Math.max(0, seconds);
+    const target = Math.max(0, seconds);
+    this.rememberSeek(target);
+    this.audio.currentTime = target;
     this.lyricsScrolledAt = 0;
     this.syncLyrics(true);
   }
@@ -850,6 +854,15 @@ class PlayerEngine {
    *
    * Returns whether a retry was scheduled.
    */
+  /**
+   * A seek is where the listener wants to be, so a retry or a connection wait
+   * that later replays the track goes there, not to where it last broke.
+   */
+  private rememberSeek(target: number) {
+    if (this.resumeAttempts > 0) this.resumeFrom = target;
+    if (this.networkWait) this.networkWait.at = target;
+  }
+
   private resetRetries() {
     this.resumeAttempts = 0;
     this.resumeFrom = 0;
@@ -956,7 +969,7 @@ class PlayerEngine {
       if (ok) {
         cleanup();
         this.resumeAttempts = 0;
-        if (at > 0) this.pendingResume = { id: item.id, pos: at };
+        if (wait.at > 0) this.pendingResume = { id: item.id, pos: wait.at };
         this.notify('Back online');
         void this.playAt(this.queueIndex, { recovering: true });
         return;

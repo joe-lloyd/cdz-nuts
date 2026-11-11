@@ -277,3 +277,46 @@ test('play after the last retry failed picks up where the track broke', async ()
   expect(player.getSnapshot().currentId).toBe('n');
   expect(el.currentTime, 'Play must not restart the song').toBe(120);
 });
+
+for (const [how, seek, expected] of [
+  ['seekTo', () => player.seekTo(30), 30],
+  ['seekFraction', () => player.seekFraction(0), 0],
+] as const) {
+  test(`a seek back after failed retries wins over the old break (${how})`, async () => {
+    player.setQueue([item(`s-${how}`)], `s-${how}`);
+    await player.playAt(0);
+    const el = active();
+    el.duration = 210;
+    el.currentTime = 120;
+    el.fire('error');
+    for (const backoff of [1_000, 2_000, 3_000]) {
+      await vi.advanceTimersByTimeAsync(backoff);
+      el.fire('error');
+    }
+    await vi.advanceTimersByTimeAsync(0);
+    expect(player.getSnapshot().state).toBe('error');
+
+    seek();
+    el.error = { code: 2 };
+    player.toggle();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(el.currentTime, 'Play must go where the listener seeked').toBe(expected);
+  });
+}
+
+test('a seek during a connection wait is where it picks up', async () => {
+  player.setQueue([item('sw')], 'sw');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 120;
+  online = false;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  player.seekTo(45);
+  online = true;
+  await vi.advanceTimersByTimeAsync(30_000);
+  expect(player.getSnapshot().currentId).toBe('sw');
+  expect(el.currentTime).toBe(45);
+});
