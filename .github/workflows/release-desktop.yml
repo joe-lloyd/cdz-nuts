@@ -18,6 +18,13 @@ on:
         description: 'Tag to release (must already exist)'
         required: true
 
+# One run per tag at a time. Jobs of a run read, replace and restore the same
+# release's latest.json; two runs at once could restore an older copy over a
+# newer one.
+concurrency:
+  group: release-desktop-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
     permissions:
@@ -95,8 +102,27 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
+          set -euo pipefail
+          # A failed lookup must stop the job here, before anything is
+          # replaced. Only a release that exists without a manifest, or no
+          # release yet, means there is nothing to keep.
+          if ! assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>"$RUNNER_TEMP/view.err"); then
+            if grep -qi 'release not found' "$RUNNER_TEMP/view.err"; then
+              echo "no release yet, so no manifest to keep"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/view.err"
+            exit 1
+          fi
+          if ! grep -qx latest.json <<<"$assets"; then
+            echo "no manifest on the release yet"
+            exit 0
+          fi
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json \
-            -O "$RUNNER_TEMP/latest.json.bak" --clobber || echo "no manifest on the release yet"
+            -O "$RUNNER_TEMP/latest.json.bak" --clobber
+          # A partial download is not a backup.
+          jq -e '.version and (.platforms | length > 0)' "$RUNNER_TEMP/latest.json.bak" >/dev/null
+          echo "kept latest.json for $(jq -r .version "$RUNNER_TEMP/latest.json.bak")"
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -159,7 +185,10 @@ jobs:
           TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx latest.json; then
+          # Captured on its own line so a failed lookup fails the step here,
+          # and can never be mistaken for a missing manifest.
+          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          if grep -qx latest.json <<<"$assets"; then
             echo "latest.json is in place"
             exit 0
           fi
@@ -169,7 +198,9 @@ jobs:
           fi
           mkdir -p "$RUNNER_TEMP/restore"
           cp "$RUNNER_TEMP/latest.json.bak" "$RUNNER_TEMP/restore/latest.json"
-          gh release upload "$TAG" "$RUNNER_TEMP/restore/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
+          # No --clobber: if a manifest has appeared since the check, it is
+          # newer than this copy and must win.
+          gh release upload "$TAG" "$RUNNER_TEMP/restore/latest.json" --repo "$GITHUB_REPOSITORY"
           echo "restored the previous latest.json; this platform's build did not make it in"
           exit 1
 
