@@ -507,6 +507,9 @@ class PlayerEngine {
     this.intentionallyPaused = false;
     this.cancelResume();
     clearTimeout(this.arrivalTimer);
+    // Retry state belongs to one track. Replaying the same one (recovery, or
+    // Play after an error) keeps it; anything else starts clean.
+    if (this.queue[index]!.id !== this.current?.id) this.resetRetries();
     const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
@@ -688,6 +691,7 @@ class PlayerEngine {
       // The gapless path: swap which element is active instead of re-fetching.
       if (this.prefetch?.ready && this.prefetch.trackId === item.id && this.prefetch.track) {
         const playbackId = ++this.playbackId;
+        this.resetRetries();
         const old = this.audio;
         this.audio = this.standby();
         old.pause();
@@ -834,6 +838,11 @@ class PlayerEngine {
    *
    * Returns whether a retry was scheduled.
    */
+  private resetRetries() {
+    this.resumeAttempts = 0;
+    this.resumeFrom = 0;
+  }
+
   /**
    * Where the current blip interrupted the track. A retry that fails before
    * its seek lands has been reloaded to zero, so within one blip the furthest

@@ -195,3 +195,24 @@ test('play checks the connection even if the dead element still claims to play',
   expect(player.getSnapshot().overline).not.toBe('Waiting for the connection');
   expect(player.getSnapshot().currentId).toBe('g');
 });
+
+test('a new track does not inherit the last one\'s place', async () => {
+  player.setQueue([item('h1'), item('h2')], 'h1');
+  await player.playAt(0);
+  active().currentTime = 120;
+  active().fire('error'); // one quick retry under way for h1, at 120s
+
+  await player.playAt(1);
+  const el = active();
+  el.currentTime = 10;
+  online = false;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  online = true;
+  await vi.advanceTimersByTimeAsync(30_000);
+  el.fire('loadedmetadata');
+  expect(player.getSnapshot().currentId).toBe('h2');
+  expect(el.currentTime, 'h2 must resume at its own place, not h1\'s').toBe(10);
+});

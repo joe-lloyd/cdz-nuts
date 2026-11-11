@@ -25,19 +25,27 @@ export function PlayerBar() {
   // Going anywhere else means the new page should be what is on screen: the
   // lyrics take over the whole content area, so leaving them up after a menu
   // click hid the page that was just asked for.
-  useEffect(() => { setExpanded(false); setPanelState(null); }, [location.pathname, location.search]);
+  // Keyed on the navigation, not the URL, so a link to the page already
+  // underneath (the album in the bar, say) still clears the panel off it.
+  useEffect(() => { setPanelState(null); }, [location.key]);
+  useEffect(() => { setExpanded(false); }, [location.pathname]);
   // The same for any other interaction: a press outside the open panel and
   // outside the bar that controls it closes the panel. The bar is exempt so
-  // play, skip and seek still work with the lyrics up.
+  // play, skip and seek still work with the lyrics up. `click` as well as
+  // `pointerdown`, because a button activated from the keyboard only clicks.
   useEffect(() => {
     if (!panel) return;
-    const away = (event: PointerEvent) => {
+    const away = (event: Event) => {
       const target = event.target;
       if (!(target instanceof Element) || target.closest('.queue-panel, #player-bar')) return;
       setPanelState(null);
     };
     document.addEventListener('pointerdown', away, true);
-    return () => document.removeEventListener('pointerdown', away, true);
+    document.addEventListener('click', away, true);
+    return () => {
+      document.removeEventListener('pointerdown', away, true);
+      document.removeEventListener('click', away, true);
+    };
   }, [panel]);
   useEffect(() => {
     if (!expanded) return;

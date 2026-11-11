@@ -48,10 +48,10 @@ const base: Partial<PlayerSnapshot> = {
 
 const lyricsPanel = () => document.querySelector('.lyrics-panel')!;
 
-const draw = () => {
-  Object.assign(snapshot, base);
+const draw = (over: Partial<PlayerSnapshot> = {}, at = '/') => {
+  Object.assign(snapshot, base, over);
   render(
-    <MemoryRouter initialEntries={['/']}>
+    <MemoryRouter initialEntries={[at]}>
       <nav><Link to="/library">Library</Link><button type="button">Search</button></nav>
       <PlayerBar />
     </MemoryRouter>,
@@ -79,4 +79,17 @@ test('the lyrics stay up while using them or the player', () => {
   fireEvent.pointerDown(screen.getByRole('button', { name: 'A lyric line' }));
   fireEvent.pointerDown(screen.getByRole('button', { name: 'Next track' }));
   expect(lyricsPanel()).not.toHaveAttribute('hidden');
+});
+
+test('a bar link to the page already underneath still closes the lyrics', () => {
+  draw({ albumId: 'libalbum-1', albumName: 'Requiem' }, '/album/libalbum-1');
+  fireEvent.click(screen.getByRole('link', { name: 'Requiem' }));
+  expect(lyricsPanel()).toHaveAttribute('hidden');
+});
+
+test('a button activated from the keyboard closes them too', () => {
+  draw();
+  // Enter or Space on a focused button clicks it without any pointerdown.
+  fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+  expect(lyricsPanel()).toHaveAttribute('hidden');
 });
