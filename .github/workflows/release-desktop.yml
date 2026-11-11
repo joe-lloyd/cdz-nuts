@@ -113,20 +113,45 @@ jobs:
             code-signing certificate. The install scripts deal with what that
             means on each platform. Once installed, the app updates itself from
             the tray.
-          # A DRAFT, published by the job below once every platform has
-          # uploaded. Not cosmetic: `releases/latest/download/latest.json` is
-          # what the app polls, and with a published release the first matrix
-          # job to finish becomes "latest" carrying only its own platform. For
-          # the twenty-five minutes the other three take, every Windows and
-          # Linux client checking for updates got "None of the fallback
-          # platforms [windows-x86_64] were found in the response platforms
-          # object" -- an error that looked like a broken build and was really
-          # a half-published release. A draft is not served as latest, so
-          # clients keep seeing the previous version until this one is whole.
+          # Created as a DRAFT, then published by the step below as soon as
+          # both macOS builds are in, without waiting for Linux and Windows.
+          # The builds run one at a time, so holding the release for all four
+          # kept every Mac waiting the best part of an hour for platforms it
+          # does not use.
+          #
+          # `releases/latest/download/latest.json` is what the app polls, so a
+          # live release missing a platform used to make that platform's
+          # clients report "None of the fallback platforms [windows-x86_64]
+          # were found", which looked like a broken build. The app treats that
+          # as "nothing new for you yet" since 0.7.3 (update.rs), and the
+          # other platforms add themselves to the live release as they finish.
+          # A single-platform draft is still never published: the step checks
+          # the Mac entries, and the job below checks all four at the end.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true # this is latest.json, which the app polls
           args: ${{ matrix.args }}
+
+      - name: Go live as soon as both macOS builds are in
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for want in 'aarch64.app.tar.gz.sig' 'x64.app.tar.gz.sig' 'latest.json'; do
+            grep -q "$want" <<<"$assets" || { echo "not yet: missing $want"; exit 0; }
+          done
+          # The bundles being there is not enough: the updater only sees what
+          # latest.json names.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O latest.json --clobber
+          for platform in darwin-aarch64 darwin-x86_64; do
+            jq -e --arg p "$platform" '.platforms[$p].signature | length > 0' latest.json >/dev/null \
+              || { echo "not yet: latest.json has no $platform"; exit 0; }
+          done
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "published $TAG for macOS; Linux and Windows join as they finish"
 
   # Nothing is downloadable until this runs, and it only runs if all four
   # platform jobs succeeded. One platform failing now leaves a draft to inspect
@@ -137,6 +162,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      # By now macOS has normally published it already. This is the check
+      # that every platform made it in, and the publish for a run where the
+      # macOS step could not.
       - name: Publish the release once every platform is in it
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
