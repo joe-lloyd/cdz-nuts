@@ -18,8 +18,10 @@ class FakeAudio {
   paused = true;
   volume = 1;
   playbackRate = 1;
+  error: unknown = null;
   private listeners = new Map<string, Listener[]>();
-  load() { this.currentTime = 0; }
+  // As in a browser: loading resets the position and pauses the element.
+  load() { this.currentTime = 0; this.paused = true; }
   pause() { this.paused = true; }
   play(): Promise<void> { this.paused = false; return Promise.resolve(); }
   removeAttribute(name: string) { if (name === 'src') this.src = ''; }
@@ -235,4 +237,43 @@ test('choosing the current track again starts it fresh, not at the last break', 
   await vi.advanceTimersByTimeAsync(30_000);
   el.fire('loadedmetadata');
   expect(el.currentTime, 'the restart must not jump forward to the old break').toBe(5);
+});
+
+test('choosing a track paused during a wait starts it from the top', async () => {
+  player.setQueue([item('m')], 'm');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 80;
+  online = false;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  await vi.advanceTimersByTimeAsync(0);
+  (player as unknown as { pause(): void }).pause();
+
+  online = true;
+  await player.playAt(0); // picked from the list, not Play on the bar
+  expect(player.getSnapshot().currentId).toBe('m');
+  expect(active().currentTime, 'a fresh pick must not resume the old place').toBe(0);
+});
+
+test('play after the last retry failed picks up where the track broke', async () => {
+  player.setQueue([item('n')], 'n');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 120;
+  // The server answers, but the stream keeps failing, and each quick retry
+  // reloads the element to zero before it fails again.
+  el.fire('error');
+  for (const backoff of [1_000, 2_000, 3_000]) {
+    await vi.advanceTimersByTimeAsync(backoff);
+    el.fire('error');
+  }
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().state).toBe('error');
+  expect(el.currentTime).toBe(0);
+
+  el.error = { code: 2 };
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().currentId).toBe('n');
+  expect(el.currentTime, 'Play must not restart the song').toBe(120);
 });

@@ -516,6 +516,9 @@ class PlayerEngine {
     // it; anything else, including choosing the current track again, is a
     // fresh start and must not seek to where the last attempt broke.
     if (!recovering || this.queue[index]!.id !== this.current?.id) this.resetRetries();
+    // A fresh start plays from the top, even if a pause or a saved session
+    // left a place to pick up from. Play on the bar is the recovering path.
+    if (!recovering) this.pendingResume = null;
     const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
@@ -763,9 +766,9 @@ class PlayerEngine {
   }
 
   toggle() {
-    // A failed stream can leave the element claiming to play; while waiting
-    // for the connection, the button is Play and means "check now".
-    if (this.networkWait || this.audio.paused || this.intentionallyPaused) this.requestPlay();
+    // A failed stream can leave the element claiming to play. While waiting
+    // for the connection, or showing an error, the button is Play.
+    if (this.networkWait || this.snapshot.state === 'error' || this.audio.paused || this.intentionallyPaused) this.requestPlay();
     else this.pause();
   }
 
@@ -775,8 +778,11 @@ class PlayerEngine {
     this.bless();
     if (this.networkWait) { this.networkWait.now(); return; }
     if ((!this.audio.src || this.audio.error) && this.queueIndex >= 0) {
-      if (this.audio.error && this.current && this.audio.currentTime > 0) {
-        this.pendingResume = { id: this.current.id, pos: this.audio.currentTime };
+      // After a failed retry the element was reloaded to zero; the break point
+      // still knows where the track actually stopped.
+      const at = this.breakPoint();
+      if (this.audio.error && this.current && at > 0) {
+        this.pendingResume = { id: this.current.id, pos: at };
       }
       void this.playAt(this.queueIndex, { recovering: true });
       return;
