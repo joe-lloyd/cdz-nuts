@@ -69,6 +69,8 @@ beforeEach(() => { vi.useFakeTimers(); resolves.length = 0; });
 afterEach(() => { vi.useRealTimers(); });
 
 async function playFirstOf(prefix: string) {
+  // The two elements are shared by every test; undo any test's own duration.
+  for (const el of created) el.duration = 210;
   player.setQueue(longQueue(prefix), `${prefix}0`);
   await player.playAt(0);
   await vi.advanceTimersByTimeAsync(0);
@@ -180,4 +182,58 @@ test('a pause near the end does not advance', async () => {
   player.toggle(); // pause
   await vi.advanceTimersByTimeAsync(2_000);
   expect(player.getSnapshot().currentId).toBe('d0');
+});
+
+/** Buffer the next track, then fire the timed handoff with half a second left. */
+async function handOff(prefix: string) {
+  const first = await playFirstOf(prefix);
+  first.currentTime = 195;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 209.5;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(500);
+  expect(player.getSnapshot().currentId).toBe(`${prefix}1`);
+  expect(first.paused, 'the tail is still playing').toBe(false);
+  return { first, second: withSrc(`${prefix}1`)! };
+}
+
+test('pause during the tail stops the outgoing track too', async () => {
+  const { first, second } = await handOff('h');
+  player.toggle(); // pause
+  expect(second.paused).toBe(true);
+  expect(first.paused, 'no sound may carry on under a paused player').toBe(true);
+});
+
+test('a short next track does not buffer over the tail still playing', async () => {
+  const { first, second } = await handOff('i');
+  // A short incoming track is inside its own prefetch window (the last
+  // twenty seconds) from its first timeupdate, while the outgoing tail is
+  // still sounding. Standing in for one: the incoming element near its end.
+  second.currentTime = 195;
+  resolves.length = 0;
+  second.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(first.src, 'the tail must not be replaced').toContain('id=i0');
+  expect(resolves).not.toContain('i2');
+
+  // Once the tail is done, buffering carries on.
+  first.fire('ended');
+  second.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(resolves).toContain('i2');
+});
+
+test('a standby that fails before the handoff leaves the advance to ended', async () => {
+  const first = await playFirstOf('j');
+  first.currentTime = 195;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 209.5;
+  first.fire('timeupdate');
+  withSrc('j1')!.fire('error'); // the buffered next track fails
+
+  await vi.advanceTimersByTimeAsync(500);
+  expect(player.getSnapshot().currentId, 'nothing to hand over to: keep playing to the end').toBe('j0');
+  expect(first.paused).toBe(false);
 });

@@ -240,6 +240,8 @@ class PlayerEngine {
   private handoffLead = HANDOFF_LEAD_INITIAL_S;
   /** Seconds the outgoing track still has to play when a timed handoff fires. */
   private handoffTail = 0;
+  /** Ends the tail of a swapped-out element still playing, if there is one. */
+  private stopTail: (() => void) | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
   /** A seek made while the stream was broken. See rememberSeek. */
@@ -536,6 +538,7 @@ class PlayerEngine {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
     this.intentionallyPaused = false;
     this.cancelResume();
+    this.stopTail?.();
     clearTimeout(this.arrivalTimer);
     // Retry state belongs to one break in one track. A recovery replay keeps
     // it; anything else, including choosing the current track again, is a
@@ -665,6 +668,9 @@ class PlayerEngine {
     this.handoffTimer = setTimeout(() => {
       this.handoffTimer = undefined;
       if (this.playbackId !== playbackId || this.audio !== el || el.paused || this.intentionallyPaused) return;
+      // The standby may have failed since: then there is nothing to hand
+      // over to, and `ended` takes the ordinary path at the real end.
+      if (!this.prefetch?.ready || this.prefetch.trackId !== this.queue[this.queueIndex + 1]?.id) return;
       // Read the position again: a seek back may have landed since the timer
       // was set, and then there is more of this track to hear.
       const now = this.secondsLeft(el);
@@ -706,11 +712,16 @@ class PlayerEngine {
       done = true;
       el.removeEventListener('ended', retire);
       clearTimeout(timer);
+      if (this.stopTail === retire) this.stopTail = undefined;
       if (el === this.audio || el.src !== src) return;
       el.pause();
       el.removeAttribute('src');
       el.load();
     };
+    // Pause, Next or a new track stop it at once: sound must never carry on
+    // under a player that says it has stopped.
+    this.stopTail?.();
+    this.stopTail = retire;
     el.addEventListener('ended', retire);
     const timer = setTimeout(retire, (tail + 0.5) * 1000);
   }
@@ -729,6 +740,9 @@ class PlayerEngine {
 
   /** ~20s before the end, resolve the next item into the standby element. */
   private async prefetchNext() {
+    // The standby is still playing out the last track's tail. Loading into it
+    // would cut that off; the next timeupdate after it retires tries again.
+    if (this.stopTail) return;
     let upNext = this.queue[this.queueIndex + 1];
     if (!upNext) {
       await this.appendContinuation();
@@ -775,6 +789,9 @@ class PlayerEngine {
     const tail = this.handoffTail;
     this.handoffTail = 0;
     this.cancelHandoff();
+    // The standby may still be finishing the track before this one; it is
+    // about to be needed, so it stops now.
+    this.stopTail?.();
     if (automatic && this.intentionallyPaused) return;
     // A re-entrancy guard, deliberately not a lock: it must never be able to
     // outlive the advance it is guarding.
@@ -909,6 +926,7 @@ class PlayerEngine {
   private pause() {
     const wait = this.networkWait;
     this.cancelHandoff();
+    this.stopTail?.();
     this.intentionallyPaused = true;
     ++this.playbackId;
     this.cancelResume();
