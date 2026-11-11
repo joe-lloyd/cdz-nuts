@@ -308,3 +308,51 @@ test('a tail that starts while the queue is being topped up is not loaded over',
   expect(resolves, 'left retryable').toContain('cont1');
   expect(withSrc('cont1')).toBeTruthy();
 });
+
+test('a real handoff while the top-up is pending keeps the tail and buffers after', async () => {
+  for (const el of created) el.duration = 210;
+  player.setQueue([{ id: 'solo', name: 'Solo', artists: 'Someone', durationMs: 210_000 }], 'solo');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+  const outgoing = withSrc('solo')!;
+
+  // Nothing queued next: buffering asks for the next record and waits.
+  held.set('continuation', () => {});
+  outgoing.currentTime = 195;
+  outgoing.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+
+  // Meanwhile two tracks arrive another way (radio appends like this), and
+  // the first of them buffers and is handed over to for real.
+  player.append([
+    { id: 'n1', name: 'One', artists: 'Someone', durationMs: 210_000 },
+    { id: 'n2', name: 'Two', artists: 'Someone', durationMs: 210_000 },
+  ]);
+  outgoing.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(withSrc('n1'), 'n1 buffered into the standby').toBeTruthy();
+  outgoing.currentTime = 209.5;
+  outgoing.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(500);
+  expect(player.getSnapshot().currentId).toBe('n1');
+  expect(outgoing.paused, 'the outgoing tail is playing').toBe(false);
+
+  // Now the old top-up answers. Its prefetch must not take the standby,
+  // which is the outgoing element still sounding.
+  resolves.length = 0;
+  held.get('continuation')!();
+  held.delete('continuation');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(outgoing.src, 'the tail is not replaced').toContain('id=solo');
+  expect(outgoing.paused).toBe(false);
+  expect(resolves).not.toContain('n2');
+
+  // The tail ends; n1, near its own end, buffers n2 after all.
+  outgoing.fire('ended');
+  const incoming = withSrc('n1')!;
+  incoming.currentTime = 195;
+  incoming.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(resolves, 'prefetch retried once the tail had gone').toContain('n2');
+  expect(withSrc('n2')).toBeTruthy();
+});
