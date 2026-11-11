@@ -83,6 +83,21 @@ jobs:
           python -m pip install --quiet pillow
           python apps/desktop/scripts/make-icons.py
 
+      # Once macOS has made the release live, the later jobs replace a
+      # manifest that Macs are already reading. tauri-action deletes the old
+      # latest.json before uploading its own, so a failed upload would leave a
+      # live release with no manifest at all and every Mac unable to update.
+      # Keep a copy, and put it back below if the replacement does not land.
+      - name: Keep a copy of the live updater manifest
+        if: runner.os != 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json \
+            -O "$RUNNER_TEMP/latest.json.bak" --clobber || echo "no manifest on the release yet"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -135,6 +150,28 @@ jobs:
           prerelease: false
           includeUpdaterJson: true # this is latest.json, which the app polls
           args: ${{ matrix.args }}
+
+      - name: Put the updater manifest back if replacing it failed
+        if: always() && runner.os != 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -qx latest.json; then
+            echo "latest.json is in place"
+            exit 0
+          fi
+          if [ ! -f "$RUNNER_TEMP/latest.json.bak" ]; then
+            echo "no manifest on the release and none to restore"
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/restore"
+          cp "$RUNNER_TEMP/latest.json.bak" "$RUNNER_TEMP/restore/latest.json"
+          gh release upload "$TAG" "$RUNNER_TEMP/restore/latest.json" --repo "$GITHUB_REPOSITORY" --clobber
+          echo "restored the previous latest.json; this platform's build did not make it in"
+          exit 1
 
       - name: Go live as soon as both macOS builds are in
         if: runner.os == 'macOS'
