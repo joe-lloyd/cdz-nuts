@@ -28,8 +28,8 @@ export async function get<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 /** GET something that changes underneath us — worker state, player status. */
-export async function getFresh<T>(path: string): Promise<T> {
-  return get<T>(path, { cache: 'no-store' });
+export async function getFresh<T>(path: string, init?: RequestInit): Promise<T> {
+  return get<T>(path, { ...init, cache: 'no-store' });
 }
 
 export async function post<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
