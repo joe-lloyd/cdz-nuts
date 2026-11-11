@@ -127,7 +127,35 @@ jobs:
           jq -e '.version and (.platforms | length > 0)' "$RUNNER_TEMP/latest.json.bak" >/dev/null
           echo "kept latest.json for $(jq -r .version "$RUNNER_TEMP/latest.json.bak")"
 
+      # A rerun of a macOS job on a release that is already live would have
+      # tauri-action delete and re-upload a bundle Macs are installing from;
+      # a failed upload there leaves the manifest pointing at nothing. Once a
+      # Mac bundle is live, it is left alone.
+      - name: Leave a live macOS bundle alone
+        id: live
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) bundle='aarch64.app.tar.gz' ;;
+            *) bundle='x64.app.tar.gz' ;;
+          esac
+          if ! info=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>"$RUNNER_TEMP/view.err"); then
+            grep -qi 'release not found' "$RUNNER_TEMP/view.err" || { cat "$RUNNER_TEMP/view.err"; exit 1; }
+            echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if jq -e --arg b "$bundle" '(.isDraft | not) and any(.assets[]; (.name | endswith($b)) and .state == "uploaded")' <<<"$info" >/dev/null; then
+            echo "this release is live with its $bundle already; not replacing it"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: tauri-apps/tauri-action@v0
+        if: steps.live.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signing is what makes the updater trust a download. Without these
@@ -190,14 +218,28 @@ jobs:
           set -euo pipefail
           # Captured on its own line so a failed lookup fails the step here,
           # and can never be mistaken for a missing manifest.
-          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
-          if grep -qx latest.json <<<"$assets"; then
-            echo "latest.json is in place"
-            exit 0
+          info=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets)
+          state=$(jq -r '[.assets[] | select(.name == "latest.json") | .state][0] // "missing"' <<<"$info")
+          if [ "$state" = uploaded ]; then
+            # Present is not enough: a failed upload can leave an empty or
+            # partial asset behind. It has to download and parse.
+            if gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O "$RUNNER_TEMP/live.json" --clobber \
+              && jq -e '.version and (.platforms | length > 0)' "$RUNNER_TEMP/live.json" >/dev/null; then
+              echo "latest.json is in place"
+              exit 0
+            fi
+            echo "latest.json is on the release but unusable"
+          else
+            echo "latest.json is $state"
           fi
           if [ ! -f "$RUNNER_TEMP/latest.json.bak" ]; then
             echo "no manifest on the release and none to restore"
             exit 1
+          fi
+          # A broken leftover has to go before the copy can take its name. Only
+          # it: a manifest that is in place was accepted above.
+          if [ "$state" != missing ]; then
+            gh release delete-asset "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --yes
           fi
           mkdir -p "$RUNNER_TEMP/restore"
           cp "$RUNNER_TEMP/latest.json.bak" "$RUNNER_TEMP/restore/latest.json"
