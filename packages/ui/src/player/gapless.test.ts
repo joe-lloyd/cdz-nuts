@@ -57,6 +57,15 @@ vi.stubGlobal('fetch', vi.fn(async (url: string) => {
       track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: 210_000 },
     }), { headers: { 'content-type': 'application/json' } }));
   }
+  if (url.startsWith('/api/player/continuation')) {
+    // The next record once the queue runs out, held open while a test needs.
+    if (held.has('continuation')) await new Promise<void>((release) => held.set('continuation', release));
+    return new Response(JSON.stringify({
+      available: true, reason: 'same-artist',
+      album: { id: 'libalbum-c0ffee', name: 'Next record', artists: 'Someone' },
+      tracks: [{ id: 'cont1', name: 'Continued', artists: 'Someone', duration_ms: 210_000 }],
+    }), { headers: { 'content-type': 'application/json' } });
+  }
   return Promise.resolve(new Response('{}', { headers: { 'content-type': 'application/json' } }));
 }));
 
@@ -265,4 +274,37 @@ test('a tail that starts while the next track is resolving is not loaded over', 
   await vi.advanceTimersByTimeAsync(0);
   expect(resolves, 'left retryable, not marked as tried').toContain('k1');
   expect(withSrc('k1')).toBeTruthy();
+});
+
+test('a tail that starts while the queue is being topped up is not loaded over', async () => {
+  // The last queued track: the next one only exists once continuation answers.
+  for (const el of created) el.duration = 210;
+  player.setQueue([{ id: 'last', name: 'Last', artists: 'Someone', durationMs: 210_000 }], 'last');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+  const first = withSrc('last')!;
+
+  held.set('continuation', () => {});
+  first.currentTime = 195;
+  first.fire('timeupdate'); // prefetch waits on the continuation response
+  await vi.advanceTimersByTimeAsync(0);
+
+  // A tail starts playing in the standby while that response is out.
+  const engine = player as unknown as { stopTail: (() => void) | undefined };
+  engine.stopTail = () => {};
+  const before = created.map((el) => el.src);
+  resolves.length = 0;
+  held.get('continuation')!();
+  held.delete('continuation');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().queue.map((i) => i.id), 'the record was appended').toContain('cont1');
+  expect(resolves, 'nothing resolved for the standby yet').not.toContain('cont1');
+  expect(created.map((el) => el.src), 'the tail is untouched').toEqual(before);
+
+  // Once the tail has gone, the appended track buffers on the next timeupdate.
+  engine.stopTail = undefined;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(resolves, 'left retryable').toContain('cont1');
+  expect(withSrc('cont1')).toBeTruthy();
 });
