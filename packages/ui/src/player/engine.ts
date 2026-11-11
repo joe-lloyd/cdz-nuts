@@ -80,6 +80,13 @@ const SWAP_START_MS = 5000;
 const HANDOFF_WINDOW_S = 1.5;
 const HANDOFF_LEAD_INITIAL_S = 0.05;
 const HANDOFF_LEAD_MAX_S = 0.2;
+/**
+ * How far the file's own duration may differ from the scanned one before the
+ * end is treated as unknown. An Ogg or Opus element only estimates its
+ * duration, and timing the handoff off a guess would cut the song short; when
+ * the two disagree, `ended` decides instead.
+ */
+const HANDOFF_DURATION_AGREEMENT_S = 0.25;
 
 const RESUME_ATTEMPTS = 3;
 /** Backoff between retries, multiplied by the attempt number. */
@@ -231,6 +238,8 @@ class PlayerEngine {
   private handoffTimer: ReturnType<typeof setTimeout> | undefined;
   /** How long an incoming element takes to start sounding. See HANDOFF_WINDOW_S. */
   private handoffLead = HANDOFF_LEAD_INITIAL_S;
+  /** Seconds the outgoing track still has to play when a timed handoff fires. */
+  private handoffTail = 0;
   private resumeAttempts = 0;
   private resumeFrom = 0;
   /** A seek made while the stream was broken. See rememberSeek. */
@@ -646,22 +655,64 @@ class PlayerEngine {
    * new track) leaves no timer behind.
    */
   private scheduleHandoff() {
-    clearTimeout(this.handoffTimer);
-    this.handoffTimer = undefined;
+    this.cancelHandoff();
     const el = this.audio;
     if (el.paused || this.intentionallyPaused || !this.prefetch?.ready) return;
     if (this.prefetch.trackId !== this.queue[this.queueIndex + 1]?.id) return;
-    // The file's own length, which is what actually runs out.
-    const duration = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : this.durationSeconds();
-    if (!duration) return;
-    const left = (duration - el.currentTime) / (el.playbackRate || 1);
-    if (left > HANDOFF_WINDOW_S) return;
+    const left = this.secondsLeft(el);
+    if (left === null || left > HANDOFF_WINDOW_S) return;
     const playbackId = this.playbackId;
     this.handoffTimer = setTimeout(() => {
       this.handoffTimer = undefined;
       if (this.playbackId !== playbackId || this.audio !== el || el.paused || this.intentionallyPaused) return;
+      // Read the position again: a seek back may have landed since the timer
+      // was set, and then there is more of this track to hear.
+      const now = this.secondsLeft(el);
+      if (now === null || now > left + 0.1) return;
+      this.handoffTail = now;
       void this.next(true);
     }, Math.max(0, (left - this.handoffLead) * 1000));
+  }
+
+  private cancelHandoff() {
+    clearTimeout(this.handoffTimer);
+    this.handoffTimer = undefined;
+  }
+
+  /**
+   * Real seconds of audio left in `el`, or null when the end is not known
+   * well enough to time a handoff against. The scanned length and the file's
+   * own figure have to agree; see HANDOFF_DURATION_AGREEMENT_S.
+   */
+  private secondsLeft(el: HTMLAudioElement): number | null {
+    const scanned = (this.current?.duration_ms ?? 0) / 1000;
+    const own = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+    if (!scanned || !own || Math.abs(scanned - own) > HANDOFF_DURATION_AGREEMENT_S) return null;
+    return (Math.min(scanned, own) - el.currentTime) / (el.playbackRate || 1);
+  }
+
+  /**
+   * Let a swapped-out element play its last moments under the incoming one,
+   * then retire it. Retiring at once would cut that tail and leave the
+   * incoming element's start-up time silent. It goes on its own `ended`, or
+   * shortly after it should have, whichever is first -- unless it has been
+   * taken back or given another track in the meantime.
+   */
+  private retireAfterTail(el: HTMLAudioElement, tail: number) {
+    const src = el.src;
+    let done = false;
+    const retire = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('ended', retire);
+      clearTimeout(timer);
+      if (el === this.audio || el.src !== src) return;
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    };
+    el.addEventListener('ended', retire);
+    const timer = setTimeout(retire, (tail + 0.5) * 1000);
   }
 
   /** Learn how long a swapped-in element takes to start. See HANDOFF_WINDOW_S. */
@@ -720,6 +771,10 @@ class PlayerEngine {
   }
 
   async next(automatic = false): Promise<void> {
+    // Only the timed handoff sets this, immediately before calling here.
+    const tail = this.handoffTail;
+    this.handoffTail = 0;
+    this.cancelHandoff();
     if (automatic && this.intentionallyPaused) return;
     // A re-entrancy guard, deliberately not a lock: it must never be able to
     // outlive the advance it is guarding.
@@ -758,9 +813,13 @@ class PlayerEngine {
         this.resetRetries();
         const old = this.audio;
         this.audio = this.standby();
-        old.pause();
-        old.removeAttribute('src');
-        old.load();
+        if (tail > 0) {
+          this.retireAfterTail(old, tail);
+        } else {
+          old.pause();
+          old.removeAttribute('src');
+          old.load();
+        }
         this.queueIndex = index;
         const track = this.prefetch.track;
         this.current = track;
@@ -814,6 +873,7 @@ class PlayerEngine {
    */
   previous() {
     if (this.audio.currentTime > 4) {
+      this.cancelHandoff();
       this.audio.currentTime = 0;
       this.emit();
     } else if (this.queueIndex > 0) {
@@ -848,6 +908,7 @@ class PlayerEngine {
 
   private pause() {
     const wait = this.networkWait;
+    this.cancelHandoff();
     this.intentionallyPaused = true;
     ++this.playbackId;
     this.cancelResume();
@@ -870,6 +931,7 @@ class PlayerEngine {
     const duration = this.durationSeconds();
     if (!duration) return;
     this.pendingResume = null;
+    this.cancelHandoff();
     const target = clamp(fraction, 0, 1) * duration;
     this.rememberSeek(target);
     this.audio.currentTime = target;
@@ -878,6 +940,7 @@ class PlayerEngine {
 
   seekTo(seconds: number) {
     this.pendingResume = null;
+    this.cancelHandoff();
     const target = Math.max(0, seconds);
     this.rememberSeek(target);
     this.audio.currentTime = target;

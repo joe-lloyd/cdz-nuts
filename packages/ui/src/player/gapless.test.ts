@@ -99,7 +99,60 @@ test('the next track starts as this one runs out, without waiting for ended', as
   await vi.advanceTimersByTimeAsync(100);
   expect(player.getSnapshot().currentId).toBe('b1');
   expect(second.paused).toBe(false);
+  // The outgoing track plays out its last moments under the incoming one's
+  // start-up, instead of being cut.
+  expect(first.paused, 'the tail must not be cut').toBe(false);
+  expect(first.src).toContain('id=b0');
+
+  first.fire('ended');
   expect(first.paused).toBe(true);
+  expect(first.src, 'retired once its audio has run out').toBe('');
+});
+
+test('an outgoing element that never reports ended is still retired', async () => {
+  const first = await playFirstOf('e');
+  first.currentTime = 195;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 209.5;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(500);
+  expect(player.getSnapshot().currentId).toBe('e1');
+  await vi.advanceTimersByTimeAsync(1_000);
+  expect(first.paused).toBe(true);
+  expect(first.src).toBe('');
+});
+
+test('an estimated duration is not trusted to time the handoff', async () => {
+  const first = await playFirstOf('f');
+  // An Ogg element guessing 200s for a track the scan knows is 210s.
+  first.duration = 200;
+  first.currentTime = 195;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 199.5;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(player.getSnapshot().currentId, 'ten seconds of the song would be lost').toBe('f0');
+
+  // The real end still advances.
+  first.fire('ended');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().currentId).toBe('f1');
+});
+
+test('a seek just before the handoff fires cancels it at once', async () => {
+  const first = await playFirstOf('g');
+  first.currentTime = 195;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 209.5;
+  first.fire('timeupdate');
+
+  // No timeupdate follows the seek before the timer would have fired.
+  player.seekTo(60);
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(player.getSnapshot().currentId).toBe('g0');
 });
 
 test('seeking back from the end cancels the handoff', async () => {
