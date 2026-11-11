@@ -22,7 +22,23 @@ export function PlayerBar() {
   // On a phone the bar rests compact and opens into a full now-playing view.
   const [expanded, setExpanded] = useState(false);
   const location = useLocation();
-  useEffect(() => { setExpanded(false); }, [location.pathname]);
+  // Going anywhere else means the new page should be what is on screen: the
+  // lyrics take over the whole content area, so leaving them up after a menu
+  // click hid the page that was just asked for.
+  useEffect(() => { setExpanded(false); setPanelState(null); }, [location.pathname, location.search]);
+  // The same for any other interaction: a press outside the open panel and
+  // outside the bar that controls it closes the panel. The bar is exempt so
+  // play, skip and seek still work with the lyrics up.
+  useEffect(() => {
+    if (!panel) return;
+    const away = (event: PointerEvent) => {
+      const target = event.target;
+      if (!(target instanceof Element) || target.closest('.queue-panel, #player-bar')) return;
+      setPanelState(null);
+    };
+    document.addEventListener('pointerdown', away, true);
+    return () => document.removeEventListener('pointerdown', away, true);
+  }, [panel]);
   useEffect(() => {
     if (!expanded) return;
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setExpanded(false); };
