@@ -66,6 +66,28 @@ const SILENCE = 'data:audio/wav;base64,UklGRnQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfA
  */
 const SWAP_START_MS = 5000;
 
+/**
+ * Gapless handoff.
+ *
+ * Waiting for `ended` leaves a gap: the event lands a beat after the last
+ * sample, and the incoming element then takes a moment to start producing
+ * sound. So within the last HANDOFF_WINDOW_S the engine times the swap
+ * itself, starting the next track the moment the current one runs out, less
+ * the time an element takes to start. That start time is measured on every
+ * swap and kept as a running average, so the lead fits this machine rather
+ * than a guess. `ended` still advances if the timer never gets to run.
+ */
+const HANDOFF_WINDOW_S = 1.5;
+const HANDOFF_LEAD_INITIAL_S = 0.05;
+const HANDOFF_LEAD_MAX_S = 0.2;
+/**
+ * How far the file's own duration may differ from the scanned one before the
+ * end is treated as unknown. An Ogg or Opus element only estimates its
+ * duration, and timing the handoff off a guess would cut the song short; when
+ * the two disagree, `ended` decides instead.
+ */
+const HANDOFF_DURATION_AGREEMENT_S = 0.25;
+
 const RESUME_ATTEMPTS = 3;
 /** Backoff between retries, multiplied by the attempt number. */
 const RESUME_BACKOFF_MS = 1000;
@@ -213,6 +235,13 @@ class PlayerEngine {
   private outputVolume?: OutputVolume;
   private intentionallyPaused = false;
   private swapWatchdog: ReturnType<typeof setTimeout> | undefined;
+  private handoffTimer: ReturnType<typeof setTimeout> | undefined;
+  /** How long an incoming element takes to start sounding. See HANDOFF_WINDOW_S. */
+  private handoffLead = HANDOFF_LEAD_INITIAL_S;
+  /** Seconds the outgoing track still has to play when a timed handoff fires. */
+  private handoffTail = 0;
+  /** Ends the tail of a swapped-out element still playing, if there is one. */
+  private stopTail: (() => void) | undefined;
   private resumeAttempts = 0;
   private resumeFrom = 0;
   /** A seek made while the stream was broken. See rememberSeek. */
@@ -413,10 +442,6 @@ class PlayerEngine {
   }
 
   /** How many tracks are still ahead of the cursor. */
-  private ahead(): number {
-    return Math.max(0, this.queue.length - this.queueIndex - 1);
-  }
-
   setQueue(tracks: QueueItem[], selectedId: string, keepPlayingAfterList = true) {
     const seen = new Set<string>();
     this.queue = tracks.filter((t) => t.id && !seen.has(t.id) && seen.add(t.id));
@@ -513,6 +538,7 @@ class PlayerEngine {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
     this.intentionallyPaused = false;
     this.cancelResume();
+    this.stopTail?.();
     clearTimeout(this.arrivalTimer);
     // Retry state belongs to one break in one track. A recovery replay keeps
     // it; anything else, including choosing the current track again, is a
@@ -625,18 +651,116 @@ class PlayerEngine {
     void this.loadLyrics(track);
   }
 
+  /**
+   * Time the swap to the next track so it starts as this one ends. Called on
+   * every timeupdate; each call replaces the timer with a better-informed
+   * one, and anything that moves away from the end (a seek back, a pause, a
+   * new track) leaves no timer behind.
+   */
+  private scheduleHandoff() {
+    this.cancelHandoff();
+    const el = this.audio;
+    if (el.paused || this.intentionallyPaused || !this.prefetch?.ready) return;
+    if (this.prefetch.trackId !== this.queue[this.queueIndex + 1]?.id) return;
+    const left = this.secondsLeft(el);
+    if (left === null || left > HANDOFF_WINDOW_S) return;
+    const playbackId = this.playbackId;
+    this.handoffTimer = setTimeout(() => {
+      this.handoffTimer = undefined;
+      if (this.playbackId !== playbackId || this.audio !== el || el.paused || this.intentionallyPaused) return;
+      // The standby may have failed since: then there is nothing to hand
+      // over to, and `ended` takes the ordinary path at the real end.
+      if (!this.prefetch?.ready || this.prefetch.trackId !== this.queue[this.queueIndex + 1]?.id) return;
+      // Read the position again: a seek back may have landed since the timer
+      // was set, and then there is more of this track to hear.
+      const now = this.secondsLeft(el);
+      if (now === null || now > left + 0.1) return;
+      this.handoffTail = now;
+      void this.next(true);
+    }, Math.max(0, (left - this.handoffLead) * 1000));
+  }
+
+  private cancelHandoff() {
+    clearTimeout(this.handoffTimer);
+    this.handoffTimer = undefined;
+  }
+
+  /**
+   * Real seconds of audio left in `el`, or null when the end is not known
+   * well enough to time a handoff against. The scanned length and the file's
+   * own figure have to agree; see HANDOFF_DURATION_AGREEMENT_S.
+   */
+  private secondsLeft(el: HTMLAudioElement): number | null {
+    const scanned = (this.current?.duration_ms ?? 0) / 1000;
+    const own = Number.isFinite(el.duration) && el.duration > 0 ? el.duration : 0;
+    if (!scanned || !own || Math.abs(scanned - own) > HANDOFF_DURATION_AGREEMENT_S) return null;
+    return (Math.min(scanned, own) - el.currentTime) / (el.playbackRate || 1);
+  }
+
+  /**
+   * Let a swapped-out element play its last moments under the incoming one,
+   * then retire it. Retiring at once would cut that tail and leave the
+   * incoming element's start-up time silent. It goes on its own `ended`, or
+   * shortly after it should have, whichever is first -- unless it has been
+   * taken back or given another track in the meantime.
+   */
+  private retireAfterTail(el: HTMLAudioElement, tail: number) {
+    const src = el.src;
+    let done = false;
+    const retire = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('ended', retire);
+      clearTimeout(timer);
+      if (this.stopTail === retire) this.stopTail = undefined;
+      if (el === this.audio || el.src !== src) return;
+      el.pause();
+      el.removeAttribute('src');
+      el.load();
+    };
+    // Pause, Next or a new track stop it at once: sound must never carry on
+    // under a player that says it has stopped.
+    this.stopTail?.();
+    this.stopTail = retire;
+    el.addEventListener('ended', retire);
+    const timer = setTimeout(retire, (tail + 0.5) * 1000);
+  }
+
+  /** Learn how long a swapped-in element takes to start. See HANDOFF_WINDOW_S. */
+  private measureStart(el: HTMLAudioElement, playbackId: number) {
+    const started = performance.now();
+    const onPlaying = () => {
+      el.removeEventListener('playing', onPlaying);
+      if (this.playbackId !== playbackId) return;
+      const took = (performance.now() - started) / 1000;
+      this.handoffLead = clamp(this.handoffLead * 0.7 + took * 0.3, 0, HANDOFF_LEAD_MAX_S);
+    };
+    el.addEventListener('playing', onPlaying);
+  }
+
   /** ~20s before the end, resolve the next item into the standby element. */
   private async prefetchNext() {
+    // The standby is still playing out the last track's tail. Loading into it
+    // would cut that off; the next timeupdate after it retires tries again.
+    if (this.stopTail) return;
     let upNext = this.queue[this.queueIndex + 1];
     if (!upNext) {
       await this.appendContinuation();
       upNext = this.queue[this.queueIndex + 1];
     }
-    if (!upNext || this.prefetch?.trackId === upNext.id) return;
+    // A handoff may have happened while the queue was being topped up, and
+    // left a tail playing in the standby.
+    if (this.stopTail || !upNext || this.prefetch?.trackId === upNext.id) return;
     this.prefetch = { trackId: upNext.id, ready: false, track: null };
     try {
       const result = await get<ResolveResult>(`/api/player/resolve?id=${encodeURIComponent(upNext.id)}`);
       if (this.prefetch?.trackId !== upNext.id || !result.available) return;
+      if (this.stopTail) {
+        // Same again, during the resolve. Leave it to be retried once the
+        // tail has finished, rather than marked as tried.
+        this.prefetch = null;
+        return;
+      }
       const el = this.standby();
       el.src = result.streamUrl!;
       el.load();
@@ -669,6 +793,13 @@ class PlayerEngine {
   }
 
   async next(automatic = false): Promise<void> {
+    // Only the timed handoff sets this, immediately before calling here.
+    const tail = this.handoffTail;
+    this.handoffTail = 0;
+    this.cancelHandoff();
+    // The standby may still be finishing the track before this one; it is
+    // about to be needed, so it stops now.
+    this.stopTail?.();
     if (automatic && this.intentionallyPaused) return;
     // A re-entrancy guard, deliberately not a lock: it must never be able to
     // outlive the advance it is guarding.
@@ -707,9 +838,13 @@ class PlayerEngine {
         this.resetRetries();
         const old = this.audio;
         this.audio = this.standby();
-        old.pause();
-        old.removeAttribute('src');
-        old.load();
+        if (tail > 0) {
+          this.retireAfterTail(old, tail);
+        } else {
+          old.pause();
+          old.removeAttribute('src');
+          old.load();
+        }
         this.queueIndex = index;
         const track = this.prefetch.track;
         this.current = track;
@@ -745,6 +880,7 @@ class PlayerEngine {
         this.swapWatchdog = setTimeout(() => {
           if (incoming.currentTime === 0) retry();
         }, SWAP_START_MS);
+        this.measureStart(incoming, playbackId);
         this.audio.play().catch(retry);
         return;
       }
@@ -762,6 +898,7 @@ class PlayerEngine {
    */
   previous() {
     if (this.audio.currentTime > 4) {
+      this.cancelHandoff();
       this.audio.currentTime = 0;
       this.emit();
     } else if (this.queueIndex > 0) {
@@ -796,6 +933,8 @@ class PlayerEngine {
 
   private pause() {
     const wait = this.networkWait;
+    this.cancelHandoff();
+    this.stopTail?.();
     this.intentionallyPaused = true;
     ++this.playbackId;
     this.cancelResume();
@@ -818,6 +957,7 @@ class PlayerEngine {
     const duration = this.durationSeconds();
     if (!duration) return;
     this.pendingResume = null;
+    this.cancelHandoff();
     const target = clamp(fraction, 0, 1) * duration;
     this.rememberSeek(target);
     this.audio.currentTime = target;
@@ -826,6 +966,7 @@ class PlayerEngine {
 
   seekTo(seconds: number) {
     this.pendingResume = null;
+    this.cancelHandoff();
     const target = Math.max(0, seconds);
     this.rememberSeek(target);
     this.audio.currentTime = target;
@@ -1054,10 +1195,16 @@ class PlayerEngine {
         });
       } catch { /* unsupported state */ }
     }
-    // Only top up when the queue is running low, rather than on every boundary.
+    // Always have the next track buffered by the last twenty seconds. This
+    // used to run only while fewer than KEEP_AHEAD tracks were queued, which
+    // is the rule for topping the queue up, not for buffering: any long album,
+    // playlist or station then loaded every next track cold, a second of
+    // silence at each boundary. prefetchNext tops up itself when nothing is
+    // queued next, and is a no-op once the next track is in.
     if (duration && duration - this.audio.currentTime < 20 && !this.audio.paused) {
-      if (this.ahead() < KEEP_AHEAD) void this.prefetchNext();
+      void this.prefetchNext();
     }
+    this.scheduleHandoff();
     if (!this.audio.paused && Date.now() - this.lastPositionSave > 5000) {
       this.lastPositionSave = Date.now();
       this.save();

@@ -18,6 +18,13 @@ on:
         description: 'Tag to release (must already exist)'
         required: true
 
+# One run per tag at a time. Jobs of a run read, replace and restore the same
+# release's latest.json; two runs at once could restore an older copy over a
+# newer one.
+concurrency:
+  group: release-desktop-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
     permissions:
@@ -66,9 +73,16 @@ jobs:
       # who can run it.
       - name: Linux dependencies
         if: matrix.os == 'ubuntu-22.04'
+        # This normally takes a minute. On 2026-11-11 it hung for over an hour, twice,
+        # and with the builds running one at a time Windows waited behind it.
+        # Fail fast instead, so a rerun is the fix rather than a six-hour wait.
+        timeout-minutes: 10
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
+          # Retries alone never end a connection that hangs, which is what it
+          # did twice on 2026-11-11; the timeouts make each attempt give up.
+          apt='-o Acquire::Retries=3 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30'
+          sudo apt-get $apt update
+          sudo apt-get $apt install -y libwebkit2gtk-4.1-dev libappindicator3-dev \
             librsvg2-dev patchelf libgtk-3-dev libxdo-dev libssl-dev
 
       - uses: actions/setup-python@v5
@@ -79,7 +93,69 @@ jobs:
           python -m pip install --quiet pillow
           python apps/desktop/scripts/make-icons.py
 
+      # Once macOS has made the release live, the later jobs replace a
+      # manifest that Macs are already reading. tauri-action deletes the old
+      # latest.json before uploading its own, so a failed upload would leave a
+      # live release with no manifest at all and every Mac unable to update.
+      # Keep a copy, and put it back below if the replacement does not land.
+      - name: Keep a copy of the live updater manifest
+        if: runner.os != 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # A failed lookup must stop the job here, before anything is
+          # replaced. Only a release that exists without a manifest, or no
+          # release yet, means there is nothing to keep.
+          if ! assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' 2>"$RUNNER_TEMP/view.err"); then
+            if grep -qi 'release not found' "$RUNNER_TEMP/view.err"; then
+              echo "no release yet, so no manifest to keep"
+              exit 0
+            fi
+            cat "$RUNNER_TEMP/view.err"
+            exit 1
+          fi
+          if ! grep -qx latest.json <<<"$assets"; then
+            echo "no manifest on the release yet"
+            exit 0
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json \
+            -O "$RUNNER_TEMP/latest.json.bak" --clobber
+          # A partial download is not a backup.
+          jq -e '.version and (.platforms | length > 0)' "$RUNNER_TEMP/latest.json.bak" >/dev/null
+          echo "kept latest.json for $(jq -r .version "$RUNNER_TEMP/latest.json.bak")"
+
+      # A rerun of a macOS job on a release that is already live would have
+      # tauri-action delete and re-upload a bundle Macs are installing from;
+      # a failed upload there leaves the manifest pointing at nothing. Once a
+      # Mac bundle is live, it is left alone.
+      - name: Leave a live macOS bundle alone
+        id: live
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "${{ matrix.target }}" in
+            aarch64-apple-darwin) bundle='aarch64.app.tar.gz' ;;
+            *) bundle='x64.app.tar.gz' ;;
+          esac
+          if ! info=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft,assets 2>"$RUNNER_TEMP/view.err"); then
+            grep -qi 'release not found' "$RUNNER_TEMP/view.err" || { cat "$RUNNER_TEMP/view.err"; exit 1; }
+            echo "skip=false" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if jq -e --arg b "$bundle" '(.isDraft | not) and any(.assets[]; (.name | endswith($b)) and .state == "uploaded")' <<<"$info" >/dev/null; then
+            echo "this release is live with its $bundle already; not replacing it"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - uses: tauri-apps/tauri-action@v0
+        if: steps.live.outputs.skip != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signing is what makes the updater trust a download. Without these
@@ -113,20 +189,100 @@ jobs:
             code-signing certificate. The install scripts deal with what that
             means on each platform. Once installed, the app updates itself from
             the tray.
-          # A DRAFT, published by the job below once every platform has
-          # uploaded. Not cosmetic: `releases/latest/download/latest.json` is
-          # what the app polls, and with a published release the first matrix
-          # job to finish becomes "latest" carrying only its own platform. For
-          # the twenty-five minutes the other three take, every Windows and
-          # Linux client checking for updates got "None of the fallback
-          # platforms [windows-x86_64] were found in the response platforms
-          # object" -- an error that looked like a broken build and was really
-          # a half-published release. A draft is not served as latest, so
-          # clients keep seeing the previous version until this one is whole.
+          # Created as a DRAFT, then published by the step below as soon as
+          # both macOS builds are in, without waiting for Linux and Windows.
+          # The builds run one at a time, so holding the release for all four
+          # kept every Mac waiting the best part of an hour for platforms it
+          # does not use.
+          #
+          # `releases/latest/download/latest.json` is what the app polls, so a
+          # live release missing a platform used to make that platform's
+          # clients report "None of the fallback platforms [windows-x86_64]
+          # were found", which looked like a broken build. The app treats that
+          # as "nothing new for you yet" since 0.7.3 (update.rs), and the
+          # other platforms add themselves to the live release as they finish.
+          # A single-platform draft is still never published: the step checks
+          # the Mac entries, and the job below checks all four at the end.
           releaseDraft: true
           prerelease: false
           includeUpdaterJson: true # this is latest.json, which the app polls
           args: ${{ matrix.args }}
+
+      - name: Put the updater manifest back if replacing it failed
+        if: always() && runner.os != 'macOS'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          # Captured on its own line so a failed lookup fails the step here,
+          # and can never be mistaken for a missing manifest.
+          info=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets)
+          state=$(jq -r '[.assets[] | select(.name == "latest.json") | .state][0] // "missing"' <<<"$info")
+          if [ "$state" = uploaded ]; then
+            # Present is not enough: a failed upload can leave an empty or
+            # partial asset behind, so it has to download and parse. A failed
+            # download says nothing about the asset, though, and must never
+            # lead to replacing what may be a healthy, newer manifest: retry,
+            # then fail without touching it.
+            fetched=false
+            for attempt in 1 2 3; do
+              if gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O "$RUNNER_TEMP/live.json" --clobber; then
+                fetched=true
+                break
+              fi
+              sleep $((attempt * 5))
+            done
+            if [ "$fetched" != true ]; then
+              echo "could not download latest.json to check it; leaving it as it is"
+              exit 1
+            fi
+            if jq -e '.version and (.platforms | length > 0)' "$RUNNER_TEMP/live.json" >/dev/null; then
+              echo "latest.json is in place"
+              exit 0
+            fi
+            echo "latest.json is on the release but unusable"
+          else
+            echo "latest.json is $state"
+          fi
+          if [ ! -f "$RUNNER_TEMP/latest.json.bak" ]; then
+            echo "no manifest on the release and none to restore"
+            exit 1
+          fi
+          # A broken leftover has to go before the copy can take its name. Only
+          # it: a manifest that is in place was accepted above.
+          if [ "$state" != missing ]; then
+            gh release delete-asset "$TAG" latest.json --repo "$GITHUB_REPOSITORY" --yes
+          fi
+          mkdir -p "$RUNNER_TEMP/restore"
+          cp "$RUNNER_TEMP/latest.json.bak" "$RUNNER_TEMP/restore/latest.json"
+          # No --clobber: if a manifest has appeared since the check, it is
+          # newer than this copy and must win.
+          gh release upload "$TAG" "$RUNNER_TEMP/restore/latest.json" --repo "$GITHUB_REPOSITORY"
+          echo "restored the previous latest.json; this platform's build did not make it in"
+          exit 1
+
+      - name: Go live as soon as both macOS builds are in
+        if: runner.os == 'macOS'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          assets=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+          for want in 'aarch64.app.tar.gz.sig' 'x64.app.tar.gz.sig' 'latest.json'; do
+            grep -q "$want" <<<"$assets" || { echo "not yet: missing $want"; exit 0; }
+          done
+          # The bundles being there is not enough: the updater only sees what
+          # latest.json names.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" -p latest.json -O latest.json --clobber
+          for platform in darwin-aarch64 darwin-x86_64; do
+            jq -e --arg p "$platform" '.platforms[$p].signature | length > 0' latest.json >/dev/null \
+              || { echo "not yet: latest.json has no $platform"; exit 0; }
+          done
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+          echo "published $TAG for macOS; Linux and Windows join as they finish"
 
   # Nothing is downloadable until this runs, and it only runs if all four
   # platform jobs succeeded. One platform failing now leaves a draft to inspect
@@ -137,6 +293,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      # By now macOS has normally published it already. This is the check
+      # that every platform made it in, and the publish for a run where the
+      # macOS step could not.
       - name: Publish the release once every platform is in it
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

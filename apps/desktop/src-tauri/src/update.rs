@@ -41,6 +41,16 @@ pub enum Found {
 /// deserves an answer either way, while a background check should stay quiet
 /// unless it has news. `auto_install` is the startup path, where relaunching
 /// is free because nothing is playing yet.
+/// Whether a failed check only means this platform's build is not in the
+/// latest release yet. See the release workflow: macOS publishes first.
+fn platform_not_in_release_yet(e: &tauri_plugin_updater::Error) -> bool {
+    matches!(
+        e,
+        tauri_plugin_updater::Error::TargetNotFound(_)
+            | tauri_plugin_updater::Error::TargetsNotFound(_)
+    )
+}
+
 pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bool) -> Found {
     let updater = match app.updater() {
         Ok(u) => u,
@@ -73,6 +83,19 @@ pub async fn check(app: AppHandle, announce_when_current: bool, auto_install: bo
                 "It installs by itself once nothing is playing, or now from settings or the tray.",
             );
             Found::Available { version }
+        }
+        // A release goes live as soon as its macOS builds are in, and the
+        // other platforms add themselves to it as their builds finish. Until
+        // this platform's has landed, the manifest has no entry for it: that
+        // is "nothing new for you yet", not a fault worth reporting.
+        Err(e) if platform_not_in_release_yet(&e) => {
+            log::info!("the latest release has no build for this platform yet: {e}");
+            if announce_when_current {
+                notify(&app, "cdz-nutz is up to date", env!("CARGO_PKG_VERSION"));
+            }
+            Found::Current {
+                version: env!("CARGO_PKG_VERSION").to_string(),
+            }
         }
         Ok(None) => {
             log::info!("already on the latest version");
@@ -204,5 +227,27 @@ impl PendingUpdate {
     pub fn is_pending(&self) -> bool {
         self.waiting.load(Ordering::SeqCst)
             || self.slot.lock().map(|slot| slot.is_some()).unwrap_or(false)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::platform_not_in_release_yet;
+    use tauri_plugin_updater::Error;
+
+    #[test]
+    fn a_release_still_missing_this_platform_is_not_a_failure() {
+        assert!(platform_not_in_release_yet(&Error::TargetNotFound(
+            "windows-x86_64".into()
+        )));
+        assert!(platform_not_in_release_yet(&Error::TargetsNotFound(vec![
+            "windows-x86_64-nsis".into(),
+            "windows-x86_64".into(),
+        ])));
+    }
+
+    #[test]
+    fn other_failures_are_still_failures() {
+        assert!(!platform_not_in_release_yet(&Error::ReleaseNotFound));
     }
 }
