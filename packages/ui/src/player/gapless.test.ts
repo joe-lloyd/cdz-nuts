@@ -44,10 +44,13 @@ vi.stubGlobal('Audio', class extends FakeAudio {
   constructor() { super(); created.push(this); }
 });
 const resolves: string[] = [];
-vi.stubGlobal('fetch', vi.fn((url: string) => {
+/** Resolves for these ids wait until the test releases them. */
+const held = new Map<string, () => void>();
+vi.stubGlobal('fetch', vi.fn(async (url: string) => {
   if (url.startsWith('/api/player/resolve')) {
     const id = new URL(url, 'http://localhost').searchParams.get('id') ?? '';
     resolves.push(id);
+    if (held.has(id)) await new Promise<void>((release) => held.set(id, release));
     return Promise.resolve(new Response(JSON.stringify({
       available: true,
       streamUrl: `/api/player/stream?id=${id}`,
@@ -236,4 +239,30 @@ test('a standby that fails before the handoff leaves the advance to ended', asyn
   await vi.advanceTimersByTimeAsync(500);
   expect(player.getSnapshot().currentId, 'nothing to hand over to: keep playing to the end').toBe('j0');
   expect(first.paused).toBe(false);
+});
+
+test('a tail that starts while the next track is resolving is not loaded over', async () => {
+  const first = await playFirstOf('k');
+  held.set('k1', () => {});
+  first.currentTime = 195;
+  first.fire('timeupdate'); // starts resolving k1, held open
+  await vi.advanceTimersByTimeAsync(0);
+  expect(resolves).toContain('k1');
+
+  // A tail starts playing in the standby while that resolve is out.
+  const engine = player as unknown as { stopTail: (() => void) | undefined };
+  engine.stopTail = () => {};
+  const standbySrc = created.map((el) => el.src);
+  held.get('k1')!();
+  held.delete('k1');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(created.map((el) => el.src), 'nothing may be loaded over the tail').toEqual(standbySrc);
+
+  // Once the tail is done, the next timeupdate buffers it after all.
+  engine.stopTail = undefined;
+  resolves.length = 0;
+  first.fire('timeupdate');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(resolves, 'left retryable, not marked as tried').toContain('k1');
+  expect(withSrc('k1')).toBeTruthy();
 });

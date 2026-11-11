@@ -748,11 +748,19 @@ class PlayerEngine {
       await this.appendContinuation();
       upNext = this.queue[this.queueIndex + 1];
     }
-    if (!upNext || this.prefetch?.trackId === upNext.id) return;
+    // A handoff may have happened while the queue was being topped up, and
+    // left a tail playing in the standby.
+    if (this.stopTail || !upNext || this.prefetch?.trackId === upNext.id) return;
     this.prefetch = { trackId: upNext.id, ready: false, track: null };
     try {
       const result = await get<ResolveResult>(`/api/player/resolve?id=${encodeURIComponent(upNext.id)}`);
       if (this.prefetch?.trackId !== upNext.id || !result.available) return;
+      if (this.stopTail) {
+        // Same again, during the resolve. Leave it to be retried once the
+        // tail has finished, rather than marked as tried.
+        this.prefetch = null;
+        return;
+      }
       const el = this.standby();
       el.src = result.streamUrl!;
       el.load();
