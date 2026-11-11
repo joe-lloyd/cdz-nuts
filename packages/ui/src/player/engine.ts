@@ -219,7 +219,7 @@ class PlayerEngine {
   private resumeCleanup: (() => void) | undefined;
   private arrivalTimer: ReturnType<typeof setTimeout> | undefined;
   /** A wait for the connection in progress: end it, or check right now. */
-  private networkWait: { cleanup: () => void; now: () => void } | undefined;
+  private networkWait: { cleanup: () => void; now: () => void; trackId: string; at: number } | undefined;
   /** Tracks already asked for, so a re-check does not queue them twice. */
   private wanted = new Set<string>();
 
@@ -250,7 +250,7 @@ class PlayerEngine {
         // Out of quick retries. If the server is not even answering this is
         // the connection, not the file: wait for it rather than stop.
         const playbackId = this.playbackId;
-        const at = this.audio.currentTime || this.resumeFrom;
+        const at = this.breakPoint();
         void this.reachable().then((ok) => {
           if (this.playbackId !== playbackId || this.intentionallyPaused) return;
           if (!ok) { this.waitForNetwork(playbackId, at); return; }
@@ -753,7 +753,9 @@ class PlayerEngine {
   }
 
   toggle() {
-    if (this.audio.paused || this.intentionallyPaused) this.requestPlay();
+    // A failed stream can leave the element claiming to play; while waiting
+    // for the connection, the button is Play and means "check now".
+    if (this.networkWait || this.audio.paused || this.intentionallyPaused) this.requestPlay();
     else this.pause();
   }
 
@@ -773,11 +775,21 @@ class PlayerEngine {
   }
 
   private pause() {
+    const wait = this.networkWait;
     this.intentionallyPaused = true;
     ++this.playbackId;
     this.cancelResume();
     clearTimeout(this.swapWatchdog);
     this.audio.pause();
+    if (wait) {
+      // The element is already paused, so no pause event will redraw the bar.
+      // Drop the dead stream so Play resolves the track afresh, from where it
+      // stopped.
+      if (wait.at > 0) this.pendingResume = { id: wait.trackId, pos: wait.at };
+      this.audio.removeAttribute('src');
+      this.audio.load();
+      this.patch({ state: 'paused', overline: 'Paused', byline: 'Lost the connection — press play to try again', canPlay: true });
+    }
   }
 
   seekFraction(fraction: number) {
@@ -822,11 +834,21 @@ class PlayerEngine {
    *
    * Returns whether a retry was scheduled.
    */
+  /**
+   * Where the current blip interrupted the track. A retry that fails before
+   * its seek lands has been reloaded to zero, so within one blip the furthest
+   * point reached wins; otherwise a second failure would restart the song.
+   */
+  private breakPoint(): number {
+    const now = this.audio.currentTime;
+    return this.resumeAttempts > 0 ? Math.max(now, this.resumeFrom) : now;
+  }
+
   private resume(): boolean {
     const src = this.audio.src;
     if (this.intentionallyPaused || !src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
 
-    const at = this.audio.currentTime;
+    const at = this.breakPoint();
     const element = this.audio;
     this.resumeAttempts += 1;
     this.resumeFrom = at;
@@ -897,12 +919,14 @@ class PlayerEngine {
     let attempt = 0;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let probing = false;
+    // A press that lands while a probe is out gets its own check afterwards.
+    let pressedDuringProbe = false;
 
     const live = () => this.playbackId === playbackId && !this.intentionallyPaused
       && this.queue[this.queueIndex]?.id === item.id;
     const check = async (pressed = false) => {
       if (!live()) { cleanup(); return; }
-      if (probing) return;
+      if (probing) { pressedDuringProbe ||= pressed; return; }
       probing = true;
       clearTimeout(timer);
       const ok = await this.reachable();
@@ -916,6 +940,7 @@ class PlayerEngine {
         void this.playAt(this.queueIndex);
         return;
       }
+      if (pressedDuringProbe) { pressedDuringProbe = false; void check(true); return; }
       if (pressed) this.notify('Still cannot reach the library', true);
       if (Date.now() - startedAt >= NETWORK_GIVE_UP_MS) {
         cleanup();
@@ -941,7 +966,7 @@ class PlayerEngine {
       document.removeEventListener('visibilitychange', nudge);
       if (this.networkWait === wait) this.networkWait = undefined;
     };
-    const wait = { cleanup, now: () => void check(true) };
+    const wait = { cleanup, now: () => void check(true), trackId: item.id, at };
     this.networkWait = wait;
     addEventListener('online', nudge);
     document.addEventListener('visibilitychange', nudge);
@@ -1045,11 +1070,14 @@ class PlayerEngine {
       }
       this.arrivalTimer = setTimeout(check, waited < ARRIVAL_FAST_FOR_MS ? ARRIVAL_POLL_MS : ARRIVAL_SLOW_POLL_MS);
     };
+    const ours = () => this.playbackId === playbackId && this.queue[this.queueIndex]?.id === trackId;
     const check = async () => {
-      if (this.playbackId !== playbackId || this.queue[this.queueIndex]?.id !== trackId) return;
+      if (!ours()) return;
       try {
-        const result = await getFresh<ResolveResult>(`/api/player/resolve?id=${encodeURIComponent(trackId)}`);
-        if (this.playbackId !== playbackId || this.queue[this.queueIndex]?.id !== trackId) return;
+        const result = await getFresh<ResolveResult>(
+          `/api/player/resolve?id=${encodeURIComponent(trackId)}`, { signal: timeout(RESOLVE_TIMEOUT_MS) },
+        );
+        if (!ours()) return;
         if (result.available) {
           this.wanted.delete(trackId);
           // Play goes through requestPlay, which resolves it again and plays.
@@ -1061,6 +1089,8 @@ class PlayerEngine {
           return;
         }
       } catch { /* the server or tunnel wobbled; keep waiting */ }
+      // The request may have failed after the listener moved on.
+      if (!ours()) return;
       schedule();
     };
     schedule();

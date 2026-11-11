@@ -141,9 +141,57 @@ test('pausing ends the wait', async () => {
   player.toggle(); // play: checks now, still down
   await vi.advanceTimersByTimeAsync(0);
   (player as unknown as { pause(): void }).pause();
+  // The element was already paused, so nothing else would redraw the bar.
+  expect(player.getSnapshot().state).toBe('paused');
+  expect(player.getSnapshot().overline).not.toBe('Waiting for the connection');
   online = true;
   probes = 0;
   await vi.advanceTimersByTimeAsync(5 * 60_000);
   expect(probes, 'a paused player must not keep probing').toBe(0);
   expect(player.getSnapshot().currentId).not.toBe('e');
+});
+
+test('a retry that fails after reloading does not lose the place in the track', async () => {
+  player.setQueue([item('f')], 'f');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 120;
+  online = false;
+
+  // Each quick retry reloads the element, which puts it back to zero, and
+  // fails before its seek can land.
+  el.fire('error');
+  for (const backoff of [1_000, 2_000, 3_000]) {
+    await vi.advanceTimersByTimeAsync(backoff);
+    expect(el.currentTime).toBe(0);
+    el.fire('error');
+  }
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  online = true;
+  await vi.advanceTimersByTimeAsync(30_000);
+  el.fire('loadedmetadata');
+  expect(el.currentTime, 'the song must not restart').toBe(120);
+});
+
+test('play checks the connection even if the dead element still claims to play', async () => {
+  player.setQueue([item('g')], 'g');
+  await player.playAt(0);
+  const el = active();
+  el.currentTime = 30;
+  online = false;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  // A network error does not set paused. Play must still mean "check now".
+  el.paused = false;
+  online = true;
+  probes = 0;
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(probes).toBeGreaterThan(0);
+  expect(player.getSnapshot().overline).not.toBe('Waiting for the connection');
+  expect(player.getSnapshot().currentId).toBe('g');
 });
