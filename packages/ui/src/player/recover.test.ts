@@ -194,6 +194,9 @@ test('reconnect resumes a failed track at the position where playback stopped', 
   const el = active();
   el.currentTime = 87;
   for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  // Out of retries, the engine asks whether the server answers before calling
+  // it a dead file. It does here, so this is a real failure.
+  await vi.advanceTimersByTimeAsync(0);
   expect(player.getSnapshot().state).toBe('error');
   expect(player.getSnapshot().canReconnect).toBe(true);
 
