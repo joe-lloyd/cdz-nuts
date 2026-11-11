@@ -502,14 +502,20 @@ class PlayerEngine {
 
   // --- playback -----------------------------------------------------------
 
-  async playAt(index: number): Promise<void> {
+  /**
+   * Start the queue item at `index`. `recovering` marks the engine's own
+   * replays of a track that broke (Play after an error, the connection coming
+   * back, Reconnect); only those keep the track's retry state.
+   */
+  async playAt(index: number, { recovering = false }: { recovering?: boolean } = {}): Promise<void> {
     if (!this.queue.length || index < 0 || index >= this.queue.length) return;
     this.intentionallyPaused = false;
     this.cancelResume();
     clearTimeout(this.arrivalTimer);
-    // Retry state belongs to one track. Replaying the same one (recovery, or
-    // Play after an error) keeps it; anything else starts clean.
-    if (this.queue[index]!.id !== this.current?.id) this.resetRetries();
+    // Retry state belongs to one break in one track. A recovery replay keeps
+    // it; anything else, including choosing the current track again, is a
+    // fresh start and must not seek to where the last attempt broke.
+    if (!recovering || this.queue[index]!.id !== this.current?.id) this.resetRetries();
     const playbackId = ++this.playbackId;
     this.bless();
     this.flushPlay(false);
@@ -772,7 +778,7 @@ class PlayerEngine {
       if (this.audio.error && this.current && this.audio.currentTime > 0) {
         this.pendingResume = { id: this.current.id, pos: this.audio.currentTime };
       }
-      void this.playAt(this.queueIndex);
+      void this.playAt(this.queueIndex, { recovering: true });
       return;
     }
     this.audio.play().catch((e: Error) => this.notify(e.message, true));
@@ -946,7 +952,7 @@ class PlayerEngine {
         this.resumeAttempts = 0;
         if (at > 0) this.pendingResume = { id: item.id, pos: at };
         this.notify('Back online');
-        void this.playAt(this.queueIndex);
+        void this.playAt(this.queueIndex, { recovering: true });
         return;
       }
       if (pressedDuringProbe) { pressedDuringProbe = false; void check(true); return; }
@@ -1125,7 +1131,7 @@ class PlayerEngine {
         if (pos > 0) this.pendingResume = { id: item.id, pos };
         clearTimeout(this.resumeTimer);
         this.resumeAttempts = 0;
-        void this.playAt(this.queueIndex);
+        void this.playAt(this.queueIndex, { recovering: true });
       }
     } catch (err) {
       this.notify(err instanceof Error ? err.message : 'Could not reconnect to the library', true);

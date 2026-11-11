@@ -216,3 +216,23 @@ test('a new track does not inherit the last one\'s place', async () => {
   expect(player.getSnapshot().currentId).toBe('h2');
   expect(el.currentTime, 'h2 must resume at its own place, not h1\'s').toBe(10);
 });
+
+test('choosing the current track again starts it fresh, not at the last break', async () => {
+  player.setQueue([item('k')], 'k');
+  await player.playAt(0);
+  active().currentTime = 120;
+  active().fire('error'); // a quick retry under way, at 120s
+
+  await player.playAt(0); // picked again from the queue: a restart
+  const el = active();
+  el.currentTime = 5;
+  online = false;
+  for (let failure = 0; failure < 4; failure += 1) el.fire('error');
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  online = true;
+  await vi.advanceTimersByTimeAsync(30_000);
+  el.fire('loadedmetadata');
+  expect(el.currentTime, 'the restart must not jump forward to the old break').toBe(5);
+});
