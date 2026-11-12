@@ -57,3 +57,24 @@ test('the nav is styled for the element it actually uses', () => {
   assert.match(css, /#nav a svg\s*\{/, 'without this the icons render at their intrinsic size');
   assert.match(css, /#nav a\.on\s*\{/, 'the active tab needs its own state');
 });
+
+test('a row control fills only the ring it draws, not its whole tap target', () => {
+  // The play and Get controls are 44px tap targets that draw a 30px ring (an
+  // outline inset 7px) and clip their fill to the content box inside it. A
+  // `background` shorthand in a hover rule also resets background-clip to
+  // border-box, so the fill spilled over the whole 44px target, outside the
+  // ring. Follow the cascade for each hover selector, in source order: the
+  // last rule to touch the clip has to leave it at the content box.
+  const rules = [...css.replace(/\/\*[\s\S]*?\*\//g, '').matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+    .map(([, selector, body]) => ({ selectors: selector.split(',').map((s) => s.trim()), body }));
+  for (const target of ['.track-play:hover', '.radio-get:hover:not(:disabled)']) {
+    let clip = null;
+    for (const { selectors, body } of rules) {
+      if (!selectors.includes(target)) continue;
+      if (/(?:^|[;\s])background\s*:/.test(body)) clip = 'border-box';
+      const set = body.match(/background-clip\s*:\s*([\w-]+)/);
+      if (set) clip = set[1];
+    }
+    assert.equal(clip, 'content-box', `${target} paints its fill outside the ring`);
+  }
+});

@@ -2951,6 +2951,10 @@ form button:not([class]):disabled {
 }
 
 .radio-get { outline-style: dashed; }
+/* The earlier hover and now-playing rules set `background` as a shorthand,
+   which resets background-clip to border-box and fills the whole 44px target
+   around the ring. Clip the fill back to the ring, and colour the ring with it. */
+.track-play:hover,
 .track-play.playing,
 .track-play.paused { background-clip: content-box; outline-color: var(--accent); }
 .track-play:hover { transform: none; }
@@ -3687,7 +3691,7 @@ input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-of
 .radio-get { border-radius: 14px; outline-style: solid; outline-color: var(--line-strong); }
 .radio-get:not(.queued) { color: var(--ink); }
 .get-word { font-size: 11px; font-weight: 600; letter-spacing: .02em; line-height: 1; }
-.radio-get:hover:not(:disabled) { color: var(--ink); background: var(--accent-soft); outline-color: var(--accent); }
+.radio-get:hover:not(:disabled) { color: var(--ink); background-color: var(--accent-soft); background-clip: content-box; outline-color: var(--accent); }
 
 /* Album hero: other editions as chips you can follow. */
 @media (min-width: 761px) { .hero .meta.editions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; } }
