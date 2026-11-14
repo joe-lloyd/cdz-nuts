@@ -1991,9 +1991,13 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
           name: singlesFolder ? 'Singles' : first.album,
           album_type: singlesFolder ? 'singles collection' : 'library',
           release_date: new Date(newest * 1000).toISOString().slice(0, 10),
-          // The folder, not the track file: /img/folder does resolve a file
-          // rel, but naming the directory is what it actually means.
-          image_url: `/img/folder?rel=${encodeURIComponent(path.dirname(relOf(first.path)))}`,
+          // A record's cover is its folder's. A singles folder has none: the
+          // folder's newest sleeve can belong to a single identified away to
+          // its own page, so wear the card's cover, which keys on one of the
+          // collection's own tracks.
+          image_url: singlesFolder
+            ? `/img/folder?rel=${encodeURIComponent(relOf(provenance.albums().find((album) => album.id === id)?.rel ?? first.path))}`
+            : `/img/folder?rel=${encodeURIComponent(path.dirname(relOf(first.path)))}`,
           total_tracks: tracks.length,
           is_saved: 0,
           downloaded: 1,
@@ -2010,7 +2014,9 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
             // track is in the queue, the bar, or the OS media panel.
             album_id: id,
             album: track.album,
-            disc_number: track.disc_number ?? 1,
+            // A collection has no discs: each single's disc tag numbers its
+            // own release, and grouping on them drew "Disc 0" and "Disc 1".
+            disc_number: singlesFolder ? 1 : track.disc_number ?? 1,
             track_number: track.track_number,
             duration_ms: track.duration_ms,
             explicit: 0,

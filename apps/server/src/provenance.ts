@@ -683,9 +683,18 @@ export class ProvenanceStore {
       .sort((a, b) => (a.track_number ?? 0) - (b.track_number ?? 0) || a.path.localeCompare(b.path));
   }
 
-  /** The tracks of one library album, in disc/track order. */
+  /**
+   * The tracks of one library album, in disc/track order.
+   *
+   * The same split albums() makes: a singles-folder file identified to a
+   * release belongs to that release's page, so the folder's page must not
+   * list it too.
+   */
   albumTracks(id: string): ProvenanceRow[] {
-    return (this.handle().prepare(
+    return (this.handle().prepare(this.hasTable('file_release') ? `
+      SELECT p.* FROM track_provenance p
+      LEFT JOIN file_release f ON f.path = p.path AND p.path LIKE '%/\\_Singles/%' ESCAPE '\\'
+      WHERE p.album_id = ? AND f.release_group_mbid IS NULL` :
       'SELECT * FROM track_provenance WHERE album_id = ?',
     ).all(id) as ProvenanceRow[])
       .sort((a, b) => (a.disc_number ?? 1) - (b.disc_number ?? 1)
