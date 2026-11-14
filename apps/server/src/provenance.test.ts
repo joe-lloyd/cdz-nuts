@@ -364,3 +364,26 @@ test('the album tag breaks ties only among files that pass the length gate', () 
     assert.match(store.byMatchKey(key, { album: 'Coma Divine', durationMs: 259_000 })!.path, /Stars Die/);
   });
 });
+
+test('a singles folder page holds the tracks its card counts, not the ones identified elsewhere', () => {
+  withStore((store) => {
+    // Real shape: _Singles/Steven Wilson/ carried six files, four of them
+    // identified to their own releases. The card said 2 songs; the page
+    // listed all 6 under a sibling release's sleeve.
+    store.upsert([
+      row({ path: '/lib/_Singles/SW/Cursus Fingerprint.flac', title: 'Cursus Fingerprint', album: 'Requiem for a Village [2.1]', disc_number: 0, track_number: 8 }),
+      row({ path: '/lib/_Singles/SW/The 78.flac', title: 'The 78', album: 'Harmony Korine', disc_number: 1, track_number: 2 }),
+      row({ path: '/lib/A/Album/01.flac', title: 'kept', album: 'Album' }),
+    ]);
+    store.db.exec(`CREATE TABLE file_release (path TEXT PRIMARY KEY, release_group_mbid TEXT, release_title TEXT, release_type TEXT);
+      INSERT INTO file_release VALUES
+        ('/lib/_Singles/SW/The 78.flac', 'rg-korine', 'Harmony Korine', 'Single'),
+        ('/lib/A/Album/01.flac', 'rg-album', 'Album', 'Album');`);
+    const id = libAlbumId('/lib/_Singles/SW/Cursus Fingerprint.flac');
+    const card = store.albums().find((album) => album.id === id);
+    assert.equal(card?.total_tracks, 1);
+    assert.deepEqual(store.albumTracks(id).map((t) => t.title), ['Cursus Fingerprint']);
+    // Only the singles shelf gives files away; an album folder keeps its own.
+    assert.deepEqual(store.albumTracks(libAlbumId('/lib/A/Album/01.flac')).map((t) => t.title), ['kept']);
+  });
+});
