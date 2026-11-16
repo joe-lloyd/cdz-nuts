@@ -14,6 +14,9 @@ export const DISCOGS_FILE = process.env.DISCOGS_DB
   ?? path.join(import.meta.dirname, '..', 'data', 'discogs.db');
 
 const API = 'https://api.discogs.com';
+// A test or a headless verification run points the client at a stand-in for
+// Discogs. Unset in every real deployment.
+const API_OVERRIDE = process.env.DISCOGS_API_URL ?? '';
 // Discogs rejects requests without a descriptive agent, and asks that it
 // identify the application rather than impersonate a browser.
 const AGENT = process.env.DISCOGS_USER_AGENT ?? 'cdz-nutz/1.0 (+https://music.home.arpa)';
@@ -50,6 +53,175 @@ export class DiscogsError extends Error {
   }
 }
 
+export type DiscogsAlbumKind = 'master' | 'release';
+
+/** An artist as a catalogue search or lookup shows it. */
+export interface CatalogueArtist {
+  id: number;
+  name: string;
+  image: string | null;
+}
+
+/** An album as a catalogue search or an artist's discography shows it. */
+export interface CatalogueAlbum {
+  kind: DiscogsAlbumKind;
+  id: number;
+  title: string;
+  artist: string;
+  year: number | null;
+  image: string | null;
+  format: string | null;
+  genres: string[];
+}
+
+export interface DiscogsCredit {
+  id: number;
+  name: string;
+}
+
+export interface DiscogsTrack {
+  position: string;
+  title: string;
+  durationMs: number | null;
+  artists: DiscogsCredit[];
+}
+
+/** A master or release, flattened to what the library stores. */
+export interface DiscogsAlbum {
+  kind: DiscogsAlbumKind;
+  id: number;
+  title: string;
+  year: number | null;
+  /** The release date when Discogs has one finer than the year. */
+  released: string | null;
+  artists: DiscogsCredit[];
+  genres: string[];
+  styles: string[];
+  label: string | null;
+  formats: string[];
+  cover: string | null;
+  /** The master a release belongs to, or the main release of a master. */
+  masterId: number | null;
+  mainRelease: number | null;
+  tracks: DiscogsTrack[];
+}
+
+interface SearchHit {
+  id?: number;
+  type?: string;
+  title?: string;
+  thumb?: string;
+  cover_image?: string;
+  year?: string | number;
+  master_id?: number;
+  format?: unknown[];
+  genre?: unknown[];
+}
+
+interface RawImage { type?: string; uri?: string; uri150?: string }
+interface RawCredit { id?: number; name?: string; anv?: string }
+interface RawTrack {
+  position?: string;
+  title?: string;
+  duration?: string;
+  type_?: string;
+  artists?: RawCredit[];
+  sub_tracks?: RawTrack[];
+}
+interface RawAlbum {
+  id?: number;
+  title?: string;
+  year?: number;
+  released?: string;
+  artists?: RawCredit[];
+  genres?: string[];
+  styles?: string[];
+  labels?: { name?: string }[];
+  formats?: { name?: string; descriptions?: string[] }[];
+  images?: RawImage[];
+  master_id?: number;
+  main_release?: number;
+  tracklist?: RawTrack[];
+}
+
+const nonEmpty = (value: unknown): string | null => {
+  const text = typeof value === 'string' ? value.trim() : '';
+  return text || null;
+};
+
+/** Search hits title albums "Artist - Title". */
+function splitTitle(title: string): { artist: string; title: string } {
+  const dash = title.indexOf(' - ');
+  return dash > 0
+    ? { artist: cleanArtist(title.slice(0, dash)), title: title.slice(dash + 3).trim() || 'Untitled' }
+    : { artist: '', title: title.trim() || 'Untitled' };
+}
+
+function primaryImage(images: RawImage[] | undefined): string | null {
+  const list = images ?? [];
+  const best = list.find((image) => image.type === 'primary') ?? list[0];
+  return nonEmpty(best?.uri) ?? nonEmpty(best?.uri150);
+}
+
+/** "4:35" or "1:02:03" to milliseconds; Discogs leaves it blank when unknown. */
+export function durationMs(text: string | undefined): number | null {
+  const parts = String(text ?? '').trim().split(':');
+  if (parts.length < 2 || parts.length > 3 || parts.some((part) => !/^\d+$/.test(part))) return null;
+  const seconds = parts.reduce((total, part) => total * 60 + Number(part), 0);
+  return seconds > 0 ? seconds * 1000 : null;
+}
+
+const credits = (list: RawCredit[] | undefined): DiscogsCredit[] => (list ?? [])
+  .map((credit) => ({ id: Number(credit.id ?? 0), name: cleanArtist(String(credit.name ?? '')) }))
+  .filter((credit) => credit.name);
+
+/**
+ * Discogs tracklists mix real tracks with headings ("Bonus Tracks") and
+ * index tracks that group sub-tracks. Only playable entries become tracks.
+ */
+function flattenTracks(list: RawTrack[] | undefined): DiscogsTrack[] {
+  const tracks: DiscogsTrack[] = [];
+  for (const entry of list ?? []) {
+    const type = entry.type_ ?? 'track';
+    if (type === 'heading') continue;
+    if (type === 'index') {
+      tracks.push(...flattenTracks(entry.sub_tracks));
+      continue;
+    }
+    const title = String(entry.title ?? '').trim();
+    if (!title) continue;
+    tracks.push({
+      position: String(entry.position ?? '').trim(),
+      title,
+      durationMs: durationMs(entry.duration),
+      artists: credits(entry.artists),
+    });
+  }
+  return tracks;
+}
+
+export function toDiscogsAlbum(kind: DiscogsAlbumKind, raw: RawAlbum): DiscogsAlbum {
+  const released = nonEmpty(raw.released);
+  return {
+    kind,
+    id: Number(raw.id ?? 0),
+    title: String(raw.title ?? '').trim() || 'Untitled',
+    year: Number(raw.year) || null,
+    // "1999-00-00" is how Discogs writes a year-only date.
+    released: released && /^\d{4}-\d{2}-\d{2}$/.test(released) && !released.endsWith('-00') ? released : null,
+    artists: credits(raw.artists),
+    genres: (raw.genres ?? []).map(String),
+    styles: (raw.styles ?? []).map(String),
+    label: nonEmpty(raw.labels?.[0]?.name),
+    formats: (raw.formats ?? []).flatMap((format) => [format.name, ...(format.descriptions ?? [])])
+      .filter((name): name is string => typeof name === 'string' && !!name),
+    cover: primaryImage(raw.images),
+    masterId: kind === 'release' ? Number(raw.master_id ?? 0) || null : Number(raw.id ?? 0) || null,
+    mainRelease: Number(raw.main_release ?? 0) || null,
+    tracks: flattenTracks(raw.tracklist),
+  };
+}
+
 export interface CollectionRelease {
   id: number;
   basic_information?: {
@@ -66,7 +238,7 @@ export interface CollectionRelease {
 }
 
 /** "Joe Bloggs (2)" is how Discogs disambiguates same-named artists. */
-function cleanArtist(name: string): string {
+export function cleanArtist(name: string): string {
   return name.replace(/\s*\(\d+\)$/, '').trim();
 }
 
@@ -115,19 +287,51 @@ export function toShelfItem(release: CollectionRelease): Omit<ShelfItem, 'status
  */
 export type DiscogsScope = 'none' | 'catalogue' | 'account';
 
+/** How a request behaves when Discogs pushes back. */
+interface RequestOptions {
+  /**
+   * Sleep through one 429 and try again. Right for a sync the user started and
+   * is happy to wait on; wrong for a search box, where a half-minute hang reads
+   * as broken. Interactive calls fail fast with the wait in the message.
+   */
+  wait?: boolean;
+  /** Keep the answer for a few minutes: catalogue entries barely change. */
+  cache?: boolean;
+}
+
+export interface DiscogsClientOptions {
+  /** Base URL of the API. Defaults to Discogs itself. */
+  api?: string;
+  fetch?: typeof fetch;
+  now?: () => number;
+}
+
+const CACHE_TTL_MS = 10 * 60_000;
+/** Pages of an artist's discography read at most (100 entries each). */
+export const ARTIST_PAGES = 5;
+const CACHE_ENTRIES = 200;
+
 export class DiscogsClient {
   private readonly token: string;
   private readonly key: string;
   private readonly secret: string;
+  private readonly api: string;
+  private readonly fetcher: typeof fetch;
+  private readonly now: () => number;
+  private readonly cache = new Map<string, { at: number; value: unknown }>();
 
   constructor(
     token = process.env.DISCOGS_TOKEN ?? '',
     key = process.env.DISCOGS_CONSUMER_KEY ?? '',
     secret = process.env.DISCOGS_CONSUMER_SECRET ?? '',
+    options: DiscogsClientOptions = {},
   ) {
     this.token = token.trim();
     this.key = key.trim();
     this.secret = secret.trim();
+    this.api = (options.api || API_OVERRIDE || API).replace(/\/+$/, '');
+    this.fetcher = options.fetch ?? ((input, init) => fetch(input, init));
+    this.now = options.now ?? Date.now;
   }
 
   /** What the configured credentials can actually reach. */
@@ -152,35 +356,66 @@ export class DiscogsClient {
       : `Discogs key=${this.key}, secret=${this.secret}`;
   }
 
-  private async request<T>(pathname: string, params: Record<string, string> = {}): Promise<T> {
-    if (!this.configured) throw new DiscogsError('No Discogs credentials are configured', 503);
-    const url = new URL(API + pathname);
+  private async request<T>(
+    pathname: string,
+    params: Record<string, string> = {},
+    options: RequestOptions = {},
+  ): Promise<T> {
+    if (!this.configured) throw new DiscogsError('Discogs is not configured on this server', 503);
+    const url = new URL(this.api + pathname);
     for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+    const cacheKey = url.toString();
+    if (options.cache) {
+      const hit = this.cache.get(cacheKey);
+      if (hit && this.now() - hit.at < CACHE_TTL_MS) return hit.value as T;
+      this.cache.delete(cacheKey);
+    }
+    const wait = options.wait ?? true;
 
     // 60 requests/minute authenticated. A collection sync is a handful of
     // pages, so one polite wait-and-retry is enough to ride out a 429 rather
     // than failing a sync the user asked for.
     for (let attempt = 0; attempt < 2; attempt += 1) {
-      const res = await fetch(url, {
-        headers: { authorization: this.authorization(), 'user-agent': AGENT },
-        signal: AbortSignal.timeout(20_000),
-      });
-      if (res.status === 429 && attempt === 0) {
-        const wait = Math.min(30, Number(res.headers.get('retry-after') ?? 5) || 5);
-        await new Promise((resolve) => setTimeout(resolve, wait * 1000));
-        continue;
+      let res: Response;
+      try {
+        res = await this.fetcher(url, {
+          headers: { authorization: this.authorization(), 'user-agent': AGENT },
+          signal: AbortSignal.timeout(20_000),
+        });
+      } catch (err) {
+        // Neither the URL nor the error text is passed on: both are about
+        // the network, and the request carried the credential.
+        const timedOut = (err as Error)?.name === 'TimeoutError';
+        throw new DiscogsError(timedOut ? 'Discogs did not answer in time' : 'Discogs is unavailable right now', timedOut ? 504 : 502);
+      }
+      if (res.status === 429) {
+        const pause = Math.min(30, Number(res.headers.get('retry-after') ?? 5) || 5);
+        if (attempt === 0 && wait) {
+          await new Promise((resolve) => setTimeout(resolve, pause * 1000));
+          continue;
+        }
+        throw new DiscogsError(`Discogs rate limit reached. Try again in ${pause} seconds.`, 429);
       }
       if (!res.ok) {
         // 401 on a consumer key/secret is not a bad credential, it is the
         // wrong *kind* of credential; say which so it is actionable.
-        const detail = res.status !== 401
-          ? `Discogs returned ${res.status}`
-          : this.canReadCollection
-            ? 'Discogs rejected the personal access token'
-            : 'This endpoint needs a personal access token, not a consumer key and secret';
-        throw new DiscogsError(detail, res.status);
+        const detail = res.status === 404
+          ? 'Discogs has no such entry'
+          : res.status >= 500
+            ? 'Discogs is unavailable right now'
+            : res.status !== 401
+              ? `Discogs returned ${res.status}`
+              : this.canReadCollection
+                ? 'Discogs rejected the personal access token'
+                : 'This endpoint needs a personal access token, not a consumer key and secret';
+        throw new DiscogsError(detail, res.status >= 500 ? 502 : res.status);
       }
-      return await res.json() as T;
+      const value = await res.json() as T;
+      if (options.cache) {
+        if (this.cache.size >= CACHE_ENTRIES) this.cache.delete(this.cache.keys().next().value as string);
+        this.cache.set(cacheKey, { at: this.now(), value });
+      }
+      return value;
     }
     throw new DiscogsError('Discogs rate limit exceeded', 429);
   }
@@ -253,6 +488,119 @@ export class DiscogsClient {
         },
       };
     });
+  }
+
+  /**
+   * Artists and albums matching a free-text query, for finding music the
+   * library does not hold yet. Three calls, made together: artists, masters
+   * (an album across all its pressings), and releases, because a small band's
+   * only record often has no master. A release that belongs to a master is
+   * folded into that master, so one album shows once.
+   */
+  async searchCatalogue(term: string): Promise<{ artists: CatalogueArtist[]; albums: CatalogueAlbum[] }> {
+    const ask = (type: string, perPage: number) => this.request<{ results?: SearchHit[] }>(
+      '/database/search', { q: term, type, per_page: String(perPage) }, { wait: false, cache: true },
+    ).then((body) => body.results ?? []);
+    const [artistHits, masterHits, releaseHits] = await Promise.all([ask('artist', 8), ask('master', 20), ask('release', 20)]);
+    const artists = artistHits.map((hit): CatalogueArtist => ({
+      id: Number(hit.id ?? 0),
+      name: cleanArtist(String(hit.title ?? '')),
+      image: nonEmpty(hit.cover_image) ?? nonEmpty(hit.thumb),
+    })).filter((artist) => artist.id > 0 && artist.name);
+    const albums: CatalogueAlbum[] = [];
+    const seen = new Set<string>();
+    for (const hit of [...masterHits, ...releaseHits]) {
+      const master = Number(hit.master_id ?? 0);
+      const kind: DiscogsAlbumKind = hit.type === 'master' || master > 0 ? 'master' : 'release';
+      const id = hit.type === 'master' ? Number(hit.id ?? 0) : kind === 'master' ? master : Number(hit.id ?? 0);
+      const key = `${kind}:${id}`;
+      if (!id || seen.has(key)) continue;
+      seen.add(key);
+      const { artist, title } = splitTitle(String(hit.title ?? ''));
+      albums.push({
+        kind, id, title, artist,
+        year: Number(hit.year) || null,
+        image: nonEmpty(hit.cover_image) ?? nonEmpty(hit.thumb),
+        format: Array.isArray(hit.format) ? hit.format.map(String).join(', ') || null : null,
+        genres: Array.isArray(hit.genre) ? hit.genre.map(String) : [],
+      });
+    }
+    return { artists, albums: albums.slice(0, 30) };
+  }
+
+  /** One album with its tracklist, from a master or a release. */
+  async album(kind: DiscogsAlbumKind, id: number): Promise<DiscogsAlbum> {
+    const raw = await this.request<RawAlbum>(`/${kind}s/${id}`, {}, { wait: false, cache: true });
+    return toDiscogsAlbum(kind, raw);
+  }
+
+  /**
+   * An album complete enough to store. A master carries no label, so its main
+   * release is asked for that - one more call, made only when adding.
+   */
+  async albumForLibrary(kind: DiscogsAlbumKind, id: number): Promise<DiscogsAlbum> {
+    const album = await this.album(kind, id);
+    if (kind === 'master' && !album.label && album.mainRelease) {
+      try {
+        const main = await this.album('release', album.mainRelease);
+        return { ...album, label: main.label, released: main.released ?? album.released, formats: main.formats };
+      } catch (err) {
+        // The label is a nicety; the album is worth adding without it.
+        if (!(err instanceof DiscogsError)) throw err;
+      }
+    }
+    return album;
+  }
+
+  async artist(id: number): Promise<CatalogueArtist & { profile: string | null }> {
+    const raw = await this.request<{ id?: number; name?: string; profile?: string; images?: RawImage[] }>(
+      `/artists/${id}`, {}, { wait: false, cache: true },
+    );
+    return {
+      id: Number(raw.id ?? id),
+      name: cleanArtist(String(raw.name ?? '')) || 'Unknown Artist',
+      image: primaryImage(raw.images),
+      profile: nonEmpty(raw.profile),
+    };
+  }
+
+  /**
+   * The albums an artist made (main credits only, not guest spots), newest
+   * first. Discogs pages the list and mixes guest appearances in, so pages are
+   * followed before filtering, up to ARTIST_PAGES of them: a prolific artist's
+   * appearances would otherwise crowd their own records off the first page.
+   */
+  async artistAlbums(id: number): Promise<{ albums: CatalogueAlbum[]; truncated: boolean }> {
+    const entries: Record<string, unknown>[] = [];
+    let pages = 1;
+    for (let page = 1; page <= Math.min(pages, ARTIST_PAGES); page += 1) {
+      const body = await this.request<{ pagination?: { pages?: number }; releases?: Record<string, unknown>[] }>(
+        `/artists/${id}/releases`,
+        { sort: 'year', sort_order: 'desc', per_page: '100', page: String(page) },
+        { wait: false, cache: true },
+      );
+      entries.push(...(body.releases ?? []));
+      pages = Math.max(1, Number(body.pagination?.pages ?? 1) || 1);
+    }
+    const albums: CatalogueAlbum[] = [];
+    for (const entry of entries) {
+      if (entry.role && entry.role !== 'Main') continue;
+      const kind: DiscogsAlbumKind = entry.type === 'master' ? 'master' : 'release';
+      const albumId = Number(entry.id ?? 0);
+      if (!albumId) continue;
+      albums.push({
+        kind, id: albumId,
+        title: String(entry.title ?? '').trim() || 'Untitled',
+        artist: cleanArtist(String(entry.artist ?? '')),
+        year: Number(entry.year) || null,
+        image: nonEmpty(entry.thumb),
+        format: nonEmpty(entry.format),
+        genres: [],
+      });
+    }
+    // Discogs listed more pages than were read: what is missing may include
+    // the artist's own records, so the caller must not call this complete.
+    return { albums, truncated: pages > ARTIST_PAGES };
   }
 }
 

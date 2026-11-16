@@ -293,3 +293,55 @@ export interface Wrapped {
   topAlbums: Array<{ album_id?: string | null; album_name: string; artist_name?: string | null; plays: number; image_url?: string | null }>;
   years?: string[];
 }
+
+/* Discogs: music the library does not hold yet. `library` is the library's
+   own id for an entry it already has, or null when it can be added. */
+export type DiscogsAlbumKind = 'master' | 'release';
+
+export interface DiscogsArtistHit {
+  id: number;
+  name: string;
+  image: string | null;
+  library: string | null;
+}
+
+export interface DiscogsAlbumHit {
+  kind: DiscogsAlbumKind;
+  id: number;
+  title: string;
+  artist: string;
+  year: number | null;
+  image: string | null;
+  format: string | null;
+  library: string | null;
+}
+
+export interface DiscogsSearch {
+  artists: DiscogsArtistHit[];
+  albums: DiscogsAlbumHit[];
+}
+
+export interface DiscogsAlbumDetail {
+  album: {
+    kind: DiscogsAlbumKind;
+    id: number;
+    title: string;
+    year: number | null;
+    label: string | null;
+    tracks: { position: string; title: string; durationMs: number | null }[];
+    library: string | null;
+  };
+}
+
+export interface DiscogsArtistDetail {
+  artist: DiscogsArtistHit & { profile: string | null };
+  albums: DiscogsAlbumHit[];
+  /** Discogs listed more than the server read, so albums may be incomplete. */
+  truncated?: boolean;
+}
+
+export interface DiscogsAdded {
+  kind: 'artist' | DiscogsAlbumKind;
+  id: string;
+  added: boolean;
+}

@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { ShelfStore, albumKey, toShelfItem } from './discogs.ts';
+import { ARTIST_PAGES, DiscogsClient, DiscogsError, ShelfStore, albumKey, durationMs, toShelfItem } from './discogs.ts';
 
 const withShelf = (fn: (shelf: ShelfStore) => void): void => {
   const dir = mkdtempSync(path.join(tmpdir(), 'shelf-'));
@@ -124,4 +124,138 @@ test('single adds and removals work without a collection sync', () => {
     assert.equal(shelf.remove(9), true);
     assert.equal(shelf.remove(9), false);
   });
+});
+
+// A stand-in for fetch that answers by path and records what was asked.
+const fakeDiscogs = (answer: (url: URL) => Response | Promise<Response>) => {
+  const asked: { url: URL; authorization: string | null }[] = [];
+  const fetcher = (async (input: string | URL | Request, init?: RequestInit) => {
+    const url = new URL(String(input));
+    asked.push({ url, authorization: new Headers(init?.headers).get('authorization') });
+    return answer(url);
+  }) as typeof fetch;
+  return { asked, fetcher };
+};
+const reply = (body: unknown, status = 200, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json', ...headers } });
+
+test('catalogue search returns artists and albums, folding pressings into their master', async () => {
+  const { asked, fetcher } = fakeDiscogs((url) => {
+    const type = url.searchParams.get('type');
+    if (type === 'artist') return reply({ results: [{ id: 77, type: 'artist', title: 'The Quiet Ferns (2)', cover_image: 'https://i/ferns.jpg' }] });
+    if (type === 'master') return reply({ results: [{ id: 501, type: 'master', title: 'The Quiet Ferns (2) - Hollow Lanterns', year: '2019', genre: ['Rock'], cover_image: 'https://i/hl.jpg' }] });
+    return reply({ results: [
+      { id: 9001, type: 'release', master_id: 501, title: 'The Quiet Ferns - Hollow Lanterns', year: '2020' },
+      { id: 9002, type: 'release', master_id: 0, title: 'The Quiet Ferns - Demo Tape', year: '2017', format: ['Cassette'] },
+    ] });
+  });
+  const client = new DiscogsClient('secret-token', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  const found = await client.searchCatalogue('quiet ferns');
+  assert.deepEqual(found.artists, [{ id: 77, name: 'The Quiet Ferns', image: 'https://i/ferns.jpg' }]);
+  assert.deepEqual(found.albums.map((album) => `${album.kind}:${album.id}:${album.artist}:${album.title}`), [
+    'master:501:The Quiet Ferns:Hollow Lanterns',
+    'release:9002:The Quiet Ferns:Demo Tape',
+  ]);
+  assert.equal(asked.length, 3);
+  assert(asked.every((call) => call.url.origin === 'https://discogs.test' && call.authorization === 'Discogs token=secret-token'));
+  // A repeat of the same search is answered from the cache.
+  await client.searchCatalogue('quiet ferns');
+  assert.equal(asked.length, 3);
+});
+
+test('an interactive call fails fast on a rate limit, with the wait in the message', async () => {
+  const { asked, fetcher } = fakeDiscogs(() => reply({ message: 'slow down' }, 429, { 'retry-after': '12' }));
+  const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  const started = Date.now();
+  await assert.rejects(client.album('master', 1), (err: unknown) =>
+    err instanceof DiscogsError && err.status === 429 && /Try again in 12 seconds/.test(err.message));
+  assert.equal(asked.length, 1);
+  assert(Date.now() - started < 1000);
+});
+
+test('an outage or a network failure reads as Discogs being unavailable, and never echoes the token', async () => {
+  const down = new DiscogsClient('secret-token', '', '', { api: 'https://discogs.test', fetch: fakeDiscogs(() => reply({}, 503)).fetcher });
+  await assert.rejects(down.artist(1), (err: unknown) => err instanceof DiscogsError && err.status === 502 && err.message === 'Discogs is unavailable right now');
+  const offline = new DiscogsClient('secret-token', '', '', {
+    api: 'https://discogs.test',
+    fetch: (async () => { throw new TypeError('fetch failed: secret-token'); }) as typeof fetch,
+  });
+  await assert.rejects(offline.artist(1), (err: unknown) =>
+    err instanceof DiscogsError && err.status === 502 && !err.message.includes('secret-token'));
+  const missing = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fakeDiscogs(() => reply({}, 404)).fetcher });
+  await assert.rejects(missing.album('release', 5), (err: unknown) => err instanceof DiscogsError && err.status === 404);
+});
+
+test('without credentials nothing is sent and the error says Discogs is not configured', async () => {
+  const { asked, fetcher } = fakeDiscogs(() => reply({}));
+  const client = new DiscogsClient('', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  await assert.rejects(client.searchCatalogue('anything'), (err: unknown) =>
+    err instanceof DiscogsError && err.status === 503 && /not configured/.test(err.message));
+  assert.equal(asked.length, 0);
+});
+
+test('a master is completed with its main release label when added', async () => {
+  const { asked, fetcher } = fakeDiscogs((url) => url.pathname === '/masters/501'
+    ? reply({ id: 501, title: 'Hollow Lanterns', year: 2019, main_release: 9001, artists: [{ id: 77, name: 'The Quiet Ferns' }], tracklist: [{ position: '1', title: 'Moth Light', duration: '4:05' }] })
+    : reply({ id: 9001, master_id: 501, title: 'Hollow Lanterns', released: '2019-04-12', labels: [{ name: 'Fern Records' }], formats: [{ name: 'CD', descriptions: ['Album'] }] }));
+  const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  const album = await client.albumForLibrary('master', 501);
+  assert.equal(album.label, 'Fern Records');
+  assert.equal(album.released, '2019-04-12');
+  assert.deepEqual(album.tracks, [{ position: '1', title: 'Moth Light', durationMs: 245000, artists: [] }]);
+  assert.deepEqual(asked.map((call) => call.url.pathname), ['/masters/501', '/releases/9001']);
+});
+
+test('an artist discography keeps main credits only', async () => {
+  const { fetcher } = fakeDiscogs(() => reply({ releases: [
+    { id: 501, type: 'master', title: 'Hollow Lanterns', year: 2019, artist: 'The Quiet Ferns', role: 'Main', thumb: 'https://i/t.jpg' },
+    { id: 7, type: 'release', title: 'Somebody Else', year: 2018, artist: 'Other Band', role: 'Appearance' },
+  ] }));
+  const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  const result = await client.artistAlbums(77);
+  assert.deepEqual(result.albums.map((album) => `${album.kind}:${album.id}`), ['master:501']);
+  assert.equal(result.truncated, false);
+});
+
+test('an artist discography follows every page before filtering, up to the page cap', async () => {
+  const entry = (id: number, role = 'Main') => ({ id, type: 'master', title: `Album ${id}`, year: 2000 + (id % 20), artist: 'The Quiet Ferns', role });
+  const { asked, fetcher } = fakeDiscogs((url) => {
+    const page = Number(url.searchParams.get('page'));
+    // Page 1 is all guest spots; the band's own records are on pages 2 and 3.
+    const releases = page === 1 ? [entry(1, 'Appearance'), entry(2, 'TrackAppearance')]
+      : page === 2 ? [entry(3), entry(4, 'Appearance')] : [entry(5)];
+    return reply({ pagination: { page, pages: 3 }, releases });
+  });
+  const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  assert.deepEqual(await client.artistAlbums(77).then((r) => ({ ids: r.albums.map((album) => album.id), truncated: r.truncated })),
+    { ids: [3, 5], truncated: false }, 'every page read: complete');
+  assert.deepEqual(asked.map((call) => call.url.searchParams.get('page')), ['1', '2', '3']);
+});
+
+test('a discography longer than the page cap says it was cut short, with or without main credits in it', async () => {
+  const entry = (id: number, role: string) => ({ id, type: 'master', title: `Album ${id}`, year: 2000, artist: 'The Quiet Ferns', role });
+  const pages = (role: string) => fakeDiscogs((url) =>
+    reply({ pagination: { pages: 500 }, releases: [entry(Number(url.searchParams.get('page')), role)] }));
+
+  const withMain = pages('Main');
+  const capped = await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: withMain.fetcher }).artistAlbums(77);
+  assert.equal(capped.albums.length, ARTIST_PAGES);
+  assert.equal(capped.truncated, true);
+  assert.equal(withMain.asked.length, ARTIST_PAGES, 'stops at the cap');
+
+  // The pages read hold only guest spots: no albums, but not "none exist".
+  const guestsOnly = pages('Appearance');
+  const empty = await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: guestsOnly.fetcher }).artistAlbums(77);
+  assert.deepEqual(empty, { albums: [], truncated: true });
+
+  // Exactly the cap is complete.
+  const exact = fakeDiscogs((url) => reply({ pagination: { pages: ARTIST_PAGES }, releases: [entry(Number(url.searchParams.get('page')), 'Main')] }));
+  assert.equal((await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: exact.fetcher }).artistAlbums(77)).truncated, false);
+});
+
+test('track durations parse minutes and hours, and blank stays unknown', () => {
+  assert.equal(durationMs('4:05'), 245000);
+  assert.equal(durationMs('1:02:03'), 3723000);
+  assert.equal(durationMs(''), null);
+  assert.equal(durationMs('4:x5'), null);
 });

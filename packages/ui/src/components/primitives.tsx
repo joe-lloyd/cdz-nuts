@@ -65,7 +65,8 @@ export function Pic({ kind, id, cdn, name, overlay }: {
     <div className={`pic pic-${kind}`}>
       {failed ? null : (
         <img
-          src={src} alt="" loading="lazy"
+          // Discogs serves its covers only without a foreign referrer.
+          src={src} alt="" loading="lazy" referrerPolicy="no-referrer"
           onError={() => {
             if (cdn && src !== cdn) setSrc(cdn);
             else setFailed(true);

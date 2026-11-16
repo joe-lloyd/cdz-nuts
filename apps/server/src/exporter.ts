@@ -10,6 +10,12 @@ import { ApiError, get, paginate, type Page } from './api.ts';
 import { TasteDb, type ApiAlbum, type ApiArtist, type ApiTrack } from './db.ts';
 import type { Files } from './files.ts';
 import { syncMusicBrainz } from './musicbrainz.ts';
+import { DISCOGS_ID_LIKE } from './discogs-library.ts';
+
+// Rows added from Discogs (discogs-library.ts) share these tables but are not
+// Spotify's: there is nothing to hydrate from Spotify, no discography to crawl
+// there, and their absence from Spotify's saved list is not an un-save.
+const SPOTIFY_ROW = `id NOT LIKE '${DISCOGS_ID_LIKE}'`;
 
 export interface ExportHost {
   /** Where cover images are archived, by absolute path. */
@@ -138,7 +144,7 @@ async function syncSavedAlbums(db: TasteDb): Promise<number> {
     }
     console.log(`  ${present.length}/${page.total ?? '?'}`);
   }
-  const unsaved = db.markMissing('albums', 'id', 'unsaved_at', present, 'is_saved = 1');
+  const unsaved = db.markMissing('albums', 'id', 'unsaved_at', present, `is_saved = 1 AND ${SPOTIFY_ROW}`);
   db.run('UPDATE albums SET is_saved = 0 WHERE unsaved_at IS NOT NULL');
   if (unsaved) console.log(`  ${unsaved} un-saved (kept, tagged unsaved_at)`);
   return present.length;
@@ -287,7 +293,7 @@ async function syncRecentlyPlayed(db: TasteDb): Promise<number> {
 // full objects one at a time, throttled. NULL markers make this resumable —
 // an interrupted run picks up where it left off.
 async function hydrate(db: TasteDb): Promise<void> {
-  const artistIds = (db.db.prepare('SELECT id FROM artists WHERE genres IS NULL').all() as { id: string }[]).map((r) => r.id);
+  const artistIds = (db.db.prepare(`SELECT id FROM artists WHERE genres IS NULL AND ${SPOTIFY_ROW}`).all() as { id: string }[]).map((r) => r.id);
   console.log(`Hydrating ${artistIds.length} artists (genres, followers)...`);
   for (const [i, id] of artistIds.entries()) {
     try {
@@ -308,7 +314,7 @@ async function hydrate(db: TasteDb): Promise<void> {
 
   // Saved and liked albums first; discography stubs fill the tail of the queue.
   const albumIds = (db.db.prepare(`
-    SELECT id FROM albums WHERE label IS NULL OR tracks_synced = 0
+    SELECT id FROM albums WHERE (label IS NULL OR tracks_synced = 0) AND ${SPOTIFY_ROW}
     ORDER BY is_saved DESC, (SELECT COUNT(*) FROM tracks t JOIN liked_tracks lt ON lt.track_id = t.id
                               WHERE t.album_id = albums.id) DESC`).all() as { id: string }[]).map((r) => r.id);
   console.log(`Hydrating ${albumIds.length} albums (label, popularity, track listings)...`);
@@ -359,14 +365,14 @@ async function hydrate(db: TasteDb): Promise<void> {
 async function syncDiscographies(db: TasteDb): Promise<{ done: number; newReleases: string[] }> {
   const pending = db.db.prepare(`
     SELECT id, name, (discog_synced_at IS NOT NULL) AS recheck FROM artists
-    WHERE discog_synced_at IS NULL
+    WHERE ${SPOTIFY_ROW} AND (discog_synced_at IS NULL
        OR (is_followed = 1 AND discog_synced_at < datetime('now', '-1 day'))
-       OR discog_synced_at < datetime('now', ?)
+       OR discog_synced_at < datetime('now', ?))
     ORDER BY discog_synced_at IS NOT NULL, is_followed DESC, followers DESC
     LIMIT ?`).all(`-${DISCOG_RECHECK_DAYS} days`, DISCOG_BUDGET || -1) as
     { id: string; name: string; recheck: number }[];
   const backlog = (db.db.prepare(
-    'SELECT COUNT(*) AS n FROM artists WHERE discog_synced_at IS NULL').get() as { n: number }).n;
+    `SELECT COUNT(*) AS n FROM artists WHERE discog_synced_at IS NULL AND ${SPOTIFY_ROW}`).get() as { n: number }).n;
   console.log(`Discographies: ${pending.length} this run (budget ${DISCOG_BUDGET}), ${backlog} never crawled...`);
   const newReleases: string[] = [];
   const releaseCutoff = new Date(Date.now() - 45 * 864e5).toISOString().slice(0, 10);
