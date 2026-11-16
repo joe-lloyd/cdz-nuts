@@ -4152,3 +4152,58 @@ a.primary-action, a.primary-action:hover { text-decoration: none; }
 /* Cancel shows with results, and on a phone as soon as the field is open. */
 .search-cancel:not(.is-open) { display: none; }
 body.search-open .search-cancel { display: inline-flex; align-items: center; }
+
+/* Discogs, under the search results: music the library does not hold yet.
+   Cards reuse the album card and the CD shelf's action row; an opened
+   tracklist or discography spans the whole row beneath its card. */
+.discogs h3 {
+  margin: 20px 0 10px;
+  color: var(--ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+.discogs-offer { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.discogs-offer p { margin: 0; }
+.discogs-error { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.discogs-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 16px;
+}
+.discogs-card .cd-actions { flex-wrap: wrap; margin-top: auto; }
+.discogs-card .discogs-held {
+  flex: 1;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 87, 217, .34);
+  border-radius: 8px;
+  color: var(--accent);
+  font-size: 13px;
+  text-align: center;
+  text-decoration: none;
+}
+.discogs-card .discogs-add { color: var(--ink); }
+.discogs-panel {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.discogs-panel p { margin: 0; }
+.discogs-tracks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.discogs-tracks li {
+  display: grid;
+  grid-template-columns: 3em minmax(0, 1fr) auto;
+  gap: 10px;
+  font-size: 14px;
+}
+.discogs-tracks .pos,
+.discogs-tracks .dur { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.discogs-tracks .title { overflow-wrap: anywhere; }
+
+@media (max-width: 720px) {
+  .discogs-grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+}

@@ -6,6 +6,7 @@ import type { Album, Artist, Playlist, Track } from '../api/types.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackRow } from '../components/rows.tsx';
 import { PlayScope } from '../components/PlayScope.tsx';
+import { DiscogsSearch } from './DiscogsSearch.tsx';
 
 interface Results { songs: Track[]; artists: Artist[]; albums: Album[]; playlists: Playlist[] }
 
@@ -92,6 +93,10 @@ export function GlobalSearch({ children }: { children: ReactNode }) {
           <PlayScope tracks={data.songs}><div className="rows">{data.songs.map(track => <TrackRow key={track.id} track={track} />)}</div></PlayScope></section>}
         {!!data.playlists.length && <section><h2>Playlists<span className="count">{data.playlists.length}</span></h2><div className="search-links">{data.playlists.map(p => <Link key={p.id} to={`/playlist/${encodeURIComponent(p.id)}`}>{p.name}</Link>)}</div></section>}
       </>}
+      {/* The library answers first; Discogs is offered beneath it, and
+          even when the library has nothing, or could not be searched. */}
+      {term.length >= 2 && !loading && <DiscogsSearch term={debounced}
+        hasLocal={!!data && Object.values(data).some(rows => rows.length)} />}
     </section>}
   </>;
 }

@@ -13,6 +13,9 @@ import path from 'node:path';
 import {
   DiscogsClient, DiscogsError, ShelfStore, albumKey, toShelfItem, type ShelfStatus,
 } from './discogs.ts';
+import {
+  DISCOGS_ID_LIKE, DiscogsLibrary, discogsAlbumId, discogsArtistId,
+} from './discogs-library.ts';
 // The front end is the shared packages/ui, so that the desktop shell can serve
 // byte-identical files. Its routes.json -- not this file -- is the single
 // source of truth for what lives at which URL; ui.ts applies it.
@@ -310,6 +313,10 @@ const tasteDb = openSql(DB_FILE, { attach: { app: APP_PLAYS_FILE } });
 function query(sql: string, ...args: (string | number)[]): unknown[] {
   return tasteDb.prepare(sql).all(...args);
 }
+
+// Music found on Discogs and copied into the library. Matches against the
+// albums on disk as well as the taste DB, so nothing held is offered again.
+const discogsLibrary = new DiscogsLibrary(tasteDb, () => provenance.albums());
 
 // The identity of the front end this server is serving.
 //
@@ -1125,7 +1132,11 @@ function likedArtists() {
     LEFT JOIN liked ON liked.artist_id = a.id
     LEFT JOIN top ON top.artist_id = a.id
     WHERE a.is_followed = 1 OR liked.n > 0 OR top.r IS NOT NULL OR a.unfollowed_at IS NOT NULL
-    ORDER BY liked_count DESC, a.followers DESC`) as Record<string, unknown>[];
+       -- Added from Discogs on purpose: on its own, or as an album's artist.
+       -- A guest credited on one track is not.
+       OR (a.id LIKE ?1 AND (EXISTS (SELECT 1 FROM album_artists aa WHERE aa.artist_id = a.id)
+                             OR NOT EXISTS (SELECT 1 FROM track_artists ta WHERE ta.artist_id = a.id)))
+    ORDER BY liked_count DESC, a.followers DESC`, DISCOGS_ID_LIKE) as Record<string, unknown>[];
   for (const row of rows) row.liked = Number(Boolean(row.is_followed) && !row.unfollowed_at);
   const merged = new Map(rows.map((row) => [String(row.id), row]));
   for (const choice of appLikes.choices('artist')) {
@@ -1481,7 +1492,9 @@ function libraryAlbumKeys(): Set<string> {
   for (const row of query(
     'SELECT al.name AS album, (SELECT a.name FROM album_artists aa JOIN artists a ON a.id = aa.artist_id'
     + ' WHERE aa.album_id = al.id ORDER BY aa.position LIMIT 1) AS artist'
-    + ' FROM albums al WHERE al.is_saved = 1',
+    // An album added from Discogs is a record of the music, not a rip of it.
+    + ' FROM albums al WHERE al.is_saved = 1 AND al.id NOT LIKE ?',
+    DISCOGS_ID_LIKE,
   ) as { album: string | null; artist: string | null }[]) {
     const key = albumKey(row.artist ?? '', row.album ?? '');
     if (key) keys.add(key);
@@ -2719,6 +2732,98 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
   },
 };
 
+/**
+ * Searching Discogs for music the library does not hold, and copying it in.
+ *
+ * Every call to Discogs happens here, on the server, with the server's own
+ * credentials: the browser and the desktop app only ever see our /api. Each
+ * result says whether the library already holds it (`library` is our id for
+ * it, or null) so the page can offer to add only what is missing.
+ */
+async function discogsRoute(url: URL, req: Request, res: Reply): Promise<void> {
+  const positive = (value: unknown): number => {
+    const n = Number(value);
+    return Number.isSafeInteger(n) && n > 0 ? n : 0;
+  };
+  const kindOf = (value: unknown): 'master' | 'release' | null =>
+    value === 'master' || value === 'release' ? value : null;
+  try {
+    if (url.pathname === '/api/discogs/add') {
+      if (req.method !== 'POST') { res.writeHead(405, { allow: 'POST' }).end(); return; }
+      let body: Record<string, unknown>;
+      try { body = await readJson(req); } catch (err) { json(res, 400, { error: (err as Error).message }); return; }
+      const id = positive(body.id);
+      if (!id) { json(res, 400, { error: 'A Discogs id is required' }); return; }
+      if (body.kind === 'artist') {
+        // Known already: answer without asking Discogs again.
+        const held = tasteDb.prepare('SELECT id FROM artists WHERE id = ?').get(discogsArtistId(id));
+        if (held) { json(res, 200, { kind: 'artist', id: String(held.id), added: false }); return; }
+        const artist = await discogs.artist(id);
+        const added = discogsLibrary.addArtist(artist);
+        json(res, 200, { kind: 'artist', id: added.artistId, added: added.added });
+        return;
+      }
+      const kind = kindOf(body.kind);
+      if (!kind) { json(res, 400, { error: 'kind must be artist, master or release' }); return; }
+      if (tasteDb.prepare('SELECT 1 FROM albums WHERE id = ?').get(discogsAlbumId(kind, id))) {
+        json(res, 200, { kind, id: discogsAlbumId(kind, id), added: false });
+        return;
+      }
+      const album = await discogs.albumForLibrary(kind, id);
+      const added = discogsLibrary.addAlbum(album);
+      json(res, 200, { kind, id: added.albumId, added: added.added, artistIds: added.artistIds, tracks: added.tracks });
+      return;
+    }
+    if (req.method !== 'GET' && req.method !== 'HEAD') { res.writeHead(405, { allow: 'GET' }).end(); return; }
+    const params = url.searchParams;
+    const albumStatus = (album: { kind: 'master' | 'release'; id: number; artist: string; title: string }) =>
+      discogsLibrary.findAlbum(album.kind, album.id, album.artist ? [album.artist] : [], album.title);
+    if (url.pathname === '/api/discogs/search') {
+      const term = (params.get('q') ?? '').trim().slice(0, 200);
+      if (term.length < 2) { json(res, 200, { artists: [], albums: [] }); return; }
+      const found = await discogs.searchCatalogue(term);
+      json(res, 200, {
+        artists: found.artists.map((artist) => ({ ...artist, library: discogsLibrary.findArtist(artist) })),
+        albums: found.albums.map((album) => ({ ...album, library: albumStatus(album) })),
+      });
+      return;
+    }
+    if (url.pathname === '/api/discogs/album') {
+      const kind = kindOf(params.get('kind'));
+      const id = positive(params.get('id'));
+      if (!kind || !id) { json(res, 400, { error: 'kind (master or release) and id are required' }); return; }
+      const album = await discogs.album(kind, id);
+      json(res, 200, {
+        album: {
+          ...album,
+          library: discogsLibrary.findAlbum(kind, id, album.artists.map((artist) => artist.name), album.title, album.masterId),
+        },
+      });
+      return;
+    }
+    if (url.pathname === '/api/discogs/artist') {
+      const id = positive(params.get('id'));
+      if (!id) { json(res, 400, { error: 'id is required' }); return; }
+      const [artist, albums] = await Promise.all([discogs.artist(id), discogs.artistAlbums(id)]);
+      json(res, 200, {
+        artist: { ...artist, library: discogsLibrary.findArtist(artist) },
+        albums: albums.map((album) => ({ ...album, library: albumStatus({ ...album, artist: album.artist || artist.name }) })),
+      });
+      return;
+    }
+    json(res, 404, { error: 'not found' });
+  } catch (err) {
+    if (err instanceof DiscogsError) {
+      // The message is ours, written to be shown; it never carries the token.
+      json(res, err.status, { error: err.message });
+      return;
+    }
+    // Anything else is ours (a release with no artist, a database error).
+    console.error(`${url.pathname}:`, (err as Error).message);
+    json(res, 500, { error: (err as Error).message || 'Could not add that from Discogs' });
+  }
+}
+
 /** The fetch handler both hosts call. */
 export async function handle(req: Request): Promise<Response> {
   const res = new Reply();
@@ -3059,6 +3164,11 @@ async function route(req: Request, res: Reply): Promise<void> {
       } catch (err) {
         json(res, 400, { error: (err as Error).message });
       }
+      return;
+    }
+
+    if (url.pathname.startsWith('/api/discogs/')) {
+      await discogsRoute(url, req, res);
       return;
     }
 

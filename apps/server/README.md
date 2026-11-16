@@ -447,6 +447,35 @@ Needs a personal access token from
 the tab renders setup instructions instead of failing. The token's own account
 is resolved via `/oauth/identity`, so there is no username to configure.
 
+## Finding music on Discogs
+
+Search answers from the library first. Under the results, **Search Discogs**
+runs the same query against the Discogs catalogue (artists, and albums as
+masters, with plain releases where a record has no master) and marks each
+entry as already held or not. An album opens to its tracklist and an artist
+to their discography. **Add to library** copies an album into the library's
+own tables: the artist (reused if the library already knows them by name),
+the album marked saved, its tracks, year, label, genres and Discogs cover.
+
+- **Metadata only.** Adding never downloads or queues audio. It does not use
+  an app like either, because the likes sweep grabs what is liked.
+- **No duplicates.** Rows are keyed on Discogs ids (`discogs-artist:<id>`,
+  `discogs-master:<id>`, `discogs-release:<id>`), a release is stored as its
+  master, and an album the library already holds by artist and title (from
+  Spotify or on disk) is linked to rather than added again.
+- **The exporter leaves these rows alone**: no Spotify hydration, discography
+  crawl or un-save marking for ids starting `discogs-`.
+- **Every call goes through this server** (`/api/discogs/search`, `/album`,
+  `/artist`, `/add`), using the same credentials as the CD shelf. A consumer
+  key and secret are enough for this; a personal token works too. Interactive
+  calls do not sleep on a 429: they answer at once with how long to wait, and
+  catalogue answers are cached for ten minutes. Without credentials the
+  section says Discogs is not configured and local search carries on.
+
+`pnpm verify:discogs` drives the whole journey in Chromium against a stand-in
+for the API (`src/fake-discogs.ts`, selected with `DISCOGS_API_URL`), so it
+needs no token. Screenshots land in `data/discogs-verification`.
+
 ## The standard album card
 
 Everything album-shaped renders through one card (`albumCell` /
