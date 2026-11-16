@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { DiscogsClient, DiscogsError, ShelfStore, albumKey, durationMs, toShelfItem } from './discogs.ts';
+import { ARTIST_PAGES, DiscogsClient, DiscogsError, ShelfStore, albumKey, durationMs, toShelfItem } from './discogs.ts';
 
 const withShelf = (fn: (shelf: ShelfStore) => void): void => {
   const dir = mkdtempSync(path.join(tmpdir(), 'shelf-'));
@@ -213,6 +213,25 @@ test('an artist discography keeps main credits only', async () => {
   ] }));
   const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
   assert.deepEqual((await client.artistAlbums(77)).map((album) => `${album.kind}:${album.id}`), ['master:501']);
+});
+
+test('an artist discography follows every page before filtering, up to the page cap', async () => {
+  const entry = (id: number, role = 'Main') => ({ id, type: 'master', title: `Album ${id}`, year: 2000 + (id % 20), artist: 'The Quiet Ferns', role });
+  const { asked, fetcher } = fakeDiscogs((url) => {
+    const page = Number(url.searchParams.get('page'));
+    // Page 1 is all guest spots; the band's own records are on pages 2 and 3.
+    const releases = page === 1 ? [entry(1, 'Appearance'), entry(2, 'TrackAppearance')]
+      : page === 2 ? [entry(3), entry(4, 'Appearance')] : [entry(5)];
+    return reply({ pagination: { page, pages: 3 }, releases });
+  });
+  const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
+  assert.deepEqual((await client.artistAlbums(77)).map((album) => album.id), [3, 5]);
+  assert.deepEqual(asked.map((call) => call.url.searchParams.get('page')), ['1', '2', '3']);
+
+  const endless = fakeDiscogs((url) => reply({ pagination: { pages: 500 }, releases: [entry(Number(url.searchParams.get('page')))] }));
+  const capped = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: endless.fetcher });
+  assert.equal((await capped.artistAlbums(77)).length, ARTIST_PAGES);
+  assert.equal(endless.asked.length, ARTIST_PAGES);
 });
 
 test('track durations parse minutes and hours, and blank stays unknown', () => {

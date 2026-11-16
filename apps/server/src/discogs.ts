@@ -307,6 +307,8 @@ export interface DiscogsClientOptions {
 }
 
 const CACHE_TTL_MS = 10 * 60_000;
+/** Pages of an artist's discography read at most (100 entries each). */
+export const ARTIST_PAGES = 5;
 const CACHE_ENTRIES = 200;
 
 export class DiscogsClient {
@@ -562,13 +564,25 @@ export class DiscogsClient {
     };
   }
 
-  /** The albums an artist made (main credits only, not guest spots), newest first. */
+  /**
+   * The albums an artist made (main credits only, not guest spots), newest
+   * first. Discogs pages the list and mixes guest appearances in, so pages are
+   * followed before filtering, up to ARTIST_PAGES of them: a prolific artist's
+   * appearances would otherwise crowd their own records off the first page.
+   */
   async artistAlbums(id: number): Promise<CatalogueAlbum[]> {
-    const body = await this.request<{ releases?: Record<string, unknown>[] }>(
-      `/artists/${id}/releases`, { sort: 'year', sort_order: 'desc', per_page: '50' }, { wait: false, cache: true },
-    );
+    const entries: Record<string, unknown>[] = [];
+    for (let page = 1, pages = 1; page <= Math.min(pages, ARTIST_PAGES); page += 1) {
+      const body = await this.request<{ pagination?: { pages?: number }; releases?: Record<string, unknown>[] }>(
+        `/artists/${id}/releases`,
+        { sort: 'year', sort_order: 'desc', per_page: '100', page: String(page) },
+        { wait: false, cache: true },
+      );
+      entries.push(...(body.releases ?? []));
+      pages = Math.max(1, Number(body.pagination?.pages ?? 1) || 1);
+    }
     const albums: CatalogueAlbum[] = [];
-    for (const entry of body.releases ?? []) {
+    for (const entry of entries) {
       if (entry.role && entry.role !== 'Main') continue;
       const kind: DiscogsAlbumKind = entry.type === 'master' ? 'master' : 'release';
       const albumId = Number(entry.id ?? 0);

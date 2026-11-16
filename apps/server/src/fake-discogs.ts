@@ -35,6 +35,26 @@ const MASTERS: Record<number, Record<string, unknown>> = {
   },
 };
 
+// Another band's album that credits a solo singer (91) on one track and a
+// session player (92) on another: who a track credit puts in the library.
+MASTERS[601] = {
+  id: 601, title: 'Borrowed Light', year: 2021, main_release: 9601,
+  artists: [{ id: 88, name: 'Night Lanterns', anv: '', join: '' }], genres: ['Rock'], styles: ['Post-Rock'],
+  images: [{ type: 'primary', uri: `${ART}/borrowed-light.jpg` }],
+  tracklist: [
+    { position: '1', title: 'Low Beacon', duration: '4:10', type_: 'track' },
+    { position: '2', title: 'Quill Song', duration: '3:55', type_: 'track', artists: [{ id: 91, name: 'Mara Quill', anv: '', join: '' }] },
+    { position: '3', title: 'Brass Interlude', duration: '1:40', type_: 'track', artists: [{ id: 92, name: 'Session Horn', anv: '', join: '' }] },
+  ],
+};
+
+const ARTISTS: Record<number, Record<string, unknown>> = {
+  77: { id: 77, name: BAND.name, profile: 'A fictional band for tests.', images: [{ type: 'primary', uri: `${ART}/ferns.jpg` }] },
+  88: { id: 88, name: 'Night Lanterns', profile: 'A fictional band for tests.', images: [] },
+  91: { id: 91, name: 'Mara Quill', profile: 'A fictional singer for tests.', images: [{ type: 'primary', uri: `${ART}/mara-quill.jpg` }] },
+  92: { id: 92, name: 'Session Horn', profile: 'A fictional session player for tests.', images: [] },
+};
+
 const RELEASES: Record<number, Record<string, unknown>> = {
   9001: { ...MASTERS[501], id: 9001, master_id: 501, released: '2019-04-12', labels: [{ name: 'Fern Records', catno: 'FERN-001' }], formats: [{ name: 'CD', qty: '1', descriptions: ['Album'] }] },
   9003: { ...MASTERS[502], id: 9003, master_id: 502, released: '2022-09-02', labels: [{ name: 'Fern Records', catno: 'FERN-007' }], formats: [{ name: 'CD', qty: '1', descriptions: ['Album'] }] },
@@ -68,7 +88,7 @@ function search(q: string, type: string): Record<string, unknown>[] {
   ];
 }
 
-return { MASTERS, RELEASES, search, ART };
+return { MASTERS, RELEASES, ARTISTS, search, ART };
 }
 
 const COLOURS = ['#2f6b4f', '#7a3e8e', '#b5652b', '#2b5d8f', '#8f2b45'];
@@ -94,7 +114,7 @@ export async function startFakeDiscogs(): Promise<FakeDiscogs> {
   let data = catalogue('');
   const server = http.createServer((req, res) => {
     const url = new URL(req.url ?? '/', 'http://fake');
-    const { MASTERS, RELEASES, search, ART } = data;
+    const { MASTERS, RELEASES, ARTISTS, search, ART } = data;
     if (url.pathname.startsWith('/img/')) {
       res.writeHead(200, { 'content-type': 'image/svg+xml' });
       res.end(cover(url.pathname.slice(5)));
@@ -116,9 +136,8 @@ export async function startFakeDiscogs(): Promise<FakeDiscogs> {
     if (match) return MASTERS[Number(match[1])] ? send(200, MASTERS[Number(match[1])]) : send(404, { message: 'Master Release not found.' });
     match = /^\/releases\/(\d+)$/.exec(url.pathname);
     if (match) return RELEASES[Number(match[1])] ? send(200, RELEASES[Number(match[1])]) : send(404, { message: 'Release not found.' });
-    if (url.pathname === '/artists/77') {
-      return send(200, { id: 77, name: BAND.name, profile: 'A fictional band for tests.', images: [{ type: 'primary', uri: `${ART}/ferns.jpg` }] });
-    }
+    match = /^\/artists\/(\d+)$/.exec(url.pathname);
+    if (match) return ARTISTS[Number(match[1])] ? send(200, ARTISTS[Number(match[1])]) : send(404, { message: 'Artist not found.' });
     if (url.pathname === '/artists/77/releases') {
       return send(200, { pagination: { page: 1, pages: 1 }, releases: [
         { id: 502, type: 'master', main_release: 9003, title: 'Second Bloom', year: 2022, artist: BAND.name, role: 'Main', thumb: `${ART}/502-thumb.jpg` },

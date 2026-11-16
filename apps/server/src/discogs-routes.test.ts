@@ -35,14 +35,26 @@ async function startServer(dir: string, discogs: Record<string, string>) {
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  // Made at spawn, so stopping works however and whenever the child ended.
+  const exited = once(child, 'exit');
+  const stop = async () => {
+    if (child.exitCode === null && child.signalCode === null) child.kill();
+    await exited;
+  };
   let output = '';
   child.stdout.on('data', chunk => { output += chunk; });
   child.stderr.on('data', chunk => { output += chunk; });
-  for (let i = 0; i < 200 && !output.includes('taste-db ui on'); i++) {
-    if (child.exitCode !== null) assert.fail(output);
-    await new Promise(resolve => setTimeout(resolve, 50));
+  try {
+    for (let i = 0; i < 200 && !output.includes('taste-db ui on'); i++) {
+      if (child.exitCode !== null || child.signalCode !== null) assert.fail(output);
+      await new Promise(resolve => setTimeout(resolve, 50));
+    }
+    assert.match(output, /taste-db ui on/);
+  } catch (err) {
+    // A server that never came up is still a process: reap it, or the run hangs.
+    await stop();
+    throw err;
   }
-  assert.match(output, /taste-db ui on/);
   const base = `http://127.0.0.1:${port}`;
   const call = async (route: string, body?: unknown) => {
     const response = await fetch(base + route, body === undefined ? {} : {
@@ -57,7 +69,6 @@ async function startServer(dir: string, discogs: Record<string, string>) {
     assert.equal(status, 200, JSON.stringify(data));
     return data;
   };
-  const stop = async () => { const exited = once(child, 'exit'); child.kill(); await exited; };
   return { call, ok, stop, log: () => output };
 }
 
@@ -95,11 +106,29 @@ test('HTTP: Discogs search, add to the library, dedupe, and failure states', { t
       assert.equal(discography.artist.name, 'The Quiet Ferns');
       assert.deepEqual(discography.albums.map((a: any) => a.title), ['Second Bloom', 'Hollow Lanterns', 'Demo Tape']);
 
+      // Like state of the album, its artist and its tracks: an add files
+      // metadata, it does not favourite anything (that would grab audio).
+      const likeState = async () => {
+        const albums = await server.ok('/api/albums') as unknown as { id: string; liked?: number }[];
+        const artists = await server.ok('/api/artists') as unknown as { id: string; liked?: number }[];
+        const liked = await server.ok('/api/tracks') as unknown as { id: string }[];
+        const page = await server.ok('/api/album?id=discogs-master:501');
+        return {
+          album: Number(albums.find(a => a.id === 'discogs-master:501')?.liked ?? 0),
+          artist: Number(artists.find(a => a.id === 'discogs-artist:77')?.liked ?? 0),
+          likedTracks: liked.filter(t => String(t.id).startsWith('discogs-')).length,
+          albumPageLikedTracks: (page.tracks as { liked?: number }[]).filter(t => Number(t.liked)).length,
+        };
+      };
+      const unliked = { album: 0, artist: 0, likedTracks: 0, albumPageLikedTracks: 0 };
+      assert.deepEqual(await likeState(), unliked);
       const added = await server.ok('/api/discogs/add', { kind: 'master', id: 501 });
       assert.deepEqual(added, { kind: 'master', id: 'discogs-master:501', added: true, artistIds: ['discogs-artist:77'], tracks: 4 });
+      assert.deepEqual(await likeState(), unliked, 'adding likes nothing');
       const requestsAfterAdd = fake.requests.length;
       assert.deepEqual(await server.ok('/api/discogs/add', { kind: 'master', id: 501 }), { kind: 'master', id: 'discogs-master:501', added: false });
       assert.equal(fake.requests.length, requestsAfterAdd, 'a repeat add is answered without Discogs');
+      assert.deepEqual(await likeState(), unliked, 'a repeat add likes nothing');
       // A pressing of the same album, and the artist, are already held.
       assert.equal((await server.ok('/api/discogs/add', { kind: 'release', id: 9001 })).added, false);
       assert.deepEqual(await server.ok('/api/discogs/add', { kind: 'artist', id: 77 }), { kind: 'artist', id: 'discogs-artist:77', added: false });
@@ -138,6 +167,32 @@ test('HTTP: Discogs search, add to the library, dedupe, and failure states', { t
       assert.deepEqual((await server.ok('/api/upgrades')).jobs, []);
       const cds = await server.ok('/api/cds');
       assert.deepEqual(cds.items.map((item: any) => [item.title, item.status]), [['Hollow Lanterns', 'shelf']]);
+
+      // An artist added on their own stays in Library after another band's
+      // album credits them on one track; a guest only credited on a track
+      // never joins it.
+      const libraryArtists = async () => (await server.ok('/api/artists') as unknown as { id: string; name: string }[])
+        .filter(a => a.id.startsWith('discogs-')).map(a => a.name).sort();
+      assert.deepEqual(await server.ok('/api/discogs/add', { kind: 'artist', id: 91 }), { kind: 'artist', id: 'discogs-artist:91', added: true });
+      assert.deepEqual(await libraryArtists(), ['Mara Quill', 'The Quiet Ferns']);
+      const borrowed = await server.ok('/api/discogs/add', { kind: 'master', id: 601 });
+      assert.deepEqual([borrowed.added, borrowed.artistIds], [true, ['discogs-artist:88']]);
+      assert.deepEqual(await libraryArtists(), ['Mara Quill', 'Night Lanterns', 'The Quiet Ferns']);
+      const credits = (await server.ok('/api/album?id=discogs-master:601')).tracks.map((t: any) => t.artists);
+      assert.deepEqual(credits, ['Night Lanterns', 'Mara Quill', 'Session Horn']);
+      // Putting the guest in the library on purpose needs no Discogs call: the row exists.
+      const requestsBeforeGuest = fake.requests.length;
+      assert.deepEqual(await server.ok('/api/discogs/add', { kind: 'artist', id: 92 }), { kind: 'artist', id: 'discogs-artist:92', added: true });
+      assert.equal(fake.requests.length, requestsBeforeGuest);
+      assert.deepEqual(await libraryArtists(), ['Mara Quill', 'Night Lanterns', 'Session Horn', 'The Quiet Ferns']);
+      // A new artist's page resolves at once (the name cache is rebuilt after an add).
+      assert.equal((await server.ok('/api/artist?id=discogs-artist:91')).artist.name, 'Mara Quill');
+
+      // Un-liking a Discogs add here keeps it in the library, unliked.
+      await server.ok('/api/likes', { id: 'discogs-master:501', kind: 'album', liked: false });
+      const afterUnlike = (await server.ok('/api/albums') as unknown as { id: string; liked: number }[])
+        .filter(a => a.id === 'discogs-master:501');
+      assert.deepEqual(afterUnlike.map(a => a.liked), [0]);
 
       // Discogs pushing back, and bad requests.
       const limited = await server.call('/api/discogs/search?q=ratelimit');

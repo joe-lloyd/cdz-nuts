@@ -14,7 +14,7 @@ import {
   DiscogsClient, DiscogsError, ShelfStore, albumKey, toShelfItem, type ShelfStatus,
 } from './discogs.ts';
 import {
-  DISCOGS_ID_LIKE, DiscogsLibrary, discogsAlbumId, discogsArtistId,
+  DISCOGS_ID_LIKE, DISCOGS_LIBRARY_ARTISTS, DiscogsLibrary, discogsAlbumId, discogsArtistId, isDiscogsId,
 } from './discogs-library.ts';
 // The front end is the shared packages/ui, so that the desktop shell can serve
 // byte-identical files. Its routes.json -- not this file -- is the single
@@ -87,6 +87,8 @@ export function init(): void {
   // one database, so there every table is created now.
   const lazy = runtime().sql.singleDatabase ? [provenance, shelf, listenbrainz, lyrics] : [];
   for (const store of [appPlays, ...lazy]) store.ready();
+  // Library > Artists reads its membership table, so it exists from the start.
+  discogsLibrary.ready();
   ensureLidarrTables();
 }
 
@@ -352,6 +354,11 @@ const LOCAL_ALBUM_PREFIX = 'localalbum-';
 const artistIdCache = new Map<string, string | null>();
 let artistIdCacheAt = 0;
 const ARTIST_ID_TTL_MS = 5 * 60_000;
+
+/** Rebuild the name map on next use: an artist was just added to the table. */
+function forgetArtistIds(): void {
+  artistIdCacheAt = 0;
+}
 
 /** Fold a credit to its comparable core: case, accents, "&"/"and", punctuation. */
 function normalizeArtistName(value: string | null | undefined): string {
@@ -1097,14 +1104,18 @@ function likedAlbums() {
     FROM albums al WHERE al.is_saved = 1 OR al.unsaved_at IS NOT NULL
     ORDER BY al.saved_at DESC`) as Record<string, unknown>[],
     ];
-  for (const row of rows) row.liked = row.local ? 0 : Number(Boolean(row.is_saved) && !row.unsaved_at);
+  // A Discogs add is saved so it is listed, not because it was favourited: it
+  // starts unliked, and only a like made here (appLikes, below) changes that.
+  const fromDiscogs = (row: Record<string, unknown>) => isDiscogsId(String(row.id ?? ''));
+  for (const row of rows) row.liked = row.local || fromDiscogs(row) ? 0 : Number(Boolean(row.is_saved) && !row.unsaved_at);
   const merged = new Map(rows.map((row) => [String(row.id), row]));
   for (const choice of appLikes.choices('album')) {
     const row = merged.get(choice.id);
     if (!choice.liked) {
-      // An imported album is real music on disk, so it keeps its card; a
-      // Spotify save that was un-liked here leaves the list like a song does.
-      if (row && row.local) row.liked = 0; else merged.delete(choice.id);
+      // An imported album is real music on disk, and a Discogs add was put in
+      // the library on purpose, so both keep their card; a Spotify save that
+      // was un-liked here leaves the list like a song does.
+      if (row && (row.local || fromDiscogs(row))) row.liked = 0; else merged.delete(choice.id);
       continue;
     }
     if (row) { row.liked = 1; continue; }
@@ -1132,11 +1143,9 @@ function likedArtists() {
     LEFT JOIN liked ON liked.artist_id = a.id
     LEFT JOIN top ON top.artist_id = a.id
     WHERE a.is_followed = 1 OR liked.n > 0 OR top.r IS NOT NULL OR a.unfollowed_at IS NOT NULL
-       -- Added from Discogs on purpose: on its own, or as an album's artist.
-       -- A guest credited on one track is not.
-       OR (a.id LIKE ?1 AND (EXISTS (SELECT 1 FROM album_artists aa WHERE aa.artist_id = a.id)
-                             OR NOT EXISTS (SELECT 1 FROM track_artists ta WHERE ta.artist_id = a.id)))
-    ORDER BY liked_count DESC, a.followers DESC`, DISCOGS_ID_LIKE) as Record<string, unknown>[];
+       -- Put in the library from Discogs on purpose (discogs-library.ts).
+       OR a.id IN (SELECT artist_id FROM ${DISCOGS_LIBRARY_ARTISTS})
+    ORDER BY liked_count DESC, a.followers DESC`) as Record<string, unknown>[];
   for (const row of rows) row.liked = Number(Boolean(row.is_followed) && !row.unfollowed_at);
   const merged = new Map(rows.map((row) => [String(row.id), row]));
   for (const choice of appLikes.choices('artist')) {
@@ -2755,11 +2764,11 @@ async function discogsRoute(url: URL, req: Request, res: Reply): Promise<void> {
       const id = positive(body.id);
       if (!id) { json(res, 400, { error: 'A Discogs id is required' }); return; }
       if (body.kind === 'artist') {
-        // Known already: answer without asking Discogs again.
-        const held = tasteDb.prepare('SELECT id FROM artists WHERE id = ?').get(discogsArtistId(id));
-        if (held) { json(res, 200, { kind: 'artist', id: String(held.id), added: false }); return; }
-        const artist = await discogs.artist(id);
-        const added = discogsLibrary.addArtist(artist);
+        // A row already there (a guest credit, say) needs no Discogs call to
+        // be put in the library.
+        const held = tasteDb.prepare('SELECT name FROM artists WHERE id = ?').get(discogsArtistId(id));
+        const added = discogsLibrary.addArtist(held ? { id, name: String(held.name ?? '') } : await discogs.artist(id));
+        forgetArtistIds();
         json(res, 200, { kind: 'artist', id: added.artistId, added: added.added });
         return;
       }
@@ -2771,6 +2780,8 @@ async function discogsRoute(url: URL, req: Request, res: Reply): Promise<void> {
       }
       const album = await discogs.albumForLibrary(kind, id);
       const added = discogsLibrary.addAlbum(album);
+      // A new artist row must resolve on library album credits right away.
+      if (added.added) forgetArtistIds();
       json(res, 200, { kind, id: added.albumId, added: added.added, artistIds: added.artistIds, tracks: added.tracks });
       return;
     }

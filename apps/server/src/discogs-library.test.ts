@@ -180,6 +180,34 @@ test('multi-disc positions number each disc from one', () => {
   });
 });
 
+const members = (taste: TasteDb): string[] =>
+  (taste.db.prepare('SELECT artist_id FROM discogs_library_artists ORDER BY artist_id').all() as { artist_id: string }[])
+    .map((row) => row.artist_id);
+
+test('an artist added alone stays a library member when another album credits them on a track', () => {
+  withLibrary((taste, library) => {
+    library.addArtist({ id: 88, name: 'Guest Singer' });
+    // master() credits Guest Singer (88) on 'Undertow' only.
+    const added = library.addAlbum(master());
+    assert.deepEqual(added.artistIds, ['discogs-artist:77']);
+    assert.equal(count(taste, 'track_artists', "artist_id = 'discogs-artist:88'"), 1);
+    assert.equal(count(taste, 'album_artists', "artist_id = 'discogs-artist:88'"), 0);
+    assert.deepEqual(members(taste), ['discogs-artist:77', 'discogs-artist:88']);
+  });
+});
+
+test('a guest credited only on a track gets a row but is not a library member', () => {
+  withLibrary((taste, library) => {
+    library.addAlbum(master());
+    assert.equal(count(taste, 'artists', "id = 'discogs-artist:88'"), 1);
+    assert.deepEqual(members(taste), ['discogs-artist:77']);
+    // Adding them on purpose later joins them, and only once.
+    assert.deepEqual(library.addArtist({ id: 88, name: 'Guest Singer' }), { artistId: 'discogs-artist:88', added: true });
+    assert.deepEqual(library.addArtist({ id: 88, name: 'Guest Singer' }), { artistId: 'discogs-artist:88', added: false });
+    assert.deepEqual(members(taste), ['discogs-artist:77', 'discogs-artist:88']);
+  });
+});
+
 test('an album with no artist is refused rather than stored orphaned', () => {
   withLibrary((taste, library) => {
     assert.throws(() => library.addAlbum(master({ artists: [] })), /no artist/);

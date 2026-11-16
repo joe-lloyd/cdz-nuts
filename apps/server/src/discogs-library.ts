@@ -20,6 +20,16 @@ export const DISCOGS_TRACK_PREFIX = 'discogs-track:';
 /** A SQL LIKE pattern for every id this module writes. No `_` or `%` inside. */
 export const DISCOGS_ID_LIKE = 'discogs-%';
 
+/**
+ * The artists put in the library from Discogs on purpose: added on their own,
+ * or as an added album's artist. A guest credited on one track of someone
+ * else's album gets an artist row (the credit needs one) but is not listed.
+ * Kept in its own table because no column of `artists` means this without a
+ * side effect: `is_followed` feeds the Lidarr import list and Spotify's
+ * un-follow bookkeeping.
+ */
+export const DISCOGS_LIBRARY_ARTISTS = 'discogs_library_artists';
+
 export const discogsArtistId = (id: number): string => `${DISCOGS_ARTIST_PREFIX}${id}`;
 export const discogsAlbumId = (kind: DiscogsAlbumKind, id: number): string => `discogs-${kind}:${id}`;
 export const isDiscogsId = (id: string): boolean => id.startsWith(DISCOGS_ID_PREFIX);
@@ -71,13 +81,29 @@ function numbering(album: DiscogsAlbum): { disc: number; track: number }[] {
 
 export class DiscogsLibrary {
   private readonly db: Sql;
-  private readonly heldAlbums: () => HeldAlbum[];
+  private readonly heldAlbums: () => readonly HeldAlbum[];
   private readonly now: () => number;
+  private tableReady = false;
 
-  constructor(db: Sql, heldAlbums: () => HeldAlbum[] = () => [], now: () => number = Date.now) {
+  constructor(db: Sql, heldAlbums: () => readonly HeldAlbum[] = () => [], now: () => number = Date.now) {
     this.db = db;
     this.heldAlbums = heldAlbums;
     this.now = now;
+  }
+
+  /** Creates the membership table. Never at module load: a Durable Object forbids SQL then. */
+  ready(): void {
+    if (this.tableReady) return;
+    this.db.exec(`CREATE TABLE IF NOT EXISTS ${DISCOGS_LIBRARY_ARTISTS} (
+      artist_id TEXT PRIMARY KEY, added_at TEXT NOT NULL)`);
+    this.tableReady = true;
+  }
+
+  /** Puts an artist in the library; true when they were not in it already. */
+  private join(artistId: string): boolean {
+    this.ready();
+    return this.db.prepare(`INSERT OR IGNORE INTO ${DISCOGS_LIBRARY_ARTISTS} (artist_id, added_at) VALUES (?, ?)`)
+      .run(artistId, new Date(this.now()).toISOString()).changes > 0;
   }
 
   /**
@@ -144,15 +170,21 @@ export class DiscogsLibrary {
     return { id, added: result.changes > 0 };
   }
 
-  /** Adds one artist on its own, with no albums. A second add is a no-op. */
+  /**
+   * Adds one artist on its own, with no albums. Also how an artist the
+   * library already has a row for (a guest credit, a Spotify crawl) is put in
+   * the library on purpose. A second add is a no-op.
+   */
   addArtist(artist: DiscogsCredit & { image?: string | null; genres?: string[] }): AddedArtist {
+    this.ready();
     return this.db.transaction(() => {
       const { id, added } = this.ensureArtist(artist, artist.genres ?? [], artist.image ?? null);
       if (!added && artist.image) {
         this.db.prepare('UPDATE artists SET image_url = COALESCE(image_url, ?) WHERE id = ? AND id LIKE ?')
           .run(artist.image, id, DISCOGS_ID_LIKE);
       }
-      return { artistId: id, added };
+      const joined = this.join(id);
+      return { artistId: id, added: added || joined };
     });
   }
 
@@ -164,6 +196,7 @@ export class DiscogsLibrary {
   addAlbum(album: DiscogsAlbum): AddedAlbum {
     if (!album.id) throw new Error('Discogs gave no id for that album');
     if (!album.artists.length) throw new Error('Discogs lists no artist for that album');
+    this.ready();
     return this.db.transaction(() => {
       const names = album.artists.map((artist) => artist.name);
       const held = this.findAlbum(album.kind, album.id, names, album.title, album.masterId);
@@ -181,6 +214,8 @@ export class DiscogsLibrary {
         const ensured = this.ensureArtist(artist, genres);
         if (ensured.added) addedArtists += 1;
         if (!artistIds.includes(ensured.id)) artistIds.push(ensured.id);
+        // The album's own artists join the library with it; track guests do not.
+        this.join(ensured.id);
       }
       const at = new Date(this.now()).toISOString();
       this.db.prepare(`

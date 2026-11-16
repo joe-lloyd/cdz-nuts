@@ -33,16 +33,24 @@ async function startServer(name, discogs) {
     DISCOGS_TOKEN: '', DISCOGS_CONSUMER_KEY: '', DISCOGS_CONSUMER_SECRET: '', ...discogs };
   for (const store of ['LIKES', 'PLAYLISTS', 'PROVENANCE', 'APP_PLAYS', 'UPGRADES', 'DISCOGS', 'LYRICS']) env[`${store}_DB`] = path.join(scratch, `${name}-${store}.db`);
   const child = spawn(process.execPath, ['src/server.ts'], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Made at spawn, so stopping works however and whenever the child ended.
+  const exited = new Promise(resolve => child.once('exit', resolve));
   let log = '';
   child.stdout.on('data', b => { log += b; });
   child.stderr.on('data', b => { log += b; });
-  const base = `http://127.0.0.1:${port}`;
+  const server = {
+    base: `http://127.0.0.1:${port}`, log: () => log,
+    stop: async () => { if (child.exitCode === null && child.signalCode === null) child.kill(); await exited; },
+  };
+  // Registered before it is waited on, so the finally block stops it even if
+  // it never comes up.
+  servers.push(server);
   for (let i = 0; ; i++) {
-    try { if ((await fetch(base + '/api/tracks')).ok) break; } catch { /* starting */ }
-    if (i > 150 || child.exitCode !== null) throw new Error(log);
+    try { if ((await fetch(server.base + '/api/tracks')).ok) break; } catch { /* starting */ }
+    if (i > 150 || child.exitCode !== null || child.signalCode !== null) throw new Error(`server ${name} did not start:\n${log}`);
     await new Promise(r => setTimeout(r, 100));
   }
-  return { base, child, log: () => log };
+  return server;
 }
 
 /**
@@ -81,7 +89,6 @@ const checks = [];
 let browser;
 try {
   const live = await startServer('configured', { DISCOGS_TOKEN: TOKEN, DISCOGS_API_URL: fake.url });
-  servers.push(live);
   browser = await chromium.launch();
 
   // Desktop width: the whole journey, from nothing to the album in the library.
@@ -209,7 +216,6 @@ try {
 
   // A server with no Discogs credentials says so and keeps local search.
   const bare = await startServer('unconfigured', { DISCOGS_API_URL: fake.url });
-  servers.push(bare);
   {
     const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
     await page.goto(bare.base + '/liked');
@@ -227,10 +233,7 @@ try {
   console.log(checks.join('\n'));
 } finally {
   await browser?.close();
-  for (const server of servers) {
-    server.child.kill();
-    if (server.child.exitCode === null) await once(server.child, 'exit');
-  }
+  for (const server of servers) await server.stop();
   writeFileSync(path.join(evidence, 'server.log'), servers.map(s => s.log()).join('\n---\n'));
   await fake.close();
 }
