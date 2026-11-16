@@ -1144,7 +1144,9 @@ function libraryArtistId(artist: { id: number; name: string }): string | null {
       OR EXISTS (SELECT 1 FROM top_artists t WHERE t.artist_id = a.id AND t.time_range = 'medium_term')
       OR EXISTS (SELECT 1 FROM track_artists ta JOIN liked_tracks lt ON lt.track_id = ta.track_id
                   WHERE ta.artist_id = a.id AND lt.removed_at IS NULL))`).get(id);
-  return listed ? id : null;
+  // An unlisted row (a guest credit, say) can hide albums held on disk:
+  // findArtist stops at the row, so check the files before saying no.
+  return listed ? id : discogsLibrary.findHeldArtist(artist.name);
 }
 
 function likedArtists() {

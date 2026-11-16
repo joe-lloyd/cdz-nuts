@@ -122,7 +122,13 @@ export class DiscogsLibrary {
       SELECT id FROM artists WHERE name = ? COLLATE NOCASE
       ORDER BY is_followed DESC, popularity DESC NULLS LAST, id LIMIT 1`).get(name);
     if (named) return String(named.id);
-    const wanted = normalizeMusicText(name);
+    return this.findHeldArtist(name);
+  }
+
+  /** `local-artist:<name>` when albums by this artist are on disk, otherwise null. */
+  findHeldArtist(name: string): string | null {
+    const wanted = normalizeMusicText(cleanArtist(name));
+    if (!wanted) return null;
     const held = this.heldAlbums().find((album) => normalizeMusicText(album.artists) === wanted);
     return held ? `local-artist:${held.artists}` : null;
   }

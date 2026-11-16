@@ -45,6 +45,8 @@ MASTERS[601] = {
     { position: '1', title: 'Low Beacon', duration: '4:10', type_: 'track' },
     { position: '2', title: 'Quill Song', duration: '3:55', type_: 'track', artists: [{ id: 91, name: 'Mara Quill', anv: '', join: '' }] },
     { position: '3', title: 'Brass Interlude', duration: '1:40', type_: 'track', artists: [{ id: 92, name: 'Session Horn', anv: '', join: '' }] },
+    // A guest whose own album is on disk (see discogs-routes.test.ts).
+    { position: '4', title: 'Harbour Hymn', duration: '2:20', type_: 'track', artists: [{ id: 93, name: 'Low Tide Choir', anv: '', join: '' }] },
   ],
 };
 
@@ -53,6 +55,7 @@ const ARTISTS: Record<number, Record<string, unknown>> = {
   88: { id: 88, name: 'Night Lanterns', profile: 'A fictional band for tests.', images: [] },
   91: { id: 91, name: 'Mara Quill', profile: 'A fictional singer for tests.', images: [{ type: 'primary', uri: `${ART}/mara-quill.jpg` }] },
   92: { id: 92, name: 'Session Horn', profile: 'A fictional session player for tests.', images: [] },
+  93: { id: 93, name: 'Low Tide Choir', profile: 'A fictional choir for tests.', images: [] },
 };
 
 const RELEASES: Record<number, Record<string, unknown>> = {
@@ -76,6 +79,7 @@ function search(q: string, type: string): Record<string, unknown>[] {
   const term = q.toLowerCase();
   // The session player credited on one track of Borrowed Light.
   if (term.includes('session')) return type === 'artist' ? [hit('artist', 92, 'Session Horn')] : [];
+  if (term.includes('choir')) return type === 'artist' ? [hit('artist', 93, 'Low Tide Choir')] : [];
   if (!['quiet', 'ferns', 'lantern', 'bloom'].some((word) => term.includes(word))) return [];
   if (type === 'artist') return [hit('artist', 77, BAND.name)];
   if (type === 'master') {

@@ -9,6 +9,7 @@ import path from 'node:path';
 import { TasteDb } from './db.ts';
 import { startFakeDiscogs } from './fake-discogs.ts';
 import { ShelfStore } from './discogs.ts';
+import { ProvenanceStore } from './provenance.ts';
 
 const TOKEN = 'fixture-token-never-shown';
 
@@ -24,7 +25,8 @@ async function freePort(): Promise<number> {
 /** The real server over scratch databases; Discogs credentials as given. */
 async function startServer(dir: string, discogs: Record<string, string>) {
   const port = await freePort();
-  const store = (name: string) => name === 'discogs' ? path.join(dir, 'discogs.db') : path.join(dir, `${name}-${port}.db`);
+  // The CD shelf and the files on disk are seeded before the servers start.
+  const store = (name: string) => name === 'discogs' || name === 'provenance' ? path.join(dir, `${name}.db`) : path.join(dir, `${name}-${port}.db`);
   const child = spawn(process.execPath, ['--experimental-strip-types', '--disable-warning=ExperimentalWarning', path.join(import.meta.dirname, 'server.ts')], {
     env: {
       ...process.env, PORT: String(port), SPOTIFY_DB: path.join(dir, 'spotify.db'),
@@ -84,6 +86,10 @@ test('HTTP: Discogs search, add to the library, dedupe, and failure states', { t
   const shelf = new ShelfStore(path.join(dir, 'discogs.db'));
   shelf.add({ id: 9001, basic_information: { id: 9001, title: 'Hollow Lanterns', artists: [{ name: 'The Quiet Ferns (2)' }] } });
   shelf.close();
+  // Low Tide Choir's own album is on disk; Borrowed Light also credits them on a track.
+  const disk = new ProvenanceStore(path.join(dir, 'provenance.db'));
+  disk.upsert([{ path: '/data/library/music/Low Tide Choir/Tidewater/01 Tidewater.flac', artist: 'Low Tide Choir', title: 'Tidewater', album: 'Tidewater', codec: 'flac', duration_ms: 200000 }]);
+  disk.close();
   const fake = await startFakeDiscogs();
   try {
     const server = await startServer(dir, { DISCOGS_TOKEN: TOKEN, DISCOGS_API_URL: fake.url });
@@ -179,7 +185,11 @@ test('HTTP: Discogs search, add to the library, dedupe, and failure states', { t
       assert.deepEqual([borrowed.added, borrowed.artistIds], [true, ['discogs-artist:88']]);
       assert.deepEqual(await libraryArtists(), ['Mara Quill', 'Night Lanterns', 'The Quiet Ferns']);
       const credits = (await server.ok('/api/album?id=discogs-master:601')).tracks.map((t: any) => t.artists);
-      assert.deepEqual(credits, ['Night Lanterns', 'Mara Quill', 'Session Horn']);
+      assert.deepEqual(credits, ['Night Lanterns', 'Mara Quill', 'Session Horn', 'Low Tide Choir']);
+      // Low Tide Choir now has an unlisted track-only row, and an album on
+      // disk: held, linked to the local artist, on both endpoints.
+      assert.equal((await server.ok('/api/discogs/search?q=Low%20Tide%20Choir')).artists[0].library, 'local-artist:Low Tide Choir');
+      assert.equal((await server.ok('/api/discogs/artist?id=93')).artist.library, 'local-artist:Low Tide Choir');
       // The guest has a row, but Library does not list them, so Discogs
       // results must not call them held: both endpoints offer to add them.
       const guestStatus = async () => [
