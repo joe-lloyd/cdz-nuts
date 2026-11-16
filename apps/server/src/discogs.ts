@@ -570,9 +570,10 @@ export class DiscogsClient {
    * followed before filtering, up to ARTIST_PAGES of them: a prolific artist's
    * appearances would otherwise crowd their own records off the first page.
    */
-  async artistAlbums(id: number): Promise<CatalogueAlbum[]> {
+  async artistAlbums(id: number): Promise<{ albums: CatalogueAlbum[]; truncated: boolean }> {
     const entries: Record<string, unknown>[] = [];
-    for (let page = 1, pages = 1; page <= Math.min(pages, ARTIST_PAGES); page += 1) {
+    let pages = 1;
+    for (let page = 1; page <= Math.min(pages, ARTIST_PAGES); page += 1) {
       const body = await this.request<{ pagination?: { pages?: number }; releases?: Record<string, unknown>[] }>(
         `/artists/${id}/releases`,
         { sort: 'year', sort_order: 'desc', per_page: '100', page: String(page) },
@@ -597,7 +598,9 @@ export class DiscogsClient {
         genres: [],
       });
     }
-    return albums;
+    // Discogs listed more pages than were read: what is missing may include
+    // the artist's own records, so the caller must not call this complete.
+    return { albums, truncated: pages > ARTIST_PAGES };
   }
 }
 

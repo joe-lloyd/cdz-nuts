@@ -138,7 +138,13 @@ function ArtistAlbums({ artist }: { artist: DiscogsArtistHit }) {
       {detail.isPending ? <p role="status">Loading albums…</p>
         : detail.error ? <div role="alert" className="discogs-error">{problem(detail.error)}
           <button type="button" onClick={() => void detail.refetch()}>Try again</button></div>
-        : detail.data.albums.length ? <AlbumGrid albums={detail.data.albums} />
+        : detail.data.albums.length ? <>
+          <AlbumGrid albums={detail.data.albums} />
+          {detail.data.truncated ? <p className="sub discogs-note">Discogs lists more for {artist.name} than was read here, so this list may be incomplete.</p> : null}
+        </>
+        // Cut short and empty means only that the part read held no albums of
+        // their own, not that Discogs has none.
+        : detail.data.truncated ? <p>No albums of {artist.name}'s own in the part of their Discogs listing read here. The listing was cut short, so Discogs may have more.</p>
         : <p>Discogs lists no albums for {artist.name}.</p>}
     </div>
   );

@@ -4193,6 +4193,7 @@ body.search-open .search-cancel { display: inline-flex; align-items: center; }
   background: var(--surface-soft);
 }
 .discogs-panel p { margin: 0; }
+.discogs-panel .discogs-note { margin-top: 12px; }
 .discogs-tracks { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .discogs-tracks li {
   display: grid;

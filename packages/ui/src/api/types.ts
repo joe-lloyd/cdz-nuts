@@ -336,6 +336,8 @@ export interface DiscogsAlbumDetail {
 export interface DiscogsArtistDetail {
   artist: DiscogsArtistHit & { profile: string | null };
   albums: DiscogsAlbumHit[];
+  /** Discogs listed more than the server read, so albums may be incomplete. */
+  truncated?: boolean;
 }
 
 export interface DiscogsAdded {

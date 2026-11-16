@@ -212,7 +212,9 @@ test('an artist discography keeps main credits only', async () => {
     { id: 7, type: 'release', title: 'Somebody Else', year: 2018, artist: 'Other Band', role: 'Appearance' },
   ] }));
   const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
-  assert.deepEqual((await client.artistAlbums(77)).map((album) => `${album.kind}:${album.id}`), ['master:501']);
+  const result = await client.artistAlbums(77);
+  assert.deepEqual(result.albums.map((album) => `${album.kind}:${album.id}`), ['master:501']);
+  assert.equal(result.truncated, false);
 });
 
 test('an artist discography follows every page before filtering, up to the page cap', async () => {
@@ -225,13 +227,30 @@ test('an artist discography follows every page before filtering, up to the page 
     return reply({ pagination: { page, pages: 3 }, releases });
   });
   const client = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: fetcher });
-  assert.deepEqual((await client.artistAlbums(77)).map((album) => album.id), [3, 5]);
+  assert.deepEqual(await client.artistAlbums(77).then((r) => ({ ids: r.albums.map((album) => album.id), truncated: r.truncated })),
+    { ids: [3, 5], truncated: false }, 'every page read: complete');
   assert.deepEqual(asked.map((call) => call.url.searchParams.get('page')), ['1', '2', '3']);
+});
 
-  const endless = fakeDiscogs((url) => reply({ pagination: { pages: 500 }, releases: [entry(Number(url.searchParams.get('page')))] }));
-  const capped = new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: endless.fetcher });
-  assert.equal((await capped.artistAlbums(77)).length, ARTIST_PAGES);
-  assert.equal(endless.asked.length, ARTIST_PAGES);
+test('a discography longer than the page cap says it was cut short, with or without main credits in it', async () => {
+  const entry = (id: number, role: string) => ({ id, type: 'master', title: `Album ${id}`, year: 2000, artist: 'The Quiet Ferns', role });
+  const pages = (role: string) => fakeDiscogs((url) =>
+    reply({ pagination: { pages: 500 }, releases: [entry(Number(url.searchParams.get('page')), role)] }));
+
+  const withMain = pages('Main');
+  const capped = await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: withMain.fetcher }).artistAlbums(77);
+  assert.equal(capped.albums.length, ARTIST_PAGES);
+  assert.equal(capped.truncated, true);
+  assert.equal(withMain.asked.length, ARTIST_PAGES, 'stops at the cap');
+
+  // The pages read hold only guest spots: no albums, but not "none exist".
+  const guestsOnly = pages('Appearance');
+  const empty = await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: guestsOnly.fetcher }).artistAlbums(77);
+  assert.deepEqual(empty, { albums: [], truncated: true });
+
+  // Exactly the cap is complete.
+  const exact = fakeDiscogs((url) => reply({ pagination: { pages: ARTIST_PAGES }, releases: [entry(Number(url.searchParams.get('page')), 'Main')] }));
+  assert.equal((await new DiscogsClient('t', '', '', { api: 'https://discogs.test', fetch: exact.fetcher }).artistAlbums(77)).truncated, false);
 });
 
 test('track durations parse minutes and hours, and blank stays unknown', () => {

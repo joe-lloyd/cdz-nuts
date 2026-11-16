@@ -180,11 +180,25 @@ test('HTTP: Discogs search, add to the library, dedupe, and failure states', { t
       assert.deepEqual(await libraryArtists(), ['Mara Quill', 'Night Lanterns', 'The Quiet Ferns']);
       const credits = (await server.ok('/api/album?id=discogs-master:601')).tracks.map((t: any) => t.artists);
       assert.deepEqual(credits, ['Night Lanterns', 'Mara Quill', 'Session Horn']);
+      // The guest has a row, but Library does not list them, so Discogs
+      // results must not call them held: both endpoints offer to add them.
+      const guestStatus = async () => [
+        (await server.ok('/api/discogs/search?q=Session%20Horn')).artists[0].library,
+        (await server.ok('/api/discogs/artist?id=92')).artist.library,
+      ];
+      assert.deepEqual(await guestStatus(), [null, null]);
       // Putting the guest in the library on purpose needs no Discogs call: the row exists.
       const requestsBeforeGuest = fake.requests.length;
       assert.deepEqual(await server.ok('/api/discogs/add', { kind: 'artist', id: 92 }), { kind: 'artist', id: 'discogs-artist:92', added: true });
       assert.equal(fake.requests.length, requestsBeforeGuest);
       assert.deepEqual(await libraryArtists(), ['Mara Quill', 'Night Lanterns', 'Session Horn', 'The Quiet Ferns']);
+      assert.deepEqual(await guestStatus(), ['discogs-artist:92', 'discogs-artist:92']);
+
+      // A discography longer than the pages read is reported as cut short,
+      // even when the pages read held no albums of the artist's own.
+      const capped = await server.ok('/api/discogs/artist?id=91');
+      assert.deepEqual([capped.albums, capped.truncated], [[], true]);
+      assert.equal((await server.ok('/api/discogs/artist?id=77')).truncated, false);
       // A new artist's page resolves at once (the name cache is rebuilt after an add).
       assert.equal((await server.ok('/api/artist?id=discogs-artist:91')).artist.name, 'Mara Quill');
 

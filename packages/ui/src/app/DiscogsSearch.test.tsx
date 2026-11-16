@@ -82,3 +82,40 @@ test('a failed add says why and leaves the button to try again', async () => {
   await waitFor(() => expect(notify).toHaveBeenCalledWith('Could not add Hollow Lanterns. Discogs is unavailable right now. Your library search still works.', true));
   expect(screen.getByRole('button', { name: 'Add Hollow Lanterns to library' })).toBeEnabled();
 });
+
+test('a discography cut short says it may be incomplete, and an empty one does not claim Discogs has none', async () => {
+  const discography = (albums: unknown[], truncated: boolean) => ({ artist: { ...ferns, profile: null }, albums, truncated });
+  get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/api/discogs/artist')
+    ? discography([lanterns], true)
+    : { artists: [ferns], albums: [] }));
+  draw();
+  await userEvent.click(screen.getByRole('button', { name: 'Search Discogs' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Show albums by The Quiet Ferns' }));
+  const panel = await screen.findByRole('region', { name: 'Albums by The Quiet Ferns' });
+  expect(await within(panel).findByText('Hollow Lanterns')).toBeInTheDocument();
+  expect(within(panel).getByText(/this list may be incomplete/)).toBeInTheDocument();
+});
+
+test('an empty discography cut short is not reported as no albums', async () => {
+  get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/api/discogs/artist')
+    ? { artist: { ...ferns, profile: null }, albums: [], truncated: true }
+    : { artists: [ferns], albums: [] }));
+  draw();
+  await userEvent.click(screen.getByRole('button', { name: 'Search Discogs' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Show albums by The Quiet Ferns' }));
+  const panel = await screen.findByRole('region', { name: 'Albums by The Quiet Ferns' });
+  expect(await within(panel).findByText(/The listing was cut short, so Discogs may have more/)).toBeInTheDocument();
+  expect(within(panel).queryByText(/Discogs lists no albums/)).toBeNull();
+});
+
+test('a complete empty discography says Discogs lists no albums', async () => {
+  get.mockImplementation((path: string) => Promise.resolve(path.startsWith('/api/discogs/artist')
+    ? { artist: { ...ferns, profile: null }, albums: [], truncated: false }
+    : { artists: [ferns], albums: [] }));
+  draw();
+  await userEvent.click(screen.getByRole('button', { name: 'Search Discogs' }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Show albums by The Quiet Ferns' }));
+  const panel = await screen.findByRole('region', { name: 'Albums by The Quiet Ferns' });
+  expect(await within(panel).findByText('Discogs lists no albums for The Quiet Ferns.')).toBeInTheDocument();
+  expect(within(panel).queryByText(/may be incomplete|cut short/)).toBeNull();
+});

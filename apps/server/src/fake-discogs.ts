@@ -74,6 +74,8 @@ const hit = (type: string, id: number, title: string, extra: Record<string, unkn
 
 function search(q: string, type: string): Record<string, unknown>[] {
   const term = q.toLowerCase();
+  // The session player credited on one track of Borrowed Light.
+  if (term.includes('session')) return type === 'artist' ? [hit('artist', 92, 'Session Horn')] : [];
   if (!['quiet', 'ferns', 'lantern', 'bloom'].some((word) => term.includes(word))) return [];
   if (type === 'artist') return [hit('artist', 77, BAND.name)];
   if (type === 'master') {
@@ -145,6 +147,18 @@ export async function startFakeDiscogs(): Promise<FakeDiscogs> {
         { id: 9002, type: 'release', title: 'Demo Tape', year: 2017, artist: BAND.name, role: 'Main', format: 'Cassette, EP', thumb: '' },
         { id: 4242, type: 'release', title: 'Friends Compilation', year: 2020, artist: 'Various', role: 'TrackAppearance' },
       ] });
+    }
+    match = /^\/artists\/(\d+)\/releases$/.exec(url.pathname);
+    if (match && ARTISTS[Number(match[1])]) {
+      // Mara Quill (91) sings on a lot of other people's records: more pages
+      // than the app reads, every one of them guest spots.
+      if (match[1] === '91') {
+        const page = Number(url.searchParams.get('page') ?? 1);
+        return send(200, { pagination: { page, pages: 9 }, releases: [
+          { id: 7000 + page, type: 'release', title: `Guest Spot ${page}`, year: 2020, artist: 'Various', role: 'Appearance' },
+        ] });
+      }
+      return send(200, { pagination: { page: 1, pages: 1 }, releases: [] });
     }
     return send(404, { message: 'The requested resource was not found.' });
   });

@@ -1125,6 +1125,28 @@ function likedAlbums() {
   return [...merged.values()];
 }
 
+/**
+ * Our id for a Discogs artist when Library lists them, otherwise null. A row
+ * alone is not enough: a guest credited on one track of an added album has a
+ * row (findArtist reuses it), but Library > Artists does not list them, so
+ * the Discogs results must still offer to add them. The conditions mirror
+ * likedArtists() below, one artist at a time. An artist known only from
+ * files on disk counts as held: their albums are listed under Albums.
+ */
+function libraryArtistId(artist: { id: number; name: string }): string | null {
+  const id = discogsLibrary.findArtist(artist);
+  if (!id || id.startsWith('local-artist:')) return id;
+  if (appLikes.choices('artist').some((choice) => choice.id === id && choice.liked)) return id;
+  const listed = tasteDb.prepare(`
+    SELECT 1 FROM artists a WHERE a.id = ?1 AND (
+      a.is_followed = 1 OR a.unfollowed_at IS NOT NULL
+      OR a.id IN (SELECT artist_id FROM ${DISCOGS_LIBRARY_ARTISTS})
+      OR EXISTS (SELECT 1 FROM top_artists t WHERE t.artist_id = a.id AND t.time_range = 'medium_term')
+      OR EXISTS (SELECT 1 FROM track_artists ta JOIN liked_tracks lt ON lt.track_id = ta.track_id
+                  WHERE ta.artist_id = a.id AND lt.removed_at IS NULL))`).get(id);
+  return listed ? id : null;
+}
+
 function likedArtists() {
   // Counted once per table and joined, not once per artist: the correlated
   // version ran two subqueries for each of 15,000 artists and took 1.6s.
@@ -2794,7 +2816,7 @@ async function discogsRoute(url: URL, req: Request, res: Reply): Promise<void> {
       if (term.length < 2) { json(res, 200, { artists: [], albums: [] }); return; }
       const found = await discogs.searchCatalogue(term);
       json(res, 200, {
-        artists: found.artists.map((artist) => ({ ...artist, library: discogsLibrary.findArtist(artist) })),
+        artists: found.artists.map((artist) => ({ ...artist, library: libraryArtistId(artist) })),
         albums: found.albums.map((album) => ({ ...album, library: albumStatus(album) })),
       });
       return;
@@ -2815,10 +2837,12 @@ async function discogsRoute(url: URL, req: Request, res: Reply): Promise<void> {
     if (url.pathname === '/api/discogs/artist') {
       const id = positive(params.get('id'));
       if (!id) { json(res, 400, { error: 'id is required' }); return; }
-      const [artist, albums] = await Promise.all([discogs.artist(id), discogs.artistAlbums(id)]);
+      const [artist, discography] = await Promise.all([discogs.artist(id), discogs.artistAlbums(id)]);
       json(res, 200, {
-        artist: { ...artist, library: discogsLibrary.findArtist(artist) },
-        albums: albums.map((album) => ({ ...album, library: albumStatus({ ...album, artist: album.artist || artist.name }) })),
+        artist: { ...artist, library: libraryArtistId(artist) },
+        albums: discography.albums.map((album) => ({ ...album, library: albumStatus({ ...album, artist: album.artist || artist.name }) })),
+        // More pages than were read: the list (even an empty one) may be incomplete.
+        truncated: discography.truncated,
       });
       return;
     }
