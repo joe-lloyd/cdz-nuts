@@ -41,11 +41,38 @@ Three things fall out of it for free:
   Local Authority. The app bundles that root and pins it — neither macOS nor
   Windows has to trust anything, and only our CA is accepted, so a captive
   portal can't MITM the connection even with a cert the OS *would* accept.
-- **Seeking works.** `Range` headers pass straight through, which is what
-  scrubbing and the player's ~20-second gapless prefetch depend on.
+- **Seeking works.** `Range` requests are answered properly, which is what
+  scrubbing and the player's ~20-second gapless prefetch depend on. Audio
+  ranges come from the read-ahead below; everything else passes straight
+  through.
 - **No reliance on `192.168.2.23:8091`.** That port serves the whole app
   unauthenticated on the LAN and is a known bug; this goes through Caddy on 443
   like everything else.
+
+## Audio is read ahead
+
+The system WebView does not buffer a song. On macOS, AVFoundation asks for
+it a few seconds at a time and keeps about four seconds queued. One request
+that fails is reported as the song **ending**, not as an error. On 2026-11-25
+Caddy on pi-server restarted for twelve seconds and a six-minute FLAC
+"ended" at 3:22. The player then went on to the next song.
+
+So `src-tauri/src/stream.rs` does not fetch audio one request at a time. The
+first request for a song starts one download of the whole file into a
+cache folder, and every range the player asks for is answered from it. On
+the LAN a 44 MB FLAC is on disk in about a second. A dropped connection or a
+restart at home is retried from the byte it stopped at, and the player only
+waits if it catches up with the download. The last three songs are kept, for
+Previous; older files are deleted, and the folder is cleared at launch.
+
+Home still answers anything the read-ahead cannot: a seek far past the
+download, a song home refuses, or a download that has given up. The player
+gets home's own answer, as it did before.
+
+The player has a second guard for any browser: an `ended` more than three
+seconds short of the song's length is treated as a broken stream. It
+reconnects and carries on from where the song stopped, and waits for the
+server if the server has gone.
 
 ## The UI is `packages/ui`
 

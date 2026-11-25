@@ -20,7 +20,7 @@ tauri-plugin-single-instance = "2"
 tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "net", "time", "io-util", "fs", "sync"] }
 # rustls with manual roots: the homelab CA is the only root we add, and we do
 # not want the OS trust store deciding anything about *.home.arpa.
 reqwest = { version = "0.12", default-features = false, features = [
