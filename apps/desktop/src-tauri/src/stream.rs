@@ -783,6 +783,56 @@ mod tests {
         heard
     }
 
+    /// play_through, for a song home replaces part-way through. A request
+    /// whose read overlaps the restart is rightly handed back to home (None);
+    /// a player would get those bytes from home, so here it just asks again.
+    async fn play_through_a_replacement(streams: &Streams, key: &str, len: usize) -> Vec<u8> {
+        let mut heard = Vec::with_capacity(len);
+        let mut handed_back = 0;
+        while heard.len() < len {
+            match streams.serve(key, &format!("bytes={}-", heard.len())).await {
+                Some(response) => heard.extend_from_slice(body_of(&response)),
+                None => {
+                    handed_back += 1;
+                    assert!(
+                        handed_back < 100,
+                        "no answer at byte {} for good",
+                        heard.len()
+                    );
+                    tokio::time::sleep(Duration::from_millis(5)).await;
+                }
+            }
+        }
+        heard
+    }
+
+    /// The hand-back itself: an answer read while the file was started again
+    /// could mix two files under one Content-Range, so it is not sent.
+    #[tokio::test]
+    async fn an_answer_read_across_a_restart_is_handed_back_to_home() {
+        let dir = scratch("generation");
+        std::fs::create_dir_all(&dir.0).unwrap();
+        let entry = Entry {
+            key: KEY.to_owned(),
+            file: dir.0.join("song.audio"),
+            progress: watch::channel(Progress {
+                have: 10,
+                total: Some(10),
+                ..Progress::default()
+            })
+            .0,
+            task: Mutex::new(None),
+        };
+        std::fs::write(&entry.file, b"0123456789").unwrap();
+        let before = entry.progress.borrow().clone();
+
+        let same = answer(&entry, &before, 2, 5, 10).await.expect("answered");
+        assert_eq!(body_of(&same), b"2345");
+
+        entry.progress.send_modify(|p| p.generation += 1);
+        assert!(answer(&entry, &before, 2, 5, 10).await.is_none());
+    }
+
     #[tokio::test]
     async fn the_player_is_answered_from_one_download() {
         let fake = Fake::new(10 * MIB, &[]);
@@ -850,7 +900,7 @@ mod tests {
         let fake = Fake::new(4 * MIB, &[Act::CloseAfter(MIB), Act::Replace]);
         let (streams, _dir) = streams("replaced", &fake);
 
-        let heard = play_through(&streams, KEY, 4 * MIB).await;
+        let heard = play_through_a_replacement(&streams, KEY, 4 * MIB).await;
         assert!(
             heard[2 * MIB..] == fake.replacement[2 * MIB..],
             "after the change the player hears the new file"
@@ -869,7 +919,7 @@ mod tests {
         let fake = Fake::new(4 * MIB, &[Act::CloseAfter(MIB), Act::ReplaceQuietly]);
         let (streams, _dir) = streams("unverified", &fake);
 
-        let heard = play_through(&streams, KEY, 4 * MIB).await;
+        let heard = play_through_a_replacement(&streams, KEY, 4 * MIB).await;
         assert!(
             heard[2 * MIB..] == fake.replacement[2 * MIB..],
             "the player hears one file, not two joined"

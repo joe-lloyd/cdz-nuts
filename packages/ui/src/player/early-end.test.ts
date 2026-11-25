@@ -21,10 +21,13 @@ class FakeAudio {
   volume = 1;
   playbackRate = 1;
   error: unknown = null;
+  ended = false;
   private listeners = new Map<string, Listener[]>();
-  load() { this.currentTime = 0; this.paused = true; this.duration = NaN; }
+  load() { this.currentTime = 0; this.paused = true; this.duration = NaN; this.ended = false; }
   pause() { this.paused = true; }
   play(): Promise<void> {
+    // As the spec has it: play() on an ended element starts from the top.
+    if (this.ended) { this.currentTime = 0; this.ended = false; }
     this.paused = false;
     if (this.src.startsWith('data:')) return new Promise(() => {});
     return Promise.resolve();
@@ -93,6 +96,7 @@ function streamStopsAt(el: FakeAudio, seconds: number) {
   el.duration = seconds;
   el.fire('durationchange');
   el.paused = true;
+  el.ended = true;
   el.fire('pause');
   el.fire('ended');
 }
@@ -207,5 +211,41 @@ test('a seek made while it checks for the server is where it carries on from', a
   await vi.advanceTimersByTimeAsync(0);
 
   expect(player.getSnapshot().currentId).toBe('moved');
+  expect(el.currentTime, 'where the listener dragged it, not where it broke').toBe(240);
+});
+
+test('Play after the wait for the server gives up picks up where it stopped', async () => {
+  const el = await start('long-outage', 'meanwhile');
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    streamStopsAt(el, 202.29);
+    await vi.advanceTimersByTimeAsync(1000 * attempt);
+    el.duration = SCANNED_MS / 1000;
+    el.fire('loadedmetadata');
+  }
+  online = false;
+  streamStopsAt(el, 202.29);
+  // Longer than the player waits for the server.
+  await vi.advanceTimersByTimeAsync(16 * 60_000);
+  expect(player.getSnapshot().state).toBe('error');
+
+  online = true;
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('long-outage');
+  expect(el.currentTime, 'not from the top').toBeCloseTo(202.29, 2);
+});
+
+test('a seek made while it waits to retry is where the retry goes', async () => {
+  const el = await start('impatient', 'later-still');
+
+  streamStopsAt(el, 202.29);
+  player.seekTo(240);
+  await vi.advanceTimersByTimeAsync(1000);
+  el.duration = SCANNED_MS / 1000;
+  el.fire('loadedmetadata');
+
+  expect(player.getSnapshot().currentId).toBe('impatient');
   expect(el.currentTime, 'where the listener dragged it, not where it broke').toBe(240);
 });

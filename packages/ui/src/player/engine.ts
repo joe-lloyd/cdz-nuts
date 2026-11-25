@@ -931,11 +931,15 @@ class PlayerEngine {
     this.intentionallyPaused = false;
     this.bless();
     if (this.networkWait) { this.networkWait.now(); return; }
-    if ((!this.audio.src || this.audio.error) && this.queueIndex >= 0) {
+    // A song WebKit ended early, whose recovery gave up, is left ended with
+    // its src set and no error. play() on an ended element starts it from the
+    // top, so it is reloaded from the break point like a failed one.
+    const broken = Boolean(this.audio.error) || this.snapshot.state === 'error';
+    if ((!this.audio.src || broken) && this.queueIndex >= 0) {
       // After a failed retry the element was reloaded to zero; the break point
       // still knows where the track actually stopped.
       const at = this.breakPoint();
-      if (this.audio.error && this.current && at > 0) {
+      if (broken && this.current && at > 0) {
         this.pendingResume = { id: this.current.id, pos: at };
       }
       void this.playAt(this.queueIndex, { recovering: true });
@@ -1130,7 +1134,11 @@ class PlayerEngine {
         cleanup();
         if (this.resumeCleanup === cleanup) this.resumeCleanup = undefined;
         if (this.playbackId !== playbackId || element !== this.audio) return;
-        element.currentTime = at;
+        // A seek made during the backoff is where the listener wants to be.
+        const to = this.seekTarget ?? at;
+        this.seekTarget = null;
+        this.resumeFrom = to;
+        element.currentTime = to;
         void element.play();
       };
       const cleanup = () => element.removeEventListener('loadedmetadata', seek);
