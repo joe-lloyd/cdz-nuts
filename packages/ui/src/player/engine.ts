@@ -294,10 +294,10 @@ class PlayerEngine {
         // Out of quick retries. If the server is not even answering this is
         // the connection, not the file: wait for it rather than stop.
         const playbackId = this.playbackId;
-        const at = this.breakPoint();
         void this.reachable().then((ok) => {
           if (this.playbackId !== playbackId || this.intentionallyPaused) return;
-          if (!ok) { this.waitForNetwork(playbackId, at); return; }
+          // Read after the probe: a seek made while it was out is where to go.
+          if (!ok) { this.waitForNetwork(playbackId, this.breakPoint()); return; }
           this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed', canReconnect: true });
           this.notify('Playback stopped. The archive may have gone offline.', true);
         });
@@ -1067,10 +1067,10 @@ class PlayerEngine {
     // answers and the stream still stops at the same place, that place is
     // as far as the file goes, so carry on with the queue.
     const playbackId = this.playbackId;
-    const at = this.breakPoint();
     void this.reachable().then((ok) => {
       if (this.playbackId !== playbackId || this.intentionallyPaused || this.audio !== el) return;
-      if (!ok) { this.waitForNetwork(playbackId, at); return; }
+      // Read after the probe: a seek made while it was out is where to go.
+      if (!ok) { this.waitForNetwork(playbackId, this.breakPoint()); return; }
       void this.next(true);
     });
   }

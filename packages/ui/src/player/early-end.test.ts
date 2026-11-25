@@ -184,3 +184,28 @@ test('a stream that keeps stopping at the same place moves on once the retries a
 
   expect(player.getSnapshot().currentId).toBe('onwards');
 });
+
+test('a seek made while it checks for the server is where it carries on from', async () => {
+  const el = await start('moved', 'past');
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    streamStopsAt(el, 202.29);
+    await vi.advanceTimersByTimeAsync(1000 * attempt);
+    el.duration = SCANNED_MS / 1000;
+    el.fire('loadedmetadata');
+  }
+  // Out of quick retries, the server gone. The listener drags the bar while
+  // the player is still asking whether the server answers.
+  online = false;
+  streamStopsAt(el, 202.29);
+  player.seekTo(240);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+
+  online = true;
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('moved');
+  expect(el.currentTime, 'where the listener dragged it, not where it broke').toBe(240);
+});

@@ -64,6 +64,8 @@ pub struct Opened {
     /// The length of the whole file, if home said.
     pub total: Option<u64>,
     pub content_type: Option<HeaderValue>,
+    /// Home's ETag, or failing that its Last-Modified.
+    pub validator: Option<HeaderValue>,
     pub body: BoxStream<'static, Result<Vec<u8>>>,
 }
 
@@ -123,6 +125,12 @@ struct Progress {
     have: u64,
     total: Option<u64>,
     content_type: Option<HeaderValue>,
+    /// Home's ETag or Last-Modified for the file, to tell a resumed answer
+    /// is still the same file.
+    validator: Option<HeaderValue>,
+    /// Bumped whenever the file on disk is thrown away and started again,
+    /// so an answer read across a restart is never sent.
+    generation: u64,
     state: State,
 }
 
@@ -199,7 +207,7 @@ impl Streams {
                     None
                 };
                 if let Some(last) = ready {
-                    return answer(&entry.file, &now, wanted.start, last, total).await;
+                    return answer(&entry, &now, wanted.start, last, total).await;
                 }
                 if now.state == State::Done {
                     return None;
@@ -280,13 +288,17 @@ fn prepare(dir: &Path) -> Result<()> {
 }
 
 /// Read `start..=last` back from disk as a 206.
+///
+/// None if the file was started again while it was being read: the bytes
+/// could then belong to a different file than `progress` describes.
 async fn answer(
-    file: &Path,
+    entry: &Entry,
     progress: &Progress,
     start: u64,
     last: u64,
     total: u64,
 ) -> Option<http::Response<Vec<u8>>> {
+    let file = &entry.file;
     let read = async {
         let mut handle = tokio::fs::File::open(file).await?;
         handle.seek(SeekFrom::Start(start)).await?;
@@ -301,6 +313,9 @@ async fn answer(
             return None;
         }
     };
+    if entry.progress.borrow().generation != progress.generation {
+        return None;
+    }
     let mut response = http::Response::builder()
         .status(206)
         .header("content-range", format!("bytes {start}-{last}/{total}"))
@@ -345,6 +360,8 @@ async fn fetch(upstream: &dyn Upstream, entry: &Entry, timing: Timing) -> Result
 
     let mut delay = timing.retry;
     let mut moved = Instant::now();
+    // Whether any audio has arrived, in this download or the one it resumes.
+    let mut flowed = have > 0;
     loop {
         let before = have;
         let opened = tokio::time::timeout(timing.stall, upstream.open(&entry.key, have)).await;
@@ -365,12 +382,14 @@ async fn fetch(upstream: &dyn Upstream, entry: &Entry, timing: Timing) -> Result
             Ok(Err(Failure::Unreachable(error))) => error,
             Err(_) => anyhow!("no answer in {:?}", timing.stall),
         };
-        if have == 0 {
+        flowed |= have > 0;
+        if !flowed {
             // Before any audio, home's answer is the answer: the player gets
             // it directly, the same as it did before the read-ahead.
             return Err(failure);
         }
-        if have > before {
+        // Any change counts, including a restart from the top.
+        if have != before {
             moved = Instant::now();
             delay = timing.retry;
         }
@@ -411,20 +430,23 @@ async fn receive(
     let Opened {
         start,
         content_type,
+        validator,
         mut body,
         ..
     } = opened;
-    // A different length is a different file: the song was replaced at home
-    // part-way through. Start it again from the top.
-    if entry
-        .progress
-        .borrow()
-        .total
-        .is_some_and(|known| known != total)
-    {
+    // A different length, or a different ETag or Last-Modified, is a
+    // different file: the song was replaced at home part-way through. Start
+    // it again from the top rather than join two files together.
+    let replaced = {
+        let known = entry.progress.borrow();
+        let length = known.total.is_some_and(|known| known != total);
+        let version = matches!((&known.validator, &validator), (Some(a), Some(b)) if a != b);
+        length || version
+    };
+    if replaced {
         restart(file, entry, have).await?;
         if start != 0 {
-            bail!("the file changed length at home");
+            bail!("the file changed at home");
         }
     }
     if start != *have {
@@ -439,6 +461,9 @@ async fn receive(
         p.total = Some(total);
         if content_type.is_some() {
             p.content_type = content_type;
+        }
+        if validator.is_some() {
+            p.validator = validator;
         }
     });
 
@@ -491,9 +516,12 @@ async fn write(
 /// Throw away what is on disk and start the file from its first byte.
 async fn restart(file: &mut tokio::fs::File, entry: &Entry, have: &mut u64) -> Result<()> {
     *have = 0;
+    // Before the file is touched, so a read that overlaps it is discarded.
     entry.progress.send_modify(|p| {
         p.have = 0;
         p.total = None;
+        p.validator = None;
+        p.generation += 1;
     });
     file.set_len(0).await.map_err(Disk)?;
     file.seek(SeekFrom::Start(0)).await.map_err(Disk)?;
@@ -561,6 +589,10 @@ impl Upstream for Home {
                 status => return Err(Failure::Status(status)),
             };
             let content_type = headers.get("content-type").cloned();
+            let validator = headers
+                .get("etag")
+                .or_else(|| headers.get("last-modified"))
+                .cloned();
             let body = response
                 .bytes_stream()
                 .map(|chunk| {
@@ -573,6 +605,7 @@ impl Upstream for Home {
                 start,
                 total,
                 content_type,
+                validator,
                 body,
             })
         })
@@ -600,10 +633,16 @@ mod tests {
         Refuse,
         /// Everything, with no length given.
         Unsized,
+        /// The song is replaced at home by another of the same length, and
+        /// this answer is from the new one.
+        Replace,
     }
 
     struct Fake {
         data: Arc<Vec<u8>>,
+        /// The same length as `data`, different bytes. See Act::Replace.
+        replacement: Arc<Vec<u8>>,
+        replaced: std::sync::atomic::AtomicBool,
         script: Mutex<VecDeque<Act>>,
         opens: Mutex<Vec<u64>>,
     }
@@ -612,6 +651,8 @@ mod tests {
         fn new(len: usize, script: &[Act]) -> Arc<Self> {
             Arc::new(Self {
                 data: Arc::new((0..len).map(|i| (i * 31 + i / 4099) as u8).collect()),
+                replacement: Arc::new((0..len).map(|i| (i * 7 + 3) as u8).collect()),
+                replaced: std::sync::atomic::AtomicBool::new(false),
                 script: Mutex::new(script.iter().copied().collect()),
                 opens: Mutex::new(Vec::new()),
             })
@@ -631,7 +672,16 @@ mod tests {
                 .unwrap()
                 .pop_front()
                 .unwrap_or(Act::Serve);
-            let data = self.data.clone();
+            if matches!(act, Act::Replace) {
+                self.replaced.store(true, Ordering::SeqCst);
+            }
+            let replaced = self.replaced.load(Ordering::SeqCst);
+            let data = if replaced {
+                self.replacement.clone()
+            } else {
+                self.data.clone()
+            };
+            let validator = HeaderValue::from_static(if replaced { "\"v2\"" } else { "\"v1\"" });
             Box::pin(async move {
                 let total = data.len() as u64;
                 let rest = data[(from as usize).min(data.len())..].to_vec();
@@ -643,7 +693,7 @@ mod tests {
                     _ => Some(total),
                 };
                 let body = match act {
-                    Act::Serve | Act::Unsized => stream::iter(pieces(&rest)).boxed(),
+                    Act::Serve | Act::Unsized | Act::Replace => stream::iter(pieces(&rest)).boxed(),
                     Act::CloseAfter(n) => stream::iter(pieces(&rest[..n.min(rest.len())])).boxed(),
                     Act::ResetAfter(n) => stream::iter(pieces(&rest[..n.min(rest.len())]))
                         .chain(stream::once(async { Err(anyhow!("connection reset")) }))
@@ -658,6 +708,7 @@ mod tests {
                     start: from,
                     total,
                     content_type: Some(HeaderValue::from_static("audio/flac")),
+                    validator: Some(validator),
                     body,
                 })
             })
@@ -777,6 +828,25 @@ mod tests {
             "each retry asks for the bytes from where it stopped, not the song again: {opens:?}"
         );
         assert_eq!(opens[5], 6 * MIB as u64);
+    }
+
+    /// Two files joined at the byte where the connection dropped would be
+    /// neither song. Equal lengths, so only the validator can tell.
+    #[tokio::test]
+    async fn a_song_replaced_at_home_mid_download_starts_again() {
+        let fake = Fake::new(4 * MIB, &[Act::CloseAfter(MIB), Act::Replace]);
+        let (streams, _dir) = streams("replaced", &fake);
+
+        let heard = play_through(&streams, KEY, 4 * MIB).await;
+        assert!(
+            heard[2 * MIB..] == fake.replacement[2 * MIB..],
+            "after the change the player hears the new file"
+        );
+        assert_eq!(
+            fake.opens(),
+            vec![0, MIB as u64, 0],
+            "the new file from its first byte"
+        );
     }
 
     #[tokio::test]
