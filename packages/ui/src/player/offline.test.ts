@@ -81,6 +81,7 @@ test('the next track starts by itself once the connection is back', async () => 
   // The track runs out while the phone is between networks.
   online = false;
   vi.setSystemTime(Date.now() + 20_000);
+  active().currentTime = 210;
   active().fire('ended');
   await vi.advanceTimersByTimeAsync(0);
   const waiting = player.getSnapshot();

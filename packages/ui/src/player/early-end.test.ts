@@ -1,0 +1,186 @@
+// The bug this pins: a song that "ended" two-thirds of the way through.
+//
+// On 2026-11-25 the reverse proxy at home restarted for twelve seconds while
+// the Mac app was playing a six-minute FLAC. The next range request failed,
+// and WebKit does not report that as an error: AVFoundation plays to the last
+// byte it has, WebKit rewrites the element's duration to that point, and
+// `ended` fires. The player took it at its word and skipped to the next song
+// at 3:22. These tests replay that sequence: duration overwritten, then
+// `ended`, with no `error` at any point.
+
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
+
+type Listener = (event: { target: unknown }) => void;
+
+class FakeAudio {
+  preload = '';
+  src = '';
+  currentTime = 0;
+  duration = NaN;
+  paused = true;
+  volume = 1;
+  playbackRate = 1;
+  error: unknown = null;
+  private listeners = new Map<string, Listener[]>();
+  load() { this.currentTime = 0; this.paused = true; this.duration = NaN; }
+  pause() { this.paused = true; }
+  play(): Promise<void> {
+    this.paused = false;
+    if (this.src.startsWith('data:')) return new Promise(() => {});
+    return Promise.resolve();
+  }
+  removeAttribute(name: string) { if (name === 'src') this.src = ''; }
+  addEventListener(type: string, fn: Listener) {
+    this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn]);
+  }
+  removeEventListener(type: string, fn: Listener) {
+    this.listeners.set(type, (this.listeners.get(type) ?? []).filter((f) => f !== fn));
+  }
+  fire(type: string) {
+    for (const fn of [...(this.listeners.get(type) ?? [])]) fn({ target: this });
+  }
+}
+
+const created: FakeAudio[] = [];
+vi.stubGlobal('Audio', class extends FakeAudio {
+  constructor() { super(); created.push(this); }
+});
+
+/** The scanned length of every track, as the server sends it on resolve. */
+const SCANNED_MS = 373_453;
+/** False while the server is unreachable: every request fails. */
+let online = true;
+
+vi.stubGlobal('fetch', vi.fn((url: string) => {
+  if (!online) return Promise.reject(new TypeError('Failed to fetch'));
+  const json = (body: unknown) => Promise.resolve(new Response(JSON.stringify(body), {
+    headers: { 'content-type': 'application/json' },
+  }));
+  if (url.startsWith('/api/player/resolve')) {
+    const id = new URL(url, 'http://localhost').searchParams.get('id') ?? '';
+    return json({
+      available: true,
+      streamUrl: `/api/player/stream?id=${id}`,
+      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: SCANNED_MS },
+    });
+  }
+  if (url.startsWith('/api/player/status')) return json({ state: 'ready' });
+  return json({});
+}));
+
+const { player } = await import('./engine.ts');
+
+const item = (id: string) => ({ id, name: `Track ${id}`, artists: 'Someone', durationMs: SCANNED_MS });
+const playing = () => created.find((el) => el.src.includes('/api/player/stream'))!;
+
+/** Start `first` of a two-track queue and let it report its real length. */
+async function start(first: string, second: string, ownLength = SCANNED_MS / 1000) {
+  player.setQueue([item(first), item(second)], first);
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+  const el = playing();
+  el.duration = ownLength;
+  el.fire('durationchange');
+  el.currentTime = 100;
+  el.fire('play');
+  el.fire('timeupdate');
+  return el;
+}
+
+/** What WebKit does when a range request fails: cut the length, then end. */
+function streamStopsAt(el: FakeAudio, seconds: number) {
+  el.currentTime = seconds;
+  el.duration = seconds;
+  el.fire('durationchange');
+  el.paused = true;
+  el.fire('pause');
+  el.fire('ended');
+}
+
+beforeEach(() => {
+  online = true;
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-11-25T08:57:00Z'));
+});
+afterEach(() => { vi.useRealTimers(); });
+
+test('a stream cut off mid-song picks up where it stopped instead of skipping', async () => {
+  const el = await start('spiral', 'after');
+  const url = el.src;
+
+  streamStopsAt(el, 202.29);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId, 'the song must not be skipped').toBe('spiral');
+  expect(player.getSnapshot().overline).toBe('Reconnecting');
+
+  await vi.advanceTimersByTimeAsync(1000);
+  el.duration = SCANNED_MS / 1000;
+  el.fire('loadedmetadata');
+
+  expect(el.src, 'the same stream is asked for again').toBe(url);
+  expect(el.currentTime, 'from where it stopped').toBeCloseTo(202.29, 2);
+  expect(el.paused).toBe(false);
+  expect(created.some((other) => other.src.includes('id=after'))).toBe(false);
+});
+
+test('a song that plays to its end still moves on', async () => {
+  const el = await start('whole', 'next-one');
+
+  streamStopsAt(el, SCANNED_MS / 1000 - 0.05);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('next-one');
+});
+
+test('a file shorter than the library says is not mistaken for a broken stream', async () => {
+  // The scan fell back to Spotify's length for another edition, but the file
+  // itself says 5:00 and played all of it.
+  const el = await start('edition', 'then', 300);
+
+  streamStopsAt(el, 300);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('then');
+});
+
+test('while the server is gone it waits for it, then carries on in the same song', async () => {
+  const el = await start('outage', 'later');
+
+  online = false;
+  streamStopsAt(el, 202.29);
+  // Each quick retry reloads the stream, which fails while the server is down.
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    await vi.advanceTimersByTimeAsync(1000 * attempt);
+    el.fire('error');
+  }
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().overline).toBe('Waiting for the connection');
+  expect(player.getSnapshot().currentId).toBe('outage');
+
+  online = true;
+  await vi.advanceTimersByTimeAsync(2000);
+  await vi.advanceTimersByTimeAsync(0);
+  el.fire('play');
+
+  expect(player.getSnapshot().currentId, 'still the same song').toBe('outage');
+  expect(el.src).toContain('id=outage');
+  expect(el.currentTime, 'from where it stopped').toBeCloseTo(202.29, 2);
+});
+
+test('a stream that keeps stopping at the same place moves on once the retries are spent', async () => {
+  const el = await start('truncated', 'onwards');
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    streamStopsAt(el, 202.29);
+    await vi.advanceTimersByTimeAsync(1000 * attempt);
+    el.duration = SCANNED_MS / 1000;
+    el.fire('loadedmetadata');
+  }
+  streamStopsAt(el, 202.29);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('onwards');
+});

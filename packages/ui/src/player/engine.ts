@@ -95,6 +95,14 @@ const RESUME_BACKOFF_MS = 1000;
 const RESUME_SETTLED_S = 3;
 
 /**
+ * How far short of the song's length an `ended` has to land before it is
+ * taken for a broken stream rather than the end. A real end lands within a
+ * frame of the length, so a few seconds leaves room for a length that is a
+ * little off without ever mistaking a three-minute cut for the end.
+ */
+const EARLY_END_S = 3;
+
+/**
  * Watching for a track that is being fetched.
  *
  * Pressing play on a track we do not have queues it for download, and the bar
@@ -253,6 +261,8 @@ class PlayerEngine {
   private networkWait: { cleanup: () => void; now: () => void; trackId: string; at: number } | undefined;
   /** Tracks already asked for, so a re-check does not queue them twice. */
   private wanted = new Set<string>();
+  /** The longest duration each element has reported for its source. See endedEarly. */
+  private reportedLength = new WeakMap<HTMLAudioElement, { src: string; seconds: number }>();
 
   constructor() {
     this.audioA = new Audio();
@@ -271,8 +281,11 @@ class PlayerEngine {
       el.addEventListener('play', (e) => { if (e.target === this.audio) this.onPlayState('playing'); });
       el.addEventListener('pause', (e) => { if (e.target === this.audio) this.onPlayState('paused'); });
       el.addEventListener('timeupdate', (e) => { if (e.target === this.audio) this.onTimeUpdate(); });
-      el.addEventListener('durationchange', (e) => { if (e.target === this.audio) this.emit(); });
-      el.addEventListener('ended', (e) => { if (e.target === this.audio) void this.next(true); });
+      el.addEventListener('durationchange', (e) => {
+        this.noteLength(el);
+        if (e.target === this.audio) this.emit();
+      });
+      el.addEventListener('ended', (e) => { if (e.target === this.audio) this.onEnded(); });
       el.addEventListener('error', (e) => {
         // A failed pre-buffer just falls back to the normal resolve path.
         if (e.target !== this.audio) { this.prefetch = null; return; }
@@ -1032,6 +1045,65 @@ class PlayerEngine {
     return this.resumeAttempts > 0 ? Math.max(now, this.resumeFrom) : now;
   }
 
+  /**
+   * `ended`, which is not always the end of the song.
+   *
+   * WebKit on macOS reports a stream that breaks part-way through as the
+   * song finishing. AVFoundation plays up to the last byte it received, then
+   * WebKit rewrites the element's duration to that point and fires `ended`.
+   * No `error` is fired, so resume() never runs. On 2026-11-25 the reverse
+   * proxy at home restarted for twelve seconds, a six-minute FLAC "ended" at
+   * 3:22, and the player went on to the next song.
+   *
+   * An end that lands well short of the song's length is a broken stream. It
+   * gets the same recovery as a failed request: the same stream again from
+   * where it stopped, then a wait for the server if it has gone.
+   */
+  private onEnded() {
+    const el = this.audio;
+    if (this.intentionallyPaused || !this.endedEarly(el)) { void this.next(true); return; }
+    if (this.resume()) return;
+    // Out of quick retries. If the server is gone, wait for it. If it
+    // answers and the stream still stops at the same place, that place is
+    // as far as the file goes, so carry on with the queue.
+    const playbackId = this.playbackId;
+    const at = this.breakPoint();
+    void this.reachable().then((ok) => {
+      if (this.playbackId !== playbackId || this.intentionallyPaused || this.audio !== el) return;
+      if (!ok) { this.waitForNetwork(playbackId, at); return; }
+      void this.next(true);
+    });
+  }
+
+  /**
+   * Whether `el` stopped well before its song does.
+   *
+   * By the time `ended` fires, WebKit has already overwritten `el.duration`
+   * with the point where the stream stopped, so it cannot be read then. The
+   * longest duration the element reported earlier is used instead, along
+   * with the scanned length. When both are known, both have to agree: either
+   * one alone can be off, the element's for Ogg and Opus and the scan's when
+   * it falls back to Spotify's length for another edition.
+   */
+  private endedEarly(el: HTMLAudioElement): boolean {
+    const at = el.currentTime;
+    const seen = this.reportedLength.get(el);
+    const own = seen?.src === el.src ? seen.seconds : 0;
+    const scanned = (this.current?.duration_ms ?? 0) / 1000;
+    const short = (length: number) => length > 0 && length - at > EARLY_END_S;
+    if (own > 0 && scanned > 0) return short(own) && short(scanned);
+    return short(own) || short(scanned);
+  }
+
+  /** Keep the longest duration `el` has reported for its current source. */
+  private noteLength(el: HTMLAudioElement) {
+    const seconds = el.duration;
+    if (!el.src || !Number.isFinite(seconds) || seconds <= 0) return;
+    const seen = this.reportedLength.get(el);
+    if (seen?.src === el.src && seen.seconds >= seconds) return;
+    this.reportedLength.set(el, { src: el.src, seconds });
+  }
+
   private resume(): boolean {
     const src = this.audio.src;
     if (this.intentionallyPaused || !src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
@@ -1184,6 +1256,7 @@ class PlayerEngine {
     if (this.resumeAttempts && this.audio.currentTime > this.resumeFrom + RESUME_SETTLED_S) {
       this.resumeAttempts = 0;
     }
+    this.noteLength(this.audio);
     this.tickPlayLog();
     this.pushNowPlaying();
     const duration = this.durationSeconds();

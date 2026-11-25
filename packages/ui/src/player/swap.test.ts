@@ -86,6 +86,8 @@ async function swapInto(a: string, b: string) {
   const second = withSrc(b);
   expect(second, 'the next track should be prefetched into the standby').toBeTruthy();
 
+  // `ended` lands at the end. Short of it, it is a broken stream; see early-end.test.ts.
+  first.currentTime = 210;
   first.fire('ended');
   await vi.advanceTimersByTimeAsync(0);
   expect(player.getSnapshot().currentId).toBe(b);
@@ -148,6 +150,7 @@ test('a stalled swap after queue history is trimmed still retries the current tr
   first.currentTime = 200;
   first.fire('timeupdate');
   await vi.advanceTimersByTimeAsync(0);
+  first.currentTime = 210;
   first.fire('ended');
   await vi.advanceTimersByTimeAsync(0);
   expect(player.getSnapshot().queueIndex).toBe(10);
