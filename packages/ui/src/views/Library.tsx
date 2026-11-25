@@ -7,10 +7,10 @@ import {
   usePlaylists, usePlaylistTracks, usePlays, useSavedAlbums,
 } from '../api/hooks.ts';
 import { get, post, qs } from '../api/client.ts';
-import { ago, day, dur, initial, shortDay, threeLetters } from '../lib/format.ts';
+import { ago, day, dur, shortDay, threeLetters } from '../lib/format.ts';
 import { useDebounced } from '../lib/useDebounced.ts';
 import { AlbumCell, TrackHeader, TrackRow } from '../components/rows.tsx';
-import { Badges, Empty, GenreChips, Pic, Skeleton, SpotifyButton } from '../components/primitives.tsx';
+import { Badges, Collage, coversOf, Empty, GenreChips, Pic, Skeleton, SpotifyButton } from '../components/primitives.tsx';
 import { CollectionPlay, PlayScope } from '../components/PlayScope.tsx';
 import type { Track } from '../api/types.ts';
 
@@ -126,17 +126,10 @@ export function Playlists() {
       {hidden ? <p className="note">{hidden} playlist{hidden === 1 ? '' : 's'} hidden — Spotify returned no tracks for {hidden === 1 ? 'it' : 'them'}.</p> : null}
       <div className="al-grid pl-grid">
         {pls.map((p) => {
-          const art = (p.images ?? []).slice(0, 4);
           return (
             <div className={`al-card pl-card${p.removed_at ? ' gone' : ''}`} key={p.id}>
               <Link className="al-art" to={`/playlist/${p.id}`} tabIndex={-1} aria-hidden="true">
-                {art.length ? (
-                  <span className={`pl-collage n${art.length}`}>
-                    {art.map((u, i) => <img key={i} src={u} alt="" loading="lazy" />)}
-                  </span>
-                ) : (
-                  <span className="pl-collage empty-collage"><span className="ph">{initial(p.name)}</span></span>
-                )}
+                <Collage covers={coversOf(p)} name={p.name} lazy />
               </Link>
               <div className="al-body">
                 <b><Link to={`/playlist/${p.id}`}>{p.name}</Link></b>
@@ -169,13 +162,7 @@ export function PlaylistDetail() {
     <>
       {meta ? (
         <div className="hero pl-hero">
-          {(meta.images ?? []).length ? (
-            <span className={`pl-collage n${Math.min(4, (meta.images ?? []).length)}`}>
-              {(meta.images ?? []).slice(0, 4).map((u, i) => <img key={i} src={u} alt="" />)}
-            </span>
-          ) : (
-            <span className="pl-collage empty-collage"><span className="ph">{initial(meta.name)}</span></span>
-          )}
+          <Collage covers={coversOf(meta)} name={meta.name} />
           <div className="pl-head">
           <h1>{meta.name}</h1>
           <div className="meta">
