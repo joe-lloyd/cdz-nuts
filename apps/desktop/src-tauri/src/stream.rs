@@ -362,8 +362,11 @@ async fn fetch(upstream: &dyn Upstream, entry: &Entry, timing: Timing) -> Result
     let mut moved = Instant::now();
     // Whether any audio has arrived, in this download or the one it resumes.
     let mut flowed = have > 0;
+    // The furthest the file has got. Only passing it counts as progress, so
+    // a song that keeps starting again and dropping at the same point still
+    // gives up.
+    let mut furthest = have;
     loop {
-        let before = have;
         let opened = tokio::time::timeout(timing.stall, upstream.open(&entry.key, have)).await;
         let failure = match opened {
             Ok(Ok(opened)) => {
@@ -388,8 +391,8 @@ async fn fetch(upstream: &dyn Upstream, entry: &Entry, timing: Timing) -> Result
             // it directly, the same as it did before the read-ahead.
             return Err(failure);
         }
-        // Any change counts, including a restart from the top.
-        if have != before {
+        if have > furthest {
+            furthest = have;
             moved = Instant::now();
             delay = timing.retry;
         }
@@ -434,19 +437,25 @@ async fn receive(
         mut body,
         ..
     } = opened;
-    // A different length, or a different ETag or Last-Modified, is a
-    // different file: the song was replaced at home part-way through. Start
-    // it again from the top rather than join two files together.
+    // Bytes are only appended to what is on disk when this answer is shown
+    // to be the same file. A different length, or a different ETag or
+    // Last-Modified, means the song was replaced at home part-way through;
+    // with no validator on either side there is no telling. Either way, start
+    // again from the top rather than risk joining two files together.
+    let resuming = *have > 0 && start == *have;
     let replaced = {
         let known = entry.progress.borrow();
         let length = known.total.is_some_and(|known| known != total);
-        let version = matches!((&known.validator, &validator), (Some(a), Some(b)) if a != b);
+        let version = match (&known.validator, &validator) {
+            (Some(was), Some(now)) => was != now,
+            _ => resuming,
+        };
         length || version
     };
     if replaced {
         restart(file, entry, have).await?;
         if start != 0 {
-            bail!("the file changed at home");
+            bail!("cannot tell that home still has the same file");
         }
     }
     if start != *have {
@@ -636,6 +645,8 @@ mod tests {
         /// The song is replaced at home by another of the same length, and
         /// this answer is from the new one.
         Replace,
+        /// As Replace, but this answer carries no ETag or Last-Modified.
+        ReplaceQuietly,
     }
 
     struct Fake {
@@ -672,7 +683,7 @@ mod tests {
                 .unwrap()
                 .pop_front()
                 .unwrap_or(Act::Serve);
-            if matches!(act, Act::Replace) {
+            if matches!(act, Act::Replace | Act::ReplaceQuietly) {
                 self.replaced.store(true, Ordering::SeqCst);
             }
             let replaced = self.replaced.load(Ordering::SeqCst);
@@ -693,7 +704,9 @@ mod tests {
                     _ => Some(total),
                 };
                 let body = match act {
-                    Act::Serve | Act::Unsized | Act::Replace => stream::iter(pieces(&rest)).boxed(),
+                    Act::Serve | Act::Unsized | Act::Replace | Act::ReplaceQuietly => {
+                        stream::iter(pieces(&rest)).boxed()
+                    }
                     Act::CloseAfter(n) => stream::iter(pieces(&rest[..n.min(rest.len())])).boxed(),
                     Act::ResetAfter(n) => stream::iter(pieces(&rest[..n.min(rest.len())]))
                         .chain(stream::once(async { Err(anyhow!("connection reset")) }))
@@ -708,7 +721,7 @@ mod tests {
                     start: from,
                     total,
                     content_type: Some(HeaderValue::from_static("audio/flac")),
-                    validator: Some(validator),
+                    validator: (!matches!(act, Act::ReplaceQuietly)).then_some(validator),
                     body,
                 })
             })
@@ -846,6 +859,25 @@ mod tests {
             fake.opens(),
             vec![0, MIB as u64, 0],
             "the new file from its first byte"
+        );
+    }
+
+    /// Without a validator a resumed answer cannot be shown to be the same
+    /// file, so it is not joined onto what is on disk.
+    #[tokio::test]
+    async fn a_resumed_answer_that_cannot_be_checked_starts_again() {
+        let fake = Fake::new(4 * MIB, &[Act::CloseAfter(MIB), Act::ReplaceQuietly]);
+        let (streams, _dir) = streams("unverified", &fake);
+
+        let heard = play_through(&streams, KEY, 4 * MIB).await;
+        assert!(
+            heard[2 * MIB..] == fake.replacement[2 * MIB..],
+            "the player hears one file, not two joined"
+        );
+        assert_eq!(
+            fake.opens(),
+            vec![0, MIB as u64, 0],
+            "the unverified answer is dropped and the file fetched from the top"
         );
     }
 
