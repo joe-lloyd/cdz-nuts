@@ -353,3 +353,17 @@ test('Pause just after a reconnect lands a hair early, then Play, just carries o
   expect(el.currentTime).toBeCloseTo(202.27, 2);
   expect(el.paused).toBe(false);
 });
+
+test('Previous while it waits to retry starts the song over', async () => {
+  const el = await start('again', 'not-next');
+
+  streamStopsAt(el, 202.29);
+  player.previous();
+  await vi.advanceTimersByTimeAsync(1000);
+  el.duration = SCANNED_MS / 1000;
+  el.fire('loadedmetadata');
+
+  expect(player.getSnapshot().currentId).toBe('again');
+  expect(el.currentTime, 'from the top, not back to where it broke').toBe(0);
+  expect(el.paused).toBe(false);
+});

@@ -922,8 +922,9 @@ class PlayerEngine {
    */
   previous() {
     if (this.audio.currentTime > 4) {
-      this.cancelHandoff();
-      this.audio.currentTime = 0;
+      // As a seek, so a retry or a wait for the server that is under way
+      // starts the song over too, instead of going back to where it broke.
+      this.seekTo(0);
       this.emit();
     } else if (this.queueIndex > 0) {
       void this.playAt(this.queueIndex - 1);
