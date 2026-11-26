@@ -39,6 +39,12 @@ pub const STREAM_PATH: &str = "/api/player/stream";
 /// before, for Previous. Older files are deleted.
 const KEEP: usize = 3;
 
+/// Downloads that run at once: the songs asked for most recently, which are
+/// the one playing and the one buffered next. An older one stops where it is,
+/// so a skipped song does not share the connection with the one playing, and
+/// carries on from there if the player asks for it again.
+const RUNNING: usize = 2;
+
 /// How far past the download a request may start and still wait for it. A
 /// seek further ahead than this goes straight to home rather than waiting
 /// for the download to get there, which over the tunnel could take a while.
@@ -139,7 +145,8 @@ enum State {
     #[default]
     Running,
     Done,
-    /// Given up on, or retired. Requests go straight to home.
+    /// Given up on, stopped for newer songs, or retired. Requests go
+    /// straight to home, and one for a song still kept starts it again.
     Failed,
 }
 
@@ -234,6 +241,7 @@ impl Streams {
             if entry.progress.borrow().state == State::Failed {
                 self.start(&entry);
             }
+            hold_back(&entries);
             return entry;
         }
         let dir = self.dir.as_ref().expect("serve checks the directory first");
@@ -249,6 +257,7 @@ impl Streams {
             entries.remove(0).retire();
         }
         self.start(&entry);
+        hold_back(&entries);
         entry
     }
 
@@ -266,7 +275,30 @@ impl Streams {
     }
 }
 
+/// Stop every download but the newest RUNNING, keeping what they have.
+fn hold_back(entries: &[Arc<Entry>]) {
+    let older = entries.len().saturating_sub(RUNNING);
+    for entry in &entries[..older] {
+        entry.stop();
+    }
+}
+
 impl Entry {
+    /// Stop downloading and release anyone waiting. The file stays, and a
+    /// later request carries on from the byte it reached.
+    fn stop(&self) {
+        if let Some(task) = self.task.lock().expect("stream task lock").take() {
+            task.abort();
+        }
+        self.progress.send_if_modified(|p| {
+            let running = p.state == State::Running;
+            if running {
+                p.state = State::Failed;
+            }
+            running
+        });
+    }
+
     /// Stop downloading, release anyone waiting, and delete the file.
     fn retire(&self) {
         if let Some(task) = self.task.lock().expect("stream task lock").take() {
@@ -385,6 +417,13 @@ async fn fetch(upstream: &dyn Upstream, entry: &Entry, timing: Timing) -> Result
             Ok(Err(Failure::Unreachable(error))) => error,
             Err(_) => anyhow!("no answer in {:?}", timing.stall),
         };
+        if have < furthest {
+            // Home replaced the song and the file started again from the
+            // top. Progress is counted on the new file from here.
+            furthest = have;
+            moved = Instant::now();
+            delay = timing.retry;
+        }
         flowed |= have > 0;
         if !flowed {
             // Before any audio, home's answer is the answer: the player gets
@@ -1010,6 +1049,67 @@ mod tests {
             fake.data[2 * MIB..2 * MIB + 1024]
         );
         assert_eq!(*fake.opens().last().unwrap(), MIB as u64);
+    }
+
+    /// The state of `key`'s download, without asking for it (which would
+    /// start a stopped one again).
+    fn state_of(streams: &Streams, key: &str) -> State {
+        let entries = streams.entries.lock().unwrap();
+        let entry = entries.iter().find(|e| e.key == key).unwrap();
+        let state = entry.progress.borrow().state;
+        state
+    }
+
+    #[tokio::test]
+    async fn a_song_skipped_past_stops_downloading_and_carries_on_if_asked_for() {
+        let fake = Fake::new(4 * MIB, &[Act::HangAfter(MIB), Act::HangAfter(MIB)]);
+        let (streams, _dir) = streams("running", &fake);
+        let [a, b, c] =
+            ["skipped", "buffered", "playing"].map(|id| format!("{STREAM_PATH}?id={id}"));
+
+        assert!(streams.serve(&a, "bytes=0-1023").await.is_some());
+        assert!(streams.serve(&b, "bytes=0-1023").await.is_some());
+        assert_eq!(state_of(&streams, &a), State::Running);
+        assert!(streams.serve(&c, "bytes=0-1023").await.is_some());
+
+        assert_eq!(state_of(&streams, &a), State::Failed, "the oldest stops");
+        assert_eq!(state_of(&streams, &b), State::Running);
+
+        // Previous: the song carries on from the byte it reached.
+        let back = streams.serve(&a, &format!("bytes={MIB}-")).await.unwrap();
+        assert_eq!(body_of(&back)[..1024], fake.data[MIB..MIB + 1024]);
+        assert_eq!(*fake.opens().last().unwrap(), MIB as u64);
+    }
+
+    #[tokio::test]
+    async fn a_song_replaced_at_home_counts_progress_on_the_new_file() {
+        // The first download gets 2 MiB in, home replaces the song, and the
+        // new file keeps dropping below where the old one had got to.
+        let script: Vec<Act> = [Act::CloseAfter(2 * MIB), Act::Replace]
+            .into_iter()
+            .chain(std::iter::repeat_n(Act::CloseAfter(64 * 1024), 30))
+            .collect();
+        let fake = Fake::new(4 * MIB, &script);
+        let dir = scratch("replaced-progress");
+        let timing = Timing {
+            give_up: Duration::from_millis(200),
+            ..quick()
+        };
+        let streams = Streams::new(fake.clone(), dir.0.clone(), timing);
+
+        assert!(streams.serve(KEY, "bytes=0-1023").await.is_some());
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while state_of(&streams, KEY) == State::Running {
+            assert!(Instant::now() < deadline, "the download never finished");
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert_eq!(
+            state_of(&streams, KEY),
+            State::Done,
+            "it gave up while moving"
+        );
+        let heard = play_through(&streams, KEY, 4 * MIB).await;
+        assert!(heard == *fake.replacement, "the player gets the new file");
     }
 
     #[tokio::test]

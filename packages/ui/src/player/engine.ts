@@ -103,6 +103,17 @@ const RESUME_SETTLED_S = 3;
 const EARLY_END_S = 3;
 
 /**
+ * As EARLY_END_S, when only one length is known to check against. The
+ * element's own figure is an estimate for some files (VBR MP3 without a
+ * header, Ogg) and the scanned one can be another edition's, so on its own
+ * either gets more room. A stream cut mid-song is still minutes short.
+ */
+const LONE_EARLY_END_S = 15;
+
+/** How far short of its target a seek may land and still count as landed. */
+const SEEK_SLOP_S = 0.5;
+
+/**
  * Watching for a track that is being fetched.
  *
  * Pressing play on a track we do not have queues it for download, and the bar
@@ -1060,7 +1071,8 @@ class PlayerEngine {
    * Pause leaves it that way, and play() on it starts the song from the top.
    */
   private recoveryCut(): boolean {
-    return this.resumeAttempts > 0 && (this.audio.ended || this.audio.currentTime < this.resumeFrom);
+    return this.resumeAttempts > 0
+      && (this.audio.ended || this.audio.currentTime < this.resumeFrom - SEEK_SLOP_S);
   }
 
   /**
@@ -1091,6 +1103,7 @@ class PlayerEngine {
       if (this.playbackId !== playbackId || this.intentionallyPaused || this.audio !== el) return;
       // Read after the probe: a seek made while it was out is where to go.
       if (!ok) { this.waitForNetwork(playbackId, this.breakPoint()); return; }
+      this.resetRetries();
       void this.next(true);
     });
   }
@@ -1110,9 +1123,9 @@ class PlayerEngine {
     const seen = this.reportedLength.get(el);
     const own = seen?.src === el.src ? seen.seconds : 0;
     const scanned = (this.current?.duration_ms ?? 0) / 1000;
-    const short = (length: number) => length > 0 && length - at > EARLY_END_S;
-    if (own > 0 && scanned > 0) return short(own) && short(scanned);
-    return short(own) || short(scanned);
+    const short = (length: number, by: number) => length > 0 && length - at > by;
+    if (own > 0 && scanned > 0) return short(own, EARLY_END_S) && short(scanned, EARLY_END_S);
+    return short(own, LONE_EARLY_END_S) || short(scanned, LONE_EARLY_END_S);
   }
 
   /** Keep the longest duration `el` has reported for its current source. */

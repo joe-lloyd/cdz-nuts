@@ -65,12 +65,21 @@ restart at home is retried from the byte it stopped at, and the player only
 waits if it catches up with the download. The last three songs are kept, for
 Previous; older files are deleted, and the folder is cleared at launch.
 
+Only the two songs asked for most recently download at once: the one playing
+and the one buffered next. A song skipped past stops where it is, so over the
+tunnel it does not take bandwidth from the one playing, and carries on from
+there if the player asks for it again. A song already on disk is not checked
+against home again. If home replaces it, the new file is heard once the old
+one drops out of the last three, or after a restart.
+
 Home still answers anything the read-ahead cannot: a seek far past the
 download, a song home refuses, or a download that has given up. The player
 gets home's own answer, as it did before.
 
 The player has a second guard for any browser: an `ended` more than three
-seconds short of the song's length is treated as a broken stream. It
+seconds short of the song's length is treated as a broken stream. That is
+fifteen seconds when the file's own length or the scanned one is missing,
+because the one left can be an estimate. It
 reconnects and carries on from where the song stopped, and waits for the
 server if the server has gone.
 

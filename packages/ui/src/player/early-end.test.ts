@@ -53,6 +53,8 @@ vi.stubGlobal('Audio', class extends FakeAudio {
 const SCANNED_MS = 373_453;
 /** False while the server is unreachable: every request fails. */
 let online = true;
+/** What resolve says the song's scanned length is; null when it has none. */
+let scannedMs: number | null = SCANNED_MS;
 
 vi.stubGlobal('fetch', vi.fn((url: string) => {
   if (!online) return Promise.reject(new TypeError('Failed to fetch'));
@@ -64,7 +66,7 @@ vi.stubGlobal('fetch', vi.fn((url: string) => {
     return json({
       available: true,
       streamUrl: `/api/player/stream?id=${id}`,
-      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: SCANNED_MS },
+      track: { id, name: `Track ${id}`, artists: 'Someone', duration_ms: scannedMs },
     });
   }
   if (url.startsWith('/api/player/status')) return json({ state: 'ready' });
@@ -103,6 +105,7 @@ function streamStopsAt(el: FakeAudio, seconds: number) {
 
 beforeEach(() => {
   online = true;
+  scannedMs = SCANNED_MS;
   vi.useFakeTimers();
   vi.setSystemTime(new Date('2026-11-25T08:57:00Z'));
 });
@@ -287,4 +290,66 @@ test('Pause while a retry reloads the stream, then Play, picks up where it stopp
 
   expect(player.getSnapshot().currentId).toBe('paused-mid-reload');
   expect(el.currentTime, 'not from the top').toBeCloseTo(202.29, 2);
+});
+
+test('with only the file\'s own length to go by, a few seconds short is still the end', async () => {
+  // No scanned length, and an estimated one from the file that is 5 s long.
+  scannedMs = null;
+  const el = await start('estimated', 'following', 245);
+
+  streamStopsAt(el, 240);
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('following');
+});
+
+test('Play at the end of the queue after a song that kept stopping starts it over', async () => {
+  player.setQueue([item('cut-last')], 'cut-last');
+  await player.playAt(0);
+  await vi.advanceTimersByTimeAsync(0);
+  const el = playing();
+  el.duration = SCANNED_MS / 1000;
+  el.fire('durationchange');
+
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    streamStopsAt(el, 202.29);
+    await vi.advanceTimersByTimeAsync(1000 * attempt);
+    el.duration = SCANNED_MS / 1000;
+    el.fire('loadedmetadata');
+  }
+  streamStopsAt(el, 202.29);
+  await vi.advanceTimersByTimeAsync(0);
+  await vi.advanceTimersByTimeAsync(0);
+  expect(player.getSnapshot().overline).toBe('End of queue');
+
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(el.currentTime, 'from the top, as any end of the queue').toBe(0);
+  expect(el.paused).toBe(false);
+});
+
+test('Pause just after a reconnect lands a hair early, then Play, just carries on', async () => {
+  const el = await start('landed', 'after-that');
+  const pause = () => (player as unknown as { pause(): void }).pause();
+  const resolves = () => vi.mocked(fetch).mock.calls
+    .filter(([url]) => String(url).startsWith('/api/player/resolve')).length;
+
+  streamStopsAt(el, 202.29);
+  await vi.advanceTimersByTimeAsync(1000);
+  el.duration = SCANNED_MS / 1000;
+  el.fire('loadedmetadata');
+  // The decoder snaps the seek to a frame just before where it was asked.
+  el.currentTime = 202.27;
+  el.fire('play');
+  const before = resolves();
+
+  pause();
+  el.fire('pause');
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(resolves(), 'no reload').toBe(before);
+  expect(el.currentTime).toBeCloseTo(202.27, 2);
+  expect(el.paused).toBe(false);
 });
