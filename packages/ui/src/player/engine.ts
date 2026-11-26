@@ -931,10 +931,11 @@ class PlayerEngine {
     this.intentionallyPaused = false;
     this.bless();
     if (this.networkWait) { this.networkWait.now(); return; }
-    // A song WebKit ended early, whose recovery gave up, is left ended with
-    // its src set and no error. play() on an ended element starts it from the
-    // top, so it is reloaded from the break point like a failed one.
-    const broken = Boolean(this.audio.error) || this.snapshot.state === 'error';
+    // A song WebKit ended early is left ended with its src set and no error,
+    // whether its recovery gave up or Pause cut it short. play() on an ended
+    // element starts it from the top, so it is reloaded from the break point
+    // like a failed one.
+    const broken = Boolean(this.audio.error) || this.snapshot.state === 'error' || this.recoveryCut();
     if ((!this.audio.src || broken) && this.queueIndex >= 0) {
       // After a failed retry the element was reloaded to zero; the break point
       // still knows where the track actually stopped.
@@ -950,6 +951,7 @@ class PlayerEngine {
 
   private pause() {
     const wait = this.networkWait;
+    const cut = !wait && this.recoveryCut();
     this.cancelHandoff();
     this.stopTail?.();
     this.intentionallyPaused = true;
@@ -965,6 +967,9 @@ class PlayerEngine {
       this.audio.removeAttribute('src');
       this.audio.load();
       this.patch({ state: 'paused', overline: 'Paused', byline: 'Lost the connection — press play to try again', canPlay: true });
+    } else if (cut) {
+      // Ended or reloading, the element is already paused and fires nothing.
+      this.patch({ state: 'paused', overline: 'Paused', byline: 'Press play to pick up where it stopped', canPlay: true });
     }
   }
 
@@ -1050,6 +1055,15 @@ class PlayerEngine {
   }
 
   /**
+   * A retry that has not got the song going again: the element is still
+   * ended where the stream stopped, or was reloaded and has not had its seek.
+   * Pause leaves it that way, and play() on it starts the song from the top.
+   */
+  private recoveryCut(): boolean {
+    return this.resumeAttempts > 0 && (this.audio.ended || this.audio.currentTime < this.resumeFrom);
+  }
+
+  /**
    * `ended`, which is not always the end of the song.
    *
    * WebKit on macOS reports a stream that breaks part-way through as the
@@ -1065,7 +1079,9 @@ class PlayerEngine {
    */
   private onEnded() {
     const el = this.audio;
-    if (this.intentionallyPaused || !this.endedEarly(el)) { void this.next(true); return; }
+    if (this.intentionallyPaused) { void this.next(true); return; }
+    // A real end closes any blip, so Play at the end of the queue starts over.
+    if (!this.endedEarly(el)) { this.resetRetries(); void this.next(true); return; }
     if (this.resume()) return;
     // Out of quick retries. If the server is gone, wait for it. If it
     // answers and the stream still stops at the same place, that place is

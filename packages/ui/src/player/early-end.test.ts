@@ -249,3 +249,42 @@ test('a seek made while it waits to retry is where the retry goes', async () => 
   expect(player.getSnapshot().currentId).toBe('impatient');
   expect(el.currentTime, 'where the listener dragged it, not where it broke').toBe(240);
 });
+
+test('Pause while it waits to retry, then Play, picks up where it stopped', async () => {
+  const el = await start('paused-mid-retry', 'not-yet');
+  const pause = () => (player as unknown as { pause(): void }).pause();
+
+  streamStopsAt(el, 202.29);
+  await vi.advanceTimersByTimeAsync(0);
+  // The media key, before the first retry runs.
+  pause();
+  await vi.advanceTimersByTimeAsync(5000);
+  expect(player.getSnapshot().state).toBe('paused');
+  expect(player.getSnapshot().overline).toBe('Paused');
+
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('paused-mid-retry');
+  expect(el.currentTime, 'not from the top').toBeCloseTo(202.29, 2);
+  expect(el.paused).toBe(false);
+});
+
+test('Pause while a retry reloads the stream, then Play, picks up where it stopped', async () => {
+  const el = await start('paused-mid-reload', 'not-this-one');
+  const pause = () => (player as unknown as { pause(): void }).pause();
+
+  streamStopsAt(el, 202.29);
+  // The retry has reloaded the stream but it has not answered yet.
+  await vi.advanceTimersByTimeAsync(1000);
+  pause();
+  el.duration = SCANNED_MS / 1000;
+  el.fire('loadedmetadata');
+  expect(el.currentTime, 'the cancelled retry does not seek').toBe(0);
+
+  player.toggle();
+  await vi.advanceTimersByTimeAsync(0);
+
+  expect(player.getSnapshot().currentId).toBe('paused-mid-reload');
+  expect(el.currentTime, 'not from the top').toBeCloseTo(202.29, 2);
+});
