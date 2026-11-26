@@ -12,10 +12,11 @@ mod netpath;
 mod panel;
 mod proxy;
 mod routes;
+mod stream;
 mod uicheck;
 mod update;
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use tauri::menu::{MenuBuilder, MenuItemBuilder};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -31,7 +32,12 @@ use routes::Ui;
 /// network-path watcher.
 struct AppState {
     ui: Ui,
-    proxy: RwLock<Option<Arc<Proxy>>>,
+    /// Shared with the read-ahead, so a download that has to retry does so
+    /// over whichever path is live by then.
+    proxy: Arc<RwLock<Option<Arc<Proxy>>>>,
+    /// The audio read-ahead. Set during setup, once the app's cache folder is
+    /// known; empty if it could not be, and then audio streams directly.
+    streams: OnceLock<stream::Streams>,
     path: RwLock<Option<Path>>,
     /// Set once, during setup. The protocol handler is built before the app
     /// exists, so the shell's own endpoints have to reach the handle this way
@@ -70,7 +76,8 @@ fn main() {
 
     let state = Arc::new(AppState {
         ui,
-        proxy: RwLock::new(None),
+        proxy: Arc::new(RwLock::new(None)),
+        streams: OnceLock::new(),
         path: RwLock::new(None),
         app: RwLock::new(None),
     });
@@ -109,6 +116,19 @@ fn main() {
             // does not race the client being built.
             if let Err(error) = tauri::async_runtime::block_on(state.refresh_path(None)) {
                 log::warn!("could not build the initial network client: {error:#}");
+            }
+
+            // Read-ahead files go in this app's own cache folder, per user,
+            // and are cleared at every launch. See stream.rs.
+            match app.path().app_cache_dir() {
+                Ok(cache) => {
+                    let _ = state.streams.set(stream::Streams::new(
+                        Arc::new(stream::Home(state.proxy.clone())),
+                        cache.join("streams"),
+                        stream::Timing::default(),
+                    ));
+                }
+                Err(error) => log::warn!("no cache folder, so no read-ahead for audio: {error}"),
             }
 
             WebviewWindowBuilder::new(
@@ -227,6 +247,20 @@ async fn handle(state: Arc<AppState>, request: http::Request<Vec<u8>>) -> http::
     // straight answer instead of an HTML page from the SPA fallback.
     if path.starts_with("/api/desktop/") {
         return desktop_endpoint(&state, &path, request.method(), request.body()).await;
+    }
+
+    // Audio comes from the read-ahead when it can answer: one download per
+    // song instead of a round trip home for every few seconds of it.
+    if request.method() == http::Method::GET && path == stream::STREAM_PATH {
+        let range = request
+            .headers()
+            .get(http::header::RANGE)
+            .and_then(|v| v.to_str().ok());
+        if let (Some(streams), Some(range)) = (state.streams.get(), range) {
+            if let Some(response) = streams.serve(&format!("{path}{query}"), range).await {
+                return response;
+            }
+        }
     }
 
     // Everything else is the server's: /api/*, /img/*, and anything added later.

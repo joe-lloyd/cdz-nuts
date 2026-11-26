@@ -95,6 +95,25 @@ const RESUME_BACKOFF_MS = 1000;
 const RESUME_SETTLED_S = 3;
 
 /**
+ * How far short of the song's length an `ended` has to land before it is
+ * taken for a broken stream rather than the end. A real end lands within a
+ * frame of the length, so a few seconds leaves room for a length that is a
+ * little off without ever mistaking a three-minute cut for the end.
+ */
+const EARLY_END_S = 3;
+
+/**
+ * As EARLY_END_S, when only one length is known to check against. The
+ * element's own figure is an estimate for some files (VBR MP3 without a
+ * header, Ogg) and the scanned one can be another edition's, so on its own
+ * either gets more room. A stream cut mid-song is still minutes short.
+ */
+const LONE_EARLY_END_S = 15;
+
+/** How far short of its target a seek may land and still count as landed. */
+const SEEK_SLOP_S = 0.5;
+
+/**
  * Watching for a track that is being fetched.
  *
  * Pressing play on a track we do not have queues it for download, and the bar
@@ -253,6 +272,8 @@ class PlayerEngine {
   private networkWait: { cleanup: () => void; now: () => void; trackId: string; at: number } | undefined;
   /** Tracks already asked for, so a re-check does not queue them twice. */
   private wanted = new Set<string>();
+  /** The longest duration each element has reported for its source. See endedEarly. */
+  private reportedLength = new WeakMap<HTMLAudioElement, { src: string; seconds: number }>();
 
   constructor() {
     this.audioA = new Audio();
@@ -271,8 +292,11 @@ class PlayerEngine {
       el.addEventListener('play', (e) => { if (e.target === this.audio) this.onPlayState('playing'); });
       el.addEventListener('pause', (e) => { if (e.target === this.audio) this.onPlayState('paused'); });
       el.addEventListener('timeupdate', (e) => { if (e.target === this.audio) this.onTimeUpdate(); });
-      el.addEventListener('durationchange', (e) => { if (e.target === this.audio) this.emit(); });
-      el.addEventListener('ended', (e) => { if (e.target === this.audio) void this.next(true); });
+      el.addEventListener('durationchange', (e) => {
+        this.noteLength(el);
+        if (e.target === this.audio) this.emit();
+      });
+      el.addEventListener('ended', (e) => { if (e.target === this.audio) this.onEnded(); });
       el.addEventListener('error', (e) => {
         // A failed pre-buffer just falls back to the normal resolve path.
         if (e.target !== this.audio) { this.prefetch = null; return; }
@@ -281,10 +305,10 @@ class PlayerEngine {
         // Out of quick retries. If the server is not even answering this is
         // the connection, not the file: wait for it rather than stop.
         const playbackId = this.playbackId;
-        const at = this.breakPoint();
         void this.reachable().then((ok) => {
           if (this.playbackId !== playbackId || this.intentionallyPaused) return;
-          if (!ok) { this.waitForNetwork(playbackId, at); return; }
+          // Read after the probe: a seek made while it was out is where to go.
+          if (!ok) { this.waitForNetwork(playbackId, this.breakPoint()); return; }
           this.patch({ state: 'error', overline: 'Playback interrupted', byline: 'The local file could not be streamed', canReconnect: true });
           this.notify('Playback stopped. The archive may have gone offline.', true);
         });
@@ -898,8 +922,9 @@ class PlayerEngine {
    */
   previous() {
     if (this.audio.currentTime > 4) {
-      this.cancelHandoff();
-      this.audio.currentTime = 0;
+      // As a seek, so a retry or a wait for the server that is under way
+      // starts the song over too, instead of going back to where it broke.
+      this.seekTo(0);
       this.emit();
     } else if (this.queueIndex > 0) {
       void this.playAt(this.queueIndex - 1);
@@ -918,11 +943,16 @@ class PlayerEngine {
     this.intentionallyPaused = false;
     this.bless();
     if (this.networkWait) { this.networkWait.now(); return; }
-    if ((!this.audio.src || this.audio.error) && this.queueIndex >= 0) {
+    // A song WebKit ended early is left ended with its src set and no error,
+    // whether its recovery gave up or Pause cut it short. play() on an ended
+    // element starts it from the top, so it is reloaded from the break point
+    // like a failed one.
+    const broken = Boolean(this.audio.error) || this.snapshot.state === 'error' || this.recoveryCut();
+    if ((!this.audio.src || broken) && this.queueIndex >= 0) {
       // After a failed retry the element was reloaded to zero; the break point
       // still knows where the track actually stopped.
       const at = this.breakPoint();
-      if (this.audio.error && this.current && at > 0) {
+      if (broken && this.current && at > 0) {
         this.pendingResume = { id: this.current.id, pos: at };
       }
       void this.playAt(this.queueIndex, { recovering: true });
@@ -933,6 +963,7 @@ class PlayerEngine {
 
   private pause() {
     const wait = this.networkWait;
+    const cut = !wait && this.recoveryCut();
     this.cancelHandoff();
     this.stopTail?.();
     this.intentionallyPaused = true;
@@ -948,6 +979,9 @@ class PlayerEngine {
       this.audio.removeAttribute('src');
       this.audio.load();
       this.patch({ state: 'paused', overline: 'Paused', byline: 'Lost the connection — press play to try again', canPlay: true });
+    } else if (cut) {
+      // Ended or reloading, the element is already paused and fires nothing.
+      this.patch({ state: 'paused', overline: 'Paused', byline: 'Press play to pick up where it stopped', canPlay: true });
     }
   }
 
@@ -1032,6 +1066,78 @@ class PlayerEngine {
     return this.resumeAttempts > 0 ? Math.max(now, this.resumeFrom) : now;
   }
 
+  /**
+   * A retry that has not got the song going again: the element is still
+   * ended where the stream stopped, or was reloaded and has not had its seek.
+   * Pause leaves it that way, and play() on it starts the song from the top.
+   */
+  private recoveryCut(): boolean {
+    return this.resumeAttempts > 0
+      && (this.audio.ended || this.audio.currentTime < this.resumeFrom - SEEK_SLOP_S);
+  }
+
+  /**
+   * `ended`, which is not always the end of the song.
+   *
+   * WebKit on macOS reports a stream that breaks part-way through as the
+   * song finishing. AVFoundation plays up to the last byte it received, then
+   * WebKit rewrites the element's duration to that point and fires `ended`.
+   * No `error` is fired, so resume() never runs. On 2026-11-25 the reverse
+   * proxy at home restarted for twelve seconds, a six-minute FLAC "ended" at
+   * 3:22, and the player went on to the next song.
+   *
+   * An end that lands well short of the song's length is a broken stream. It
+   * gets the same recovery as a failed request: the same stream again from
+   * where it stopped, then a wait for the server if it has gone.
+   */
+  private onEnded() {
+    const el = this.audio;
+    if (this.intentionallyPaused) { void this.next(true); return; }
+    // A real end closes any blip, so Play at the end of the queue starts over.
+    if (!this.endedEarly(el)) { this.resetRetries(); void this.next(true); return; }
+    if (this.resume()) return;
+    // Out of quick retries. If the server is gone, wait for it. If it
+    // answers and the stream still stops at the same place, that place is
+    // as far as the file goes, so carry on with the queue.
+    const playbackId = this.playbackId;
+    void this.reachable().then((ok) => {
+      if (this.playbackId !== playbackId || this.intentionallyPaused || this.audio !== el) return;
+      // Read after the probe: a seek made while it was out is where to go.
+      if (!ok) { this.waitForNetwork(playbackId, this.breakPoint()); return; }
+      this.resetRetries();
+      void this.next(true);
+    });
+  }
+
+  /**
+   * Whether `el` stopped well before its song does.
+   *
+   * By the time `ended` fires, WebKit has already overwritten `el.duration`
+   * with the point where the stream stopped, so it cannot be read then. The
+   * longest duration the element reported earlier is used instead, along
+   * with the scanned length. When both are known, both have to agree: either
+   * one alone can be off, the element's for Ogg and Opus and the scan's when
+   * it falls back to Spotify's length for another edition.
+   */
+  private endedEarly(el: HTMLAudioElement): boolean {
+    const at = el.currentTime;
+    const seen = this.reportedLength.get(el);
+    const own = seen?.src === el.src ? seen.seconds : 0;
+    const scanned = (this.current?.duration_ms ?? 0) / 1000;
+    const short = (length: number, by: number) => length > 0 && length - at > by;
+    if (own > 0 && scanned > 0) return short(own, EARLY_END_S) && short(scanned, EARLY_END_S);
+    return short(own, LONE_EARLY_END_S) || short(scanned, LONE_EARLY_END_S);
+  }
+
+  /** Keep the longest duration `el` has reported for its current source. */
+  private noteLength(el: HTMLAudioElement) {
+    const seconds = el.duration;
+    if (!el.src || !Number.isFinite(seconds) || seconds <= 0) return;
+    const seen = this.reportedLength.get(el);
+    if (seen?.src === el.src && seen.seconds >= seconds) return;
+    this.reportedLength.set(el, { src: el.src, seconds });
+  }
+
   private resume(): boolean {
     const src = this.audio.src;
     if (this.intentionallyPaused || !src || this.resumeAttempts >= RESUME_ATTEMPTS) return false;
@@ -1058,7 +1164,11 @@ class PlayerEngine {
         cleanup();
         if (this.resumeCleanup === cleanup) this.resumeCleanup = undefined;
         if (this.playbackId !== playbackId || element !== this.audio) return;
-        element.currentTime = at;
+        // A seek made during the backoff is where the listener wants to be.
+        const to = this.seekTarget ?? at;
+        this.seekTarget = null;
+        this.resumeFrom = to;
+        element.currentTime = to;
         void element.play();
       };
       const cleanup = () => element.removeEventListener('loadedmetadata', seek);
@@ -1184,6 +1294,7 @@ class PlayerEngine {
     if (this.resumeAttempts && this.audio.currentTime > this.resumeFrom + RESUME_SETTLED_S) {
       this.resumeAttempts = 0;
     }
+    this.noteLength(this.audio);
     this.tickPlayLog();
     this.pushNowPlaying();
     const duration = this.durationSeconds();

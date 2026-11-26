@@ -13,7 +13,9 @@
 //
 // Two things come free with it: the homelab CA is pinned here rather than
 // installed into either OS trust store, and Range requests -- which seeking
-// and the player's ~20s prefetch depend on -- pass straight through.
+// and the player's ~20s prefetch depend on -- pass straight through. Audio
+// ranges are answered by the read-ahead in stream.rs first, and only reach
+// `forward` when it cannot answer them.
 
 use std::time::Duration;
 
@@ -31,6 +33,11 @@ const HOMELAB_CA: &[u8] = include_bytes!("../assets/homelab-ca.crt");
 /// path is documented as slow), short enough that a dead tunnel surfaces as an
 /// error rather than a spinner that never resolves.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(45);
+
+/// The read-ahead's whole-song download. A song over the tunnel can take
+/// minutes, so REQUEST_TIMEOUT would cut it off. A stalled download is caught
+/// by the read-ahead's own watchdog long before this; see stream.rs.
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60 * 60);
 
 /// Hop-by-hop headers, which are meaningless to forward and actively harmful
 /// if we do -- a forwarded `Connection: keep-alive` or a second
@@ -132,6 +139,19 @@ impl Proxy {
 
         out.body(bytes.to_vec()).context("building response")
     }
+
+    /// GET `path_and_query` from byte `from` to the end, without collecting
+    /// the body. Only the read-ahead uses this; see stream.rs.
+    pub async fn open_from(&self, path_and_query: &str, from: u64) -> Result<reqwest::Response> {
+        let url = format!("https://{HOME_HOST}{path_and_query}");
+        self.client
+            .get(url)
+            .header(reqwest::header::RANGE, format!("bytes={from}-"))
+            .timeout(DOWNLOAD_TIMEOUT)
+            .send()
+            .await
+            .context("upstream request failed")
+    }
 }
 
 /// Strip headers the WebView sets that would confuse the upstream server.
@@ -153,8 +173,9 @@ pub fn sanitise(headers: &HeaderMap) -> HeaderMap {
 ///
 /// Big enough that a FLAC does not turn into a request storm (4 MiB is the
 /// better part of a minute of 24/48 audio), small enough that the first bytes
-/// reach the player promptly. Nothing here depends on the exact figure.
-const RANGE_CHUNK: u64 = 4 * 1024 * 1024;
+/// reach the player promptly. Nothing here depends on the exact figure. The
+/// read-ahead answers open-ended ranges in the same size; see stream.rs.
+pub(crate) const RANGE_CHUNK: u64 = 4 * 1024 * 1024;
 
 /// Bound an open-ended `Range` so one response cannot be a whole album track.
 ///
