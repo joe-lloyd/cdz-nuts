@@ -98,6 +98,12 @@ export interface Artist extends Tombstoned {
   n?: number | null;
 }
 
+/** One album's cover in a playlist's collage: the art we host, then the remote copy. */
+export interface Cover {
+  album_id: string | null;
+  image_url: string | null;
+}
+
 export interface Playlist extends Tombstoned {
   source?: 'local' | 'spotify';
   id: string;
@@ -105,6 +111,8 @@ export interface Playlist extends Tombstoned {
   description?: string | null;
   owner_name?: string | null;
   images?: string[] | null;
+  /** Up to four albums, for a playlist made here. Spotify playlists send `images` only. */
+  covers?: Cover[] | null;
   synced_tracks?: number | null;
   total_tracks?: number | null;
 }

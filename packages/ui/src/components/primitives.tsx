@@ -2,7 +2,7 @@ import { createContext, use, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 
 import { artUrl, genres as parseGenres, cardDay, initial, shortDay } from '../lib/format.ts';
-import type { Badged, QualityTier, Tombstoned, Track } from '../api/types.ts';
+import type { Badged, Cover, QualityTier, Tombstoned, Track } from '../api/types.ts';
 import { post } from '../api/client.ts';
 import { player, usePlayer } from '../player/usePlayer.ts';
 import { useDownloadProgress, downloadLabel } from './DownloadProgress.tsx';
@@ -78,6 +78,57 @@ export function Pic({ kind, id, cdn, name, overlay }: {
     </div>
   );
 }
+
+/** Where a collage cover can come from, best first: art we host, then the remote copy. */
+const coverSources = (cover: Cover): string[] =>
+  [...new Set([artUrl('albums', cover.album_id), cover.image_url ?? ''].filter(Boolean))];
+
+/**
+ * A playlist's picture: up to four album covers in one square, or its initial
+ * when it has none. A cover that cannot be loaded from anywhere drops out and
+ * the rest fill the square, so a missing sleeve never leaves a hole.
+ */
+export function Collage({ covers, name, lazy = false }: {
+  covers: Cover[];
+  name: string;
+  lazy?: boolean;
+}) {
+  const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
+  const shown = covers
+    .map(coverSources)
+    .filter((sources) => sources.length && !failed.has(sources.join(' ')))
+    .slice(0, 4);
+  if (!shown.length) {
+    return <span className="pl-collage empty-collage"><span className="ph">{initial(name)}</span></span>;
+  }
+  return (
+    <span className={`pl-collage n${shown.length}`}>
+      {shown.map((sources) => {
+        const key = sources.join(' ');
+        return (
+          <CollageCover
+            key={key} sources={sources} lazy={lazy}
+            onGone={() => setFailed((was) => new Set(was).add(key))}
+          />
+        );
+      })}
+    </span>
+  );
+}
+
+function CollageCover({ sources, lazy, onGone }: { sources: string[]; lazy: boolean; onGone: () => void }) {
+  const [at, setAt] = useState(0);
+  return (
+    <img
+      src={sources[at]} alt="" loading={lazy ? 'lazy' : undefined} referrerPolicy="no-referrer"
+      onError={() => { if (at + 1 < sources.length) setAt(at + 1); else onGone(); }}
+    />
+  );
+}
+
+/** A Spotify playlist's `images`, as covers with nothing hosted to try first. */
+export const coversOf = (playlist: { covers?: Cover[] | null; images?: string[] | null }): Cover[] =>
+  playlist.covers ?? (playlist.images ?? []).map((url) => ({ album_id: null, image_url: url }));
 
 export const Chip = ({ text }: { text: string }) => <span className="chip">{text}</span>;
 
