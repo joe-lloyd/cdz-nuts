@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { coverUrls, hostedCover, pickCovers } from './playlist-covers.ts';
+import { coverUrls, hostedCover, pickCovers, playlistCovers } from './playlist-covers.ts';
 
 const song = (album: string, image: string | null = null) => ({ album_id: album, image_url: image });
 
@@ -51,8 +51,37 @@ test('hosted covers follow the same rule as the UI', () => {
   assert.equal(hostedCover('localalbum-9'), '/img/local/localalbum-9.jpg');
   assert.equal(hostedCover('rg:1234-abcd'), '/img/local/rg%3A1234-abcd.jpg');
   assert.equal(hostedCover('4aawyAB9vmqN3uQ7FjRGTy'), '/img/albums/4aawyAB9vmqN3uQ7FjRGTy.jpg');
+});
+
+test('an older UI gets the copy of each cover most likely to load', () => {
   assert.deepEqual(
-    coverUrls([{ album_id: 'libalbum-1', image_url: null }, { album_id: null, image_url: 'https://cdn/x.jpg' }, { album_id: null, image_url: null }]),
-    ['/img/local/libalbum-1.jpg', 'https://cdn/x.jpg'],
+    coverUrls([
+      { album_id: 'libalbum-1', image_url: 'https://coverartarchive.org/1.jpg' },
+      { album_id: '4aawyAB9vmqN3uQ7FjRGTy', image_url: 'https://i.scdn.co/a' },
+      { album_id: '0bCAjiUamIFqKJsekOYuRw', image_url: null },
+      { album_id: null, image_url: 'https://cdn/x.jpg' },
+      { album_id: null, image_url: null },
+    ]),
+    [
+      '/img/local/libalbum-1.jpg',
+      'https://i.scdn.co/a',
+      '/img/albums/0bCAjiUamIFqKJsekOYuRw.jpg',
+      'https://cdn/x.jpg',
+    ],
   );
+});
+
+test('only songs saved without an album are looked up, and one that fails is skipped', () => {
+  const looked: string[] = [];
+  const covers = playlistCovers([
+    { id: 'saved', album_id: 'a', image_url: null },
+    { id: 'setlist:x-0', album_id: null, image_url: null },
+    { id: 'setlist:x-1', album_id: null, image_url: null },
+  ], (id) => {
+    looked.push(id);
+    if (id === 'setlist:x-1') throw new Error('provenance read failed');
+    return { album_id: 'b', image_url: null };
+  });
+  assert.deepEqual(looked, ['setlist:x-0', 'setlist:x-1']);
+  assert.deepEqual(covers.map((c) => c.album_id).sort(), ['a', 'b']);
 });

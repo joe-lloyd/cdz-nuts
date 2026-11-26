@@ -54,10 +54,37 @@ export function pickCovers(tracks: CoverSource[], count = 4): Cover[] {
   return keys.slice(0, count).map((key) => albums.get(key)!);
 }
 
-/** The URLs an older UI reads from `images`: hosted art where there is an album id. */
+/**
+ * The covers for a playlist's saved songs. A song saved with its album
+ * already says which cover it has, so only one saved without, such as a
+ * setlist entry, is looked up with `resolve`. A song that cannot be looked up
+ * is left as saved rather than costing the playlist its picture.
+ */
+export function playlistCovers(
+  tracks: (CoverSource & { id?: string | null })[],
+  resolve: (id: string) => CoverSource | null,
+): Cover[] {
+  return pickCovers(tracks.map((track) => {
+    if (track.album_id || track.image_url || !track.id) return track;
+    try {
+      return resolve(track.id) ?? track;
+    } catch {
+      return track;
+    }
+  }));
+}
+
+/**
+ * The URLs an older UI reads from `images`. It has no fallback when one fails
+ * to load, so each cover gets the copy most likely to be there: the art the
+ * server hosts for a library album, otherwise the remote copy, because the
+ * server only hosts a Spotify album's cover once it is archived.
+ */
 export function coverUrls(covers: Cover[]): string[] {
-  return covers.map((cover) => (cover.album_id ? hostedCover(cover.album_id) : cover.image_url ?? ''))
-    .filter(Boolean);
+  return covers.map(({ album_id: id, image_url: remote }) => {
+    if (id && (LOCAL_ART.test(id) || !remote)) return hostedCover(id);
+    return remote ?? '';
+  }).filter(Boolean);
 }
 
 function fnv1a(text: string): number {
