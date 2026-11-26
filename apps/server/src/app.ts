@@ -1,5 +1,6 @@
 import { LIKE_KINDS, LikesStore, type LikeKind } from './likes.ts';
 import { PlaylistStore } from './playlists.ts';
+import { coverUrls, playlistCovers, type Cover } from './playlist-covers.ts';
 // The web app: routes over the taste DB plus small, separate mutable stores for
 // player history and the lossless-upgrade queue. Zero runtime dependencies.
 //
@@ -2490,7 +2491,20 @@ const api: Record<string, (params: URLSearchParams) => unknown | Promise<unknown
         String(playlist.id),
       ) as { image_url: string }[]).map((row) => row.image_url);
     }
-    return [...localPlaylists.list(), ...playlists];
+    // A playlist made here wears four of its own albums, picked at random.
+    // `images` stays filled for a UI built before `covers` existed, such as
+    // an older desktop app. A playlist whose covers cannot be worked out
+    // shows its initial; it never takes the rest of the list down with it.
+    const local = localPlaylists.list().map((playlist) => {
+      let covers: Cover[] = [];
+      try {
+        covers = playlistCovers(localPlaylists.tracks(playlist.id), tasteTrack);
+      } catch (error) {
+        console.error(`covers for ${playlist.id}:`, (error as Error).message);
+      }
+      return { ...playlist, covers, images: coverUrls(covers) };
+    });
+    return [...local, ...playlists];
   },
 
   '/api/playlist-tracks': (params) => params.get('id')?.startsWith('local-playlist:')

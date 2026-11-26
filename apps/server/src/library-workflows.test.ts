@@ -133,6 +133,12 @@ test('HTTP: release retention, local playlists, album intake and repeated reques
     const saved = await (await fetch(base + '/api/playlist-tracks?id=' + created.id)).json();
     assert.ok(Array.isArray(saved));
     assert.deepEqual(saved.map((t: { id: string }) => t.id), ['two', 'one', 'two']);
+    // Its card wears the covers of the albums in it: here two songs, one album.
+    const listed = (await (await fetch(base + '/api/playlists')).json() as {
+      id: string; covers?: { album_id: string | null }[]; images?: string[];
+    }[]).find((p) => p.id === created.id);
+    assert.deepEqual(listed?.covers?.map((c) => c.album_id), ['album']);
+    assert.deepEqual(listed?.images, ['/img/albums/album.jpg']);
     await post('/api/local-playlists', { id: created.id, action: 'delete' });
     // A like is a standing order. Liking the artist covers every album on
     // its page: the FLACs we own, including the library-only EP, are left
